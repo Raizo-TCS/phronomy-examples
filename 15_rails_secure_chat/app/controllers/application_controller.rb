@@ -10,7 +10,8 @@ class ApplicationController < ActionController::Base
   private
 
   def ensure_user_id
-    session[:user_id] ||= SecureRandom.uuid
+    session[:user_id]    ||= SecureRandom.uuid
+    session[:session_id] ||= SecureRandom.uuid
   end
 
   # Return a ConversationManager backed by PhronomyMessage (acts_as_phronomy_message DSL).

@@ -25,9 +25,10 @@ class MessagesController < ApplicationController
     result = SecureChatAgent.new.invoke(
       content,
       config: {
-        memory:    memory,
-        thread_id: thread_id,
-        user_id:   session[:user_id]
+        memory:     memory,
+        thread_id:  thread_id,
+        user_id:    session[:user_id],
+        session_id: session[:session_id]
       }
     )
 

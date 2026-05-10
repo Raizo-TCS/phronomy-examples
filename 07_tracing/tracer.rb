@@ -10,7 +10,7 @@ class ConsoleTracer < Phronomy::Tracing::Base
     OpenStruct.new(name: name, started_at: Time.now)
   end
 
-  def finish_span(span, output: nil, error: nil)
+  def finish_span(span, output: nil, usage: nil, error: nil)
     elapsed_ms = ((Time.now - span.started_at) * 1000).to_i
     suffix = error ? " error=#{error.class}: #{error.message}" : ""
     puts "[SPAN END]   #{span.name.to_s.ljust(16)} elapsed=#{elapsed_ms}ms#{suffix}"

@@ -33,6 +33,9 @@ bundle exec ruby 01_basic_chain/run.rb
 | 08 | `08_mcp_tool/` | MCP server tool integration |
 | 09 | `09_rails_chat/` | Rails web chat app using `Phronomy::Agent` + `Phronomy::Memory` (DB-backed conversation history) |
 | 14 | `14_code_review/` | **Comprehensive pipeline** — Guardrail, Splitter, Graph, ParallelNode, Interrupt/Resume, PromptTemplate, Agent (streaming), WindowMemory, OutputGuardrail, Eval (LLMJudge), Tracing |
+| 16 | `16_before_completion_hook/` | Global / class / instance `before_completion` hooks — logging, param overrides |
+| 17 | `17_multi_agent_handoff/` | Hub-and-spoke routing with `Phronomy::Agent::Runner` — triage → specialist handoff |
+| 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
 
 ## 09: Rails Chat (`09_rails_chat/`)
 

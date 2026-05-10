@@ -1,0 +1,90 @@
+<%# app/views/chat/index.html.erb — Agent streaming chat demo %>
+<div id="chat-container" style="max-width:700px;margin:2rem auto;font-family:sans-serif">
+  <h1>Phronomy AgentJob Streaming Demo</h1>
+  <p style="color:#555">Tokens are broadcast via ActionCable as the LLM generates them.</p>
+
+  <div id="messages" style="border:1px solid #ddd;padding:1rem;min-height:200px;
+       border-radius:4px;background:#fafafa;white-space:pre-wrap;font-size:0.95rem">
+    <em style="color:#aaa">Ask anything…</em>
+  </div>
+
+  <form id="chat-form" style="margin-top:1rem;display:flex;gap:0.5rem">
+    <input id="message-input" type="text" placeholder="Your message" autocomplete="off"
+           style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:1rem">
+    <button type="submit"
+            style="padding:0.5rem 1rem;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem">
+      Send
+    </button>
+  </form>
+
+  <p id="status" style="color:#888;font-size:0.85rem;margin-top:0.5rem"></p>
+</div>
+
+<script>
+  const SESSION_ID = "<%= @session_id %>";
+
+  // Connect to the AgentChannel for this session.
+  const ws = new WebSocket(
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/cable`
+  );
+
+  let buffer = "";
+
+  ws.addEventListener("open", () => {
+    // Subscribe to ActionCable channel.
+    ws.send(JSON.stringify({
+      command: "subscribe",
+      identifier: JSON.stringify({ channel: "AgentChannel", session_id: SESSION_ID })
+    }));
+  });
+
+  ws.addEventListener("message", (event) => {
+    const envelope = JSON.parse(event.data);
+    if (!envelope.message) return;
+    const msg = envelope.message;
+
+    const messagesDiv = document.getElementById("messages");
+    const statusEl   = document.getElementById("status");
+
+    if (msg.type === "token") {
+      // Streaming token: append to current response buffer.
+      buffer += msg.content || "";
+      messagesDiv.textContent = buffer;
+    } else if (msg.type === "done") {
+      buffer = msg.output || buffer;
+      messagesDiv.textContent = buffer;
+      statusEl.textContent = "Done.";
+      document.getElementById("message-input").disabled = false;
+      document.querySelector("button[type=submit]").disabled = false;
+    } else if (msg.type === "error") {
+      statusEl.textContent = `Error: ${msg.message}`;
+      document.getElementById("message-input").disabled = false;
+      document.querySelector("button[type=submit]").disabled = false;
+    }
+  });
+
+  // Submit form via fetch; tokens arrive asynchronously over WebSocket.
+  document.getElementById("chat-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("message-input");
+    const text  = input.value.trim();
+    if (!text) return;
+
+    document.getElementById("messages").textContent = "";
+    document.getElementById("status").textContent   = "Thinking…";
+    document.getElementById("message-input").disabled = true;
+    document.querySelector("button[type=submit]").disabled = true;
+
+    buffer = "";
+    input.value = "";
+
+    await fetch("/chat/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRF-Token": document.querySelector("meta[name='csrf-token']")?.content || ""
+      },
+      body: new URLSearchParams({ message: text })
+    });
+  });
+</script>

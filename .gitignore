@@ -22,3 +22,11 @@
 /15_rails_secure_chat/storage/
 /15_rails_secure_chat/db/*.sqlite3*
 /15_rails_secure_chat/scenario/evidence/
+
+# 18_rails_agent_job ignores
+/18_rails_agent_job/.bundle/
+/18_rails_agent_job/vendor/
+/18_rails_agent_job/log/
+/18_rails_agent_job/tmp/
+/18_rails_agent_job/storage/
+/18_rails_agent_job/db/*.sqlite3*

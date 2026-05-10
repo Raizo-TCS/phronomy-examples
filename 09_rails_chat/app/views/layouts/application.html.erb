@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html class="h-full overflow-hidden">
+  <head>
+    <title>Phronomy Chat</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <%# Includes all stylesheet files in app/assets/stylesheets %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+  </head>
+
+  <body class="h-full overflow-hidden">
+    <%= yield %>
+  </body>
+</html>

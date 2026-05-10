@@ -1,0 +1,24 @@
+/.bundle/
+/vendor/
+*.gem
+.byebug_history
+
+# 09_rails_chat ignores
+/09_rails_chat/.github/
+/09_rails_chat/.kamal/
+/09_rails_chat/log/
+/09_rails_chat/tmp/
+/09_rails_chat/storage/
+/09_rails_chat/script/
+/09_rails_chat/vendor/
+/09_rails_chat/.bundle/
+/09_rails_chat/db/*.sqlite3*
+
+# 15_rails_secure_chat ignores
+/15_rails_secure_chat/.bundle/
+/15_rails_secure_chat/vendor/
+/15_rails_secure_chat/log/
+/15_rails_secure_chat/tmp/
+/15_rails_secure_chat/storage/
+/15_rails_secure_chat/db/*.sqlite3*
+/15_rails_secure_chat/scenario/evidence/

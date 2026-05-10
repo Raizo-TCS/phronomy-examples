@@ -1,0 +1,130 @@
+<%# frozen_string_literal: true %>
+<div class="flex flex-col h-full bg-gray-100">
+
+  <%# Header %>
+  <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
+    <h1 class="text-lg font-semibold text-gray-800">Phronomy Chat</h1>
+    <div class="flex items-center gap-3">
+      <% if @thread_id %>
+        <span class="text-xs text-gray-400 font-mono"><%= @thread_id.split("-").first %>…</span>
+      <% end %>
+      <%= button_to "New Chat", new_conversation_path, method: :post,
+            class: "text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg transition" %>
+    </div>
+  </header>
+
+  <%# Message list %>
+  <main id="messages" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+    <% if @messages.empty? %>
+      <p class="text-center text-gray-400 mt-20 text-sm">
+        <% if @thread_id %>
+          No messages yet. Say something!
+        <% else %>
+          Click <strong>New Chat</strong> to start a conversation.
+        <% end %>
+      </p>
+    <% end %>
+
+    <% @messages.each do |msg| %>
+      <% if msg.role == "user" %>
+        <div class="flex justify-end">
+          <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-xl text-sm whitespace-pre-wrap"><%= msg.content %></div>
+        </div>
+      <% elsif msg.role == "assistant" && msg.content.present? %>
+        <div class="flex justify-start">
+          <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-xl text-sm whitespace-pre-wrap text-gray-800"><%= msg.content %></div>
+        </div>
+      <% end %>
+    <% end %>
+
+    <%# Thinking indicator (hidden by default) %>
+    <div id="thinking" class="flex justify-start hidden">
+      <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 text-sm text-gray-400 italic">
+        Thinking…
+      </div>
+    </div>
+
+    <%# Error message area %>
+    <div id="error-msg" class="hidden text-center text-sm text-red-500"></div>
+  </main>
+
+  <%# Input form %>
+  <footer class="bg-white border-t border-gray-200 px-4 py-3">
+    <% if @thread_id %>
+      <form id="chat-form" class="flex gap-2">
+        <input id="chat-input" type="text" name="content" placeholder="Type a message…" autocomplete="off"
+               class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <button type="submit"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm transition">
+          Send
+        </button>
+      </form>
+    <% else %>
+      <p class="text-center text-sm text-gray-400">Start a new chat to begin.</p>
+    <% end %>
+  </footer>
+</div>
+
+<script>
+(function () {
+  const form      = document.getElementById("chat-form");
+  const input     = document.getElementById("chat-input");
+  const messages  = document.getElementById("messages");
+  const thinking  = document.getElementById("thinking");
+  const errorMsg  = document.getElementById("error-msg");
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+  if (!form) return;
+
+  function appendBubble(role, text) {
+    const wrapper = document.createElement("div");
+    wrapper.className = role === "user" ? "flex justify-end" : "flex justify-start";
+    const bubble = document.createElement("div");
+    bubble.className = role === "user"
+      ? "bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-xl text-sm whitespace-pre-wrap"
+      : "bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-xl text-sm whitespace-pre-wrap text-gray-800";
+    bubble.textContent = text;
+    wrapper.appendChild(bubble);
+    thinking.before(wrapper);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const content = input.value.trim();
+    if (!content) return;
+
+    input.value = "";
+    errorMsg.classList.add("hidden");
+    appendBubble("user", content);
+    thinking.classList.remove("hidden");
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const res = await fetch("<%= messages_path %>", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRF-Token": csrfToken
+        },
+        body: new URLSearchParams({ content })
+      });
+      const data = await res.json();
+      thinking.classList.add("hidden");
+      if (data.reply) {
+        appendBubble("assistant", data.reply);
+      } else {
+        errorMsg.textContent = data.error || "An error occurred.";
+        errorMsg.classList.remove("hidden");
+      }
+    } catch (err) {
+      thinking.classList.add("hidden");
+      errorMsg.textContent = "Network error. Please try again.";
+      errorMsg.classList.remove("hidden");
+    }
+  });
+
+  // Scroll to bottom on load
+  messages.scrollTop = messages.scrollHeight;
+})();
+</script>

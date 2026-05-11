@@ -30,6 +30,11 @@ end
 
 INPUT_GUARDRAIL = FileInputGuardrail.new
 
+# Command-line mode: ruby run.rb <path> [priority]
+# If a path is given as ARGV[0], run once non-interactively and exit.
+CLI_PATH     = ARGV[0]
+CLI_PRIORITY = ARGV[1]
+
 # ---- Helpers ----
 
 def display_reviews(reviews)
@@ -78,56 +83,67 @@ def display_eval_scores(scores)
   puts "=" * 50
 end
 
-# ---- Main loop ----
+# ---- Helpers: run one file through the full pipeline ----
+
+def run_review(app, path, priority_override = nil)
+  begin
+    INPUT_GUARDRAIL.run!(path)
+  rescue Phronomy::GuardrailError => e
+    puts "[InputGuardrail] Rejected: #{e.message}"
+    return
+  end
+
+  source_code = File.read(path)
+
+  puts "\n[Pipeline] Starting review..."
+  puts "[ParallelNode] Running Security / Performance / Readability reviews concurrently..."
+  state = app.invoke({ file_path: path, source_code: source_code })
+
+  display_reviews(state.reviews)
+
+  priority = priority_override || ask_priority
+  puts "\n[Pipeline] Resuming with priority: #{priority}"
+
+  state = app.resume(state: state, input: { priority: priority })
+
+  display_eval_scores(state.eval_scores)
+end
+
+# ---- Main ----
 
 app = build_pipeline
 
 puts "=== AI Code Review Pipeline ==="
 puts
 
-loop do
-  print "Enter the path to a Ruby file to review (or 'quit' to exit):\n> "
-  $stdout.flush
-
-  path = $stdin.gets.to_s.strip
-  break if path.downcase == "quit" || path.empty?
-
-  # InputGuardrail: validate the supplied path.
-  begin
-    INPUT_GUARDRAIL.run!(path)
-  rescue Phronomy::GuardrailError => e
-    puts "[InputGuardrail] Rejected: #{e.message}"
-    puts
-    next
+if CLI_PATH
+  # Non-interactive mode: path (and optional priority) given on the command line.
+  # If CLI_PATH is a directory, review every *.rb file found directly inside it.
+  paths = if File.directory?(CLI_PATH)
+    Dir.glob(File.join(CLI_PATH, "*.rb")).sort
+  else
+    [CLI_PATH]
   end
 
-  source_code = File.read(path)
+  paths.each { |p| run_review(app, p, CLI_PRIORITY) }
+else
+  # Interactive mode.
+  loop do
+    print "Enter the path to a Ruby file to review (or 'quit' to exit):\n> "
+    $stdout.flush
 
-  # Phase 1: load, split, and run parallel reviews.
-  # The graph halts before :improve due to interrupt_before.
-  puts "\n[Pipeline] Starting review..."
-  puts "[ParallelNode] Running Security / Performance / Readability reviews concurrently..."
-  state = app.invoke({ file_path: path, source_code: source_code })
+    path = $stdin.gets.to_s.strip
+    break if path.downcase == "quit" || path.empty?
 
-  # Display the collected review findings.
-  display_reviews(state.reviews)
+    run_review(app, path)
 
-  # Interrupt/Resume: ask the user which area to improve.
-  priority = ask_priority
-  puts "\n[Pipeline] Resuming with priority: #{priority}"
+    puts
+    print "Review another file? (y/n) > "
+    $stdout.flush
+    break unless $stdin.gets.to_s.strip.downcase == "y"
 
-  # Phase 2: improve, evaluate, and finish.
-  state = app.resume(state: state, input: { priority: priority })
-
-  # Display eval scores.
-  display_eval_scores(state.eval_scores)
-
-  puts
-  print "Review another file? (y/n) > "
-  $stdout.flush
-  break unless $stdin.gets.to_s.strip.downcase == "y"
-
-  puts
+    puts
+  end
 end
 
 puts "\nDone."

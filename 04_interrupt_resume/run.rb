@@ -61,7 +61,7 @@ puts state.draft
 puts
 
 print "Approve and send? [yes/no]: "
-answer = $stdin.gets&.strip&.downcase
+answer = (ARGV.shift&.strip&.downcase) || ($stdin.gets&.strip&.downcase)
 if answer == "yes"
   compiled.resume(state: state)
 else

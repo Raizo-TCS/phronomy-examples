@@ -19,7 +19,7 @@ GEM
     multipart-post (2.4.1)
     net-http (0.9.1)
       uri (>= 0.11.1)
-    phronomy (0.1.3)
+    phronomy (0.1.4)
       ruby_llm (>= 1.3)
       zeitwerk (>= 2.6)
     ruby_llm (1.15.0)
@@ -58,7 +58,7 @@ CHECKSUMS
   marcel (1.1.0) sha256=fdcfcfa33cc52e93c4308d40e4090a5d4ea279e160a7f6af988260fa970e0bee
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
-  phronomy (0.1.3) sha256=d2502d9574a90589e22b5692d64dd0bdf9b92a03c588b40b1459e55df8c1e0e4
+  phronomy (0.1.4) sha256=9c00e51e1a0b6c020b65d47cb40677e642bbcd6cc8669db1e7c5f3580406962b
   ruby_llm (1.15.0) sha256=ca207465bca1cca007010a79fce500d4012b1fbe188b025040cd37b884fb98af
   ruby_llm-schema (0.3.0) sha256=a591edc5ca1b7f0304f0e2261de61ba4b3bea17be09f5cf7558153adfda3dec6
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6

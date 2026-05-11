@@ -57,7 +57,7 @@ puts
 puts "[Case 3 - PII Detector (all categories)]"
 agent = SafeQAAgent.new
 agent.add_input_guardrail(Phronomy::Guardrail::Builtin::PIIPatternDetector.new)
-ask(agent, "Please verify my credit card 1234-5678-9012-3456.")
+ask(agent, "Please verify my credit card 4111-1111-1111-1111.")
 
 # Case 4: PIIPatternDetector with detect: -- credit_card only.
 # An email address is allowed through; a credit card number is still blocked.
@@ -67,7 +67,7 @@ pii = Phronomy::Guardrail::Builtin::PIIPatternDetector.new(detect: [:credit_card
 agent = SafeQAAgent.new
 agent.add_input_guardrail(pii)
 ask(agent, "My email is user@example.com -- does Ruby validate emails?")
-ask(agent, "Charge card 1234-5678-9012-3456 please.")
+ask(agent, "Charge card 4111-1111-1111-1111 please.")
 
 # Case 5: Custom output guardrail blocks a URL in the LLM response.
 # NOTE: whether this triggers depends on the LLM actual response.

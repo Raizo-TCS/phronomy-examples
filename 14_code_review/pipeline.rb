@@ -70,13 +70,13 @@ LOAD_AND_SPLIT_NODE = lambda do |state|
 end
 
 # Seconds without receiving a streaming token before treating the LLM call as hung.
-# A watchdog thread raises in the branch thread so on_error: :best_effort can recover.
+# A watchdog thread raises in the branch thread so the parallel error handler can recover.
 REVIEWER_ACTIVITY_TIMEOUT = 90
 
 # Calls one reviewer agent on a single chunk using streaming.
 # A watchdog thread monitors token activity; if no token arrives within
 # REVIEWER_ACTIVITY_TIMEOUT seconds the watchdog raises RuntimeError in the
-# calling thread, which is caught by ParallelNode's on_error: :best_effort policy.
+# calling thread, which is rescued by PARALLEL_REVIEW_NODE's error-handling block.
 def review_chunk_streaming(agent_class, chunk_text, idx, total)
   output = +""
   last_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -156,6 +156,44 @@ ABSTRACTION_BRANCH = lambda do |state|
     findings = review_all_chunks(AbstractionConsistencyReviewerAgent, state.chunks, state.source_code)
     [{ reviews: { abstraction: findings } }, nil]
   end
+end
+
+# ---- Node: parallel_review (application-level parallel execution) ----
+# Runs four reviewer agents concurrently using Ruby threads.
+# This is an application-level parallel pattern; phronomy does not provide
+# a built-in parallel node abstraction.
+# Errors from individual branches are logged (best_effort semantics);
+# the partial reviews collected so far are merged into the state.
+PARALLEL_REVIEW_NODE = lambda do |state|
+  branches = [SECURITY_BRANCH, PERFORMANCE_BRANCH, READABILITY_BRANCH, ABSTRACTION_BRANCH]
+  results = []
+  errors = []
+  mutex = Mutex.new
+
+  threads = branches.map do |branch|
+    Thread.new do
+      result = branch.call(state)
+      mutex.synchronize { results << result } if result
+    rescue => e
+      mutex.synchronize { errors << e }
+    end
+  end
+
+  threads.each(&:join)
+
+  errors.each { |e| warn "[parallel_review] branch error: #{e.message}" }
+
+  # Deep-merge all branch results into a single Hash update.
+  merged = results.each_with_object({}) do |r, acc|
+    r.each do |key, val|
+      if acc[key].is_a?(Hash) && val.is_a?(Hash)
+        acc[key] = acc[key].merge(val)
+      else
+        acc[key] = val
+      end
+    end
+  end
+  merged
 end
 
 # ---- Node: improve ----
@@ -255,34 +293,22 @@ EVALUATE_NODE = lambda do |state|
   end
 end
 
-# ---- Graph assembly ----
+# ---- Workflow assembly ----
 def build_pipeline
-  graph = Phronomy::Graph::StateGraph.new(ReviewState)
+  Phronomy::Workflow.define(ReviewState) do
+    initial :load_and_split
+    state :load_and_split,  action: LOAD_AND_SPLIT_NODE
+    state :parallel_review, action: PARALLEL_REVIEW_NODE
+    wait_state :awaiting_priority
+    state :improve,  action: IMPROVE_NODE
+    state :evaluate, action: EVALUATE_NODE
 
-  graph.add_node(:load_and_split, LOAD_AND_SPLIT_NODE)
+    after :load_and_split,  to: :parallel_review
+    after :parallel_review, to: :awaiting_priority
+    after :improve,         to: :evaluate
+    after :evaluate,        to: :__finish__
 
-  # Four reviewer agents run concurrently; results are deep-merged into reviews.
-  graph.add_parallel_node(
-    :parallel_review,
-    SECURITY_BRANCH,
-    PERFORMANCE_BRANCH,
-    READABILITY_BRANCH,
-    ABSTRACTION_BRANCH,
-    timeout:  nil,
-    on_error: :best_effort
-  )
-
-  graph.add_node(:improve,  IMPROVE_NODE)
-  graph.add_node(:evaluate, EVALUATE_NODE)
-
-  graph.set_entry_point(:load_and_split)
-  graph.add_edge(:load_and_split, :parallel_review)
-  graph.add_edge(:parallel_review, :improve)
-  graph.add_edge(:improve,  :evaluate)
-  graph.add_edge(:evaluate, Phronomy::Graph::StateGraph::FINISH)
-
-  app = graph.compile
-  # Interrupt before :improve so the user can choose a priority.
-  app.interrupt_before(:improve) { |_state| :halt }
-  app
+    # User selects a review priority before the improver runs.
+    event :proceed, from: :awaiting_priority, to: :improve
+  end
 end

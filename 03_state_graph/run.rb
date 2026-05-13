@@ -1,18 +1,18 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 03 State Graph
+# 03 Workflow with Conditional Routing
 #
-# Demonstrates a self-improving loop using a StateGraph with conditional
-# edges. The graph evaluates a piece of text, and if its quality score is
-# below the threshold (and the iteration cap has not been reached), it
-# rewrites the text and re-evaluates.
+# Demonstrates a self-improving loop using Phronomy::Workflow with conditional
+# event routing. The workflow evaluates a piece of text, and if its quality
+# score is below the threshold (and the iteration cap has not been reached),
+# it rewrites the text and re-evaluates.
 
 require_relative "../shared/llm_config"
 require "phronomy"
 
 class MyState
-  include Phronomy::Graph::State
+  include Phronomy::WorkflowContext
 
   field :text,       type: :replace, default: ""
   field :score,      type: :replace, default: 0
@@ -25,9 +25,7 @@ llm = lambda do |input|
   chat.ask(input[:user]).content
 end
 
-graph = Phronomy::Graph::StateGraph.new(MyState)
-
-graph.add_node(:evaluate) do |state|
+EVALUATE_NODE = ->(state) {
   response = llm.call({
     system: "You are a strict text evaluator. Return only an integer score from 0 to 10. No explanation.",
     user:   "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
@@ -35,38 +33,39 @@ graph.add_node(:evaluate) do |state|
   score = response.scan(/\d+/).first.to_i.clamp(0, 10)
   puts "[Iteration #{state.iterations}] Score: #{score}"
   state.merge(score: score)
-end
+}
 
-graph.add_node(:improve) do |state|
+IMPROVE_NODE = ->(state) {
   improved = llm.call({
     system: "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text.",
     user:   state.text
   })
   state.merge(text: improved.strip, iterations: state.iterations + 1)
-end
+}
 
-graph.add_node(:finish) do |state|
+FINISH_NODE = ->(state) {
   puts "[Done] Final score: #{state.score}"
   state
+}
+
+app = Phronomy::Workflow.define(MyState) do
+  initial :evaluate
+  state :evaluate, action: EVALUATE_NODE
+  state :improve,  action: IMPROVE_NODE
+  state :finish,   action: FINISH_NODE
+
+  event :route, from: :evaluate, guard: ->(s) { s.score >= 7 || s.iterations >= 3 }, to: :finish
+  event :route, from: :evaluate, to: :improve
+  after :improve, to: :evaluate
+  after :finish,  to: :__finish__
 end
 
-graph.set_entry_point(:evaluate)
-graph.add_conditional_edges(
-  :evaluate,
-  ->(state) { state.score >= 7 || state.iterations >= 3 },
-  {true => :finish, false => :improve}
-)
-graph.add_edge(:improve, :evaluate)
-graph.add_edge(:finish, Phronomy::Graph::StateGraph::FINISH)
-
-compiled = graph.compile
-
-puts "=== State Graph Example ==="
+puts "=== Workflow Conditional Routing Example ==="
 initial_text = "Ruby is ok."
 puts "Initial text: #{initial_text.inspect}"
 puts
 
-final = compiled.invoke({text: initial_text, score: 0, iterations: 0})
+final = app.invoke({text: initial_text, score: 0, iterations: 0})
 
 puts
 puts "Final text:"

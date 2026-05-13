@@ -8,7 +8,7 @@
 #   InputGuardrail   — validates the file path before processing
 #   Splitter         — splits large files into manageable chunks
 #   Graph            — orchestrates the full review pipeline
-#   ParallelNode     — runs Security / Performance / Readability reviews concurrently
+#   Parallel threads — runs Security / Performance / Readability reviews concurrently
 #   Interrupt/Resume — pauses after reviews so the user chooses a priority
 #   PromptTemplate   — builds the improvement prompt from variables
 #   Agent (streaming)— generates improved code with real-time token output

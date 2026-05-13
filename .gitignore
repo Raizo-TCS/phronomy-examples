@@ -30,3 +30,11 @@
 /18_rails_agent_job/tmp/
 /18_rails_agent_job/storage/
 /18_rails_agent_job/db/*.sqlite3*
+
+# 20_cve_scanner ignores
+/20_cve_scanner/.bundle/
+/20_cve_scanner/vendor/
+/20_cve_scanner/log/
+/20_cve_scanner/tmp/
+/20_cve_scanner/storage/
+/20_cve_scanner/db/*.sqlite3*

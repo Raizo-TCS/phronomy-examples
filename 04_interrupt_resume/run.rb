@@ -3,16 +3,16 @@
 
 # 04 Interrupt / Resume
 #
-# Demonstrates the human-in-the-loop pattern: the graph generates an email
-# draft, then interrupts before the :send node so a human can approve.
-# On approval the graph is resumed and completes; on rejection nothing is
+# Demonstrates the human-in-the-loop pattern: the workflow generates an email
+# draft, then waits at :awaiting_approval so a human can approve.
+# On approval the workflow is resumed and completes; on rejection nothing is
 # sent.
 
 require_relative "../shared/llm_config"
 require "phronomy"
 
 class MailState
-  include Phronomy::Graph::State
+  include Phronomy::WorkflowContext
 
   field :topic,    type: :replace, default: ""
   field :draft,    type: :replace, default: ""
@@ -25,35 +25,37 @@ llm = lambda do |input|
   chat.ask(input[:user]).content
 end
 
-draft_node = lambda do |state|
+DRAFT_NODE = ->(state) {
   draft = llm.call({
     system: "You are a business email expert. Write a polite email including subject and body.",
     user:   "Topic: #{state.topic}"
   })
   state.merge(draft: draft.strip)
-end
+}
 
-send_node = lambda do |state|
+SEND_NODE = ->(state) {
   puts
   puts "[SENT] Email sent successfully."
   state.merge(approved: true)
+}
+
+app = Phronomy::Workflow.define(MailState) do
+  initial :draft
+  state :draft, action: DRAFT_NODE
+  wait_state :awaiting_approval
+  state :send, action: SEND_NODE
+
+  after :draft, to: :awaiting_approval
+  after :send,  to: :__finish__
+
+  event :approve, from: :awaiting_approval, to: :send
 end
-
-graph = Phronomy::Graph::StateGraph.new(MailState)
-graph.add_node(:draft, draft_node)
-graph.add_node(:send,  send_node)
-graph.set_entry_point(:draft)
-graph.add_edge(:draft, :send)
-graph.add_edge(:send,  Phronomy::Graph::StateGraph::FINISH)
-
-compiled = graph.compile
-compiled.interrupt_before(:send) { |_state| :halt }
 
 puts "=== Interrupt / Resume Example ==="
 topic = "Project completion report"
 puts "Topic: #{topic}"
 
-state = compiled.invoke({topic: topic})
+state = app.invoke({topic: topic})
 
 puts
 puts "[DRAFT GENERATED]"
@@ -63,7 +65,7 @@ puts
 print "Approve and send? [yes/no]: "
 answer = (ARGV.shift&.strip&.downcase) || ($stdin.gets&.strip&.downcase)
 if answer == "yes"
-  compiled.resume(state: state)
+  app.send_event(state: state, event: :approve)
 else
   puts
   puts "[CANCELLED] Draft was not sent."

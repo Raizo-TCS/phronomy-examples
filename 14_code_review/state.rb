@@ -4,7 +4,7 @@ require "phronomy"
 
 # State shared across all graph nodes in the code-review pipeline.
 class ReviewState
-  include Phronomy::Graph::State
+  include Phronomy::WorkflowContext
 
   # Path to the file being reviewed.
   field :file_path,     type: :replace, default: -> { "" }

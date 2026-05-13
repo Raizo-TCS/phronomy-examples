@@ -37,6 +37,7 @@ bundle exec ruby 01_basic_chain/run.rb
 | 17 | `17_multi_agent_handoff/` | Hub-and-spoke routing with `Phronomy::Agent::Runner` — triage → specialist handoff |
 | 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
 | 19 | `19_trust_pipeline/` | Trustworthy output via Citation Tracking + Self-Review Loop + Confidence Gate |
+| 20 | `20_cve_scanner/` | Rails 8 Web UI — CVE vulnerability scanning + remediation with CHECK LOOP / REMEDIATION LOOP, interrupt/approve gates, ActionCable real-time streaming |
 
 ## 09: Rails Chat (`09_rails_chat/`)
 

@@ -15,27 +15,26 @@ Phronomy.configure do |c|
 end
 
 class CodeState
-  include Phronomy::Graph::State
+  include Phronomy::WorkflowContext
 
   field :language, type: :replace, default: ""
   field :output,   type: :replace, default: ""
 end
 
-graph = Phronomy::Graph::StateGraph.new(CodeState)
-
-graph.add_node(:generate) do |state|
+GENERATE_NODE_WITH_TRACE = ->(state) {
   Phronomy.configuration.tracer.trace(:generate, input: state) do
     chat = RubyLLM.chat(model: LLMConfig::MODEL, provider: LLMConfig::PROVIDER, assume_model_exists: true)
     chat.with_instructions("You are a programming expert.")
     response = chat.ask("Write a Hello World program in #{state.language}. Return code only.")
     state.merge(output: response.content)
   end
+}
+
+app = Phronomy::Workflow.define(CodeState) do
+  initial :generate
+  state :generate, action: GENERATE_NODE_WITH_TRACE
+  after :generate, to: :__finish__
 end
-
-graph.set_entry_point(:generate)
-graph.add_edge(:generate, Phronomy::Graph::StateGraph::FINISH)
-
-app = graph.compile
 
 puts "=== Tracing Example ==="
 puts

@@ -13,6 +13,10 @@ module CveScanner
   # @param scan_id     [Integer, nil] if set, tokens are broadcast as :llm_token
   # @param role        [String] label shown in the UI chat (e.g. "CveAnalyst")
   def self.call_agent_json(agent_class, prompt, scan_id: nil, role: agent_class.name.split("::").last)
+    # Mock mode: skip the real LLM and return deterministic fixed responses.
+    # Activate by setting CVE_SCANNER_MOCK_LLM=1 before starting the server.
+    return mock_agent_response(agent_class, prompt, scan_id: scan_id, role: role) if ENV["CVE_SCANNER_MOCK_LLM"].present?
+
     agent = agent_class.new
     accumulated = +""
     last_tool_name = +"unknown"
@@ -31,41 +35,52 @@ module CveScanner
         tc = event.payload[:tool_call]
         last_tool_name.replace(tc.respond_to?(:name) ? tc.name.to_s : "tool")
         args_str = tc.respond_to?(:arguments) ? tc.arguments.inspect.slice(0, 120) : ""
-        ScanChannel.broadcast(scan_id, {
-          type: "log",
-          message: "#{role} → calling #{last_tool_name}: #{args_str}"
-        }) if scan_id
+        ScanChannel.broadcast(scan_id, {type: "log", subtype: "tool_call",
+          message: "#{role} \u2192 calling #{last_tool_name}: #{args_str}"}) if scan_id
       when :tool_result
         # result payload is the raw String returned by tool.call(args)
         tr_str = event.payload[:tool_result].to_s
-        ScanChannel.broadcast(scan_id, {
-          type: "log",
-          message: "#{role} ← #{last_tool_name} result (#{tr_str.length} chars)"
-        }) if scan_id
+        ScanChannel.broadcast(scan_id, {type: "log", subtype: "tool_result",
+          message: "#{role} \u2190 #{last_tool_name} result (#{tr_str.length} chars)"}) if scan_id
       when :done
         # final result captured below
       end
     end
 
     raw = (result.is_a?(Array) ? result.first : result)&.dig(:output).to_s.strip
-    raw = raw.gsub(/\A```(?:json)?\s*/, "").gsub(/\s*```\z/, "").strip
-    parsed = JSON.parse(raw)
-    ScanChannel.broadcast(scan_id, {type: "chat_turn_done", role: role, content: raw}) if scan_id
-    parsed
-  rescue JSON::ParserError
-    ScanChannel.broadcast(scan_id, {type: "chat_turn_done", role: role, content: accumulated}) if scan_id
-    {"decision" => "need_more", "proposed_commands" => [], "error" => "json_parse_failed"}
+    # When the result object carries no output (some Phronomy stream backends
+    # return the final text only via :token events), fall back to the tokens
+    # we accumulated ourselves so the answer is never silently lost.
+    raw = accumulated.strip if raw.empty?
+    # Strip leading/trailing markdown code fences produced by some LLMs.
+    raw = raw.gsub(/\A```(?:json)?\s*/i, "").gsub(/\s*```\z/, "").strip
+    # If the LLM added prose around the JSON, extract the first {...} block.
+    parsed = begin
+      JSON.parse(raw)
+    rescue JSON::ParserError
+      m = raw.match(/\{.*\}/m)
+      m ? JSON.parse(m[0]) : nil
+    end
+    if parsed
+      # Broadcast clean, normalised JSON so the client never has to guess the format.
+      ScanChannel.broadcast(scan_id, {type: "chat_turn_done", role: role, content: parsed.to_json}) if scan_id
+      parsed
+    else
+      # Completely unparseable — fall back to raw accumulated text.
+      ScanChannel.broadcast(scan_id, {type: "chat_turn_done", role: role, content: accumulated}) if scan_id
+      {"decision" => "need_more", "proposed_commands" => [], "error" => "json_parse_failed"}
+    end
   end
 
   def self.build_graph(scan_id: nil)
     # Capture scan_id in node lambdas via closure.
-    gather_node      = ->(s) { node_gather_scan_info(s) }
-    check_cve_node   = ->(s) { node_check_cve_data(s) }
+    gather_node      = ->(s) { node_gather_scan_info(s, scan_id: scan_id) }
+    check_cve_node   = ->(s) { node_check_cve_data(s, scan_id: scan_id) }
     propose_checks   = ->(s) { node_propose_checks(s, scan_id: scan_id) }
-    run_checks       = ->(s) { node_run_checks(s) }
+    run_checks       = ->(s) { node_run_checks(s, scan_id: scan_id) }
     eval_checks      = ->(s) { node_evaluate_checks(s, scan_id: scan_id) }
     propose_remed    = ->(s) { node_propose_remediation(s, scan_id: scan_id) }
-    run_remed        = ->(s) { node_run_remediation(s) }
+    run_remed        = ->(s) { node_run_remediation(s, scan_id: scan_id) }
     eval_remed       = ->(s) { node_evaluate_remediation(s, scan_id: scan_id) }
     report_node      = ->(s) { node_report(s, scan_id: scan_id) }
     followup_node    = ->(s) { node_handle_followup(s, scan_id: scan_id) }
@@ -141,7 +156,7 @@ module CveScanner
 
   # ── Node implementations ─────────────────────────────────────────────────
 
-  def self.node_gather_scan_info(state)
+  def self.node_gather_scan_info(state, scan_id: nil)
     # Validate CVE IDs
     valid   = state.cve_ids.select { |id| id.match?(/\ACVE-\d{4}-\d{4,}\z/i) }
     invalid = state.cve_ids - valid
@@ -162,6 +177,9 @@ module CveScanner
     }.each_with_object({}) { |t, h| h[t.value[0]] = t.value[1] }
     msgs += cve_infos.map { |id, info| "Fetched #{id}: priority=#{info[:priority] || "?"}" }
 
+    # Broadcast informational messages in real-time before any LLM call.
+    msgs.each { |m| ScanChannel.broadcast(scan_id, {type: "log", message: m}) } if scan_id
+
     state.merge(
       cve_ids: valid,
       os_version: os_version,
@@ -171,7 +189,7 @@ module CveScanner
     )
   end
 
-  def self.node_check_cve_data(state)
+  def self.node_check_cve_data(state, scan_id: nil)
     pre_status = {}
     msgs = []
     state.cve_ids.each do |id|
@@ -185,6 +203,7 @@ module CveScanner
       end
     end
     return state if pre_status.empty?
+    msgs.each { |m| ScanChannel.broadcast(scan_id, {type: "log", message: m}) } if scan_id
     state.merge(vulnerability_status: state.vulnerability_status.merge(pre_status), messages: msgs)
   end
 
@@ -210,8 +229,7 @@ module CveScanner
                                scan_id: scan_id, role: "CveAnalyst")
 
     if response["decision"] == "done"
-      vuln_status = response["vulnerability_status"].presence ||
-                    state.cve_ids.each_with_object({}) { |id, h| h[id] = "unknown" }
+      vuln_status = normalize_vuln_status(response["vulnerability_status"], state.cve_ids, scan_id: scan_id)
       reasoning   = response["reasoning"] || {}
       state.merge(
         check_decision: "done",
@@ -232,10 +250,11 @@ module CveScanner
     end
   end
 
-  def self.node_run_checks(state)
+  def self.node_run_checks(state, scan_id: nil)
     results = state.approved_checks.map do |cmd|
       {cmd: cmd, output: CveScanner::CommandExecutorTool.new.execute(command: cmd)}
     end
+    results.each { |r| ScanChannel.broadcast(scan_id, {type: "log", message: "Ran: #{r[:cmd]}"}) } if scan_id
     state.merge(
       check_history: results,
       messages: results.map { |r| "Ran: #{r[:cmd]}" }
@@ -267,8 +286,7 @@ module CveScanner
                                scan_id: scan_id, role: "CveAnalyst")
 
     if response["decision"] == "done" || state.check_iteration >= MAX_LOOP_ITERATIONS
-      vuln_status = response["vulnerability_status"].presence ||
-                    state.cve_ids.each_with_object({}) { |id, h| h[id] = "unknown" }
+      vuln_status = normalize_vuln_status(response["vulnerability_status"], state.cve_ids, scan_id: scan_id)
       reasoning   = response["reasoning"] || {}
       msg = state.check_iteration >= MAX_LOOP_ITERATIONS ?
               "Check loop limit reached (#{MAX_LOOP_ITERATIONS}). Using best available assessment." :
@@ -321,10 +339,11 @@ module CveScanner
     end
   end
 
-  def self.node_run_remediation(state)
+  def self.node_run_remediation(state, scan_id: nil)
     results = state.approved_remediations.map do |cmd|
       {cmd: cmd, output: CveScanner::CommandExecutorTool.new.execute(command: cmd)}
     end
+    results.each { |r| ScanChannel.broadcast(scan_id, {type: "log", message: "Ran: #{r[:cmd]}"}) } if scan_id
     state.merge(
       remediation_history: results,
       messages: results.map { |r| "Ran: #{r[:cmd]}" }
@@ -352,8 +371,30 @@ module CveScanner
     end
   end
 
+  # Keyword list that unambiguously signals the operator is done.
+  DONE_KEYWORDS = %w[done exit quit finish end finished bye].freeze
+
   def self.node_handle_followup(state, scan_id:)
     request = state.followup_request.to_s.strip
+
+    # Short-circuit: if the user explicitly says "done" (or a synonym) skip the
+    # LLM call entirely. This avoids the LLM misclassifying the terminal keyword
+    # as a question and returning "answered" instead of "done".
+    if DONE_KEYWORDS.include?(request.downcase)
+      farewell = "Session ended. Thank you for using CVE Scanner."
+      # Use followup_answer (not chat_turn_done) so the farewell bubble is shown
+      # in the UI and the JS handler can immediately hide the chat input bar.
+      ScanChannel.broadcast(scan_id, {type: "followup_answer", role: "FollowupAgent",
+        answer: farewell, decision: "done"}) if scan_id
+      new_history = state.followup_history + [{question: request, answer: farewell}]
+      return state.merge(
+        followup_decision: "done",
+        followup_request:  nil,
+        followup_history:  new_history,
+        messages:          ["Follow-up (done): #{request}"]
+      )
+    end
+
     ScanChannel.broadcast(scan_id, {type: "agent_step", node: "handle_followup",
       message: "Processing follow-up: #{request.slice(0, 120)}..."}) if scan_id
 
@@ -459,6 +500,49 @@ module CveScanner
   end
 
   # ── Context builders ─────────────────────────────────────────────────────
+
+  # Mock LLM responses for local UI testing (no real API calls).
+  # Activate with: CVE_SCANNER_MOCK_LLM=1 bundle exec rails server -p 3020
+  def self.mock_agent_response(agent_class, prompt, scan_id:, role:)
+    cve_ids = prompt.scan(/CVE-\d{4}-\d{4,}/i).uniq
+    response = case agent_class.name
+               when /CveAnalystAgent/
+                 vuln_status = cve_ids.each_with_object({}) { |id, h| h[id] = "vulnerable" }
+                 reasoning   = cve_ids.each_with_object({}) { |id, h| h[id] = "Mock: package is vulnerable (fixed response)." }
+                 {"decision" => "done", "vulnerability_status" => vuln_status, "reasoning" => reasoning}
+               when /FollowupAgent/
+                 {"decision" => "answered",
+                  "answer" => "Mock answer: The affected package has a known vulnerability. No patch is currently available for Ubuntu 24.04."}
+               when /RemediationAdvisorAgent/
+                 {"decision" => "complete", "summary" => "Mock: Remediation complete."}
+               else
+                 {"decision" => "done"}
+               end
+    if scan_id
+      ScanChannel.broadcast(scan_id, {type: "chat_turn_start", role: role,
+        prompt_preview: "[MOCK] #{prompt.slice(0, 180)}"})
+      ScanChannel.broadcast(scan_id, {type: "chat_turn_done", role: role, content: response.to_json})
+    end
+    response
+  end
+
+  # Normalise vulnerability_status keys returned by an LLM to always match the
+  # known CVE IDs supplied by the operator. LLMs occasionally corrupt CVE-ID
+  # tokens (e.g. "VEC-2023521-60" instead of "CVE-2023-52160"). Any CVE absent
+  # from the raw response is set to "unknown", and a warning is broadcast so
+  # the operator can see the problem in the pipeline log.
+  def self.normalize_vuln_status(raw_status, cve_ids, scan_id: nil)
+    raw = raw_status.is_a?(Hash) ? raw_status : {}
+    mangled = raw.keys.reject { |k| k.match?(/\ACVE-\d{4}-\d{4,}\z/i) }
+    missing = cve_ids.reject { |id| raw.key?(id) }
+    if mangled.any? && missing.any?
+      msg = "WARNING: LLM returned unrecognised key(s) [#{mangled.join(", ")}] — " \
+            "expected [#{missing.join(", ")}]. Forcing to 'unknown'."
+      ScanChannel.broadcast(scan_id, {type: "log", message: msg}) if scan_id
+      Rails.logger.warn("[CveScanner] #{msg}")
+    end
+    cve_ids.each_with_object({}) { |id, h| h[id] = raw[id] || "unknown" }
+  end
 
   # Returns the current vulnerability_status if non-empty, otherwise a hash
   # mapping every CVE ID to "unknown". Used as a safe fallback when loop

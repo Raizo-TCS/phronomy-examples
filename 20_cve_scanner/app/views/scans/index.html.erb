@@ -30,6 +30,7 @@
   /* ── Chat log styles ── */
   #chat-log { display: flex; flex-direction: column; gap: 0.6rem; max-height: 520px; overflow-y: auto; padding: 0.25rem 0; }
   .chat-msg { display: flex; flex-direction: column; max-width: 90%; }
+  .chat-msg.llm.wide { max-width: 100%; }
   .chat-msg.agent  { align-self: flex-end; }
   .chat-msg.llm    { align-self: flex-start; }
   .chat-msg.system { align-self: center; max-width: 100%; }
@@ -72,14 +73,7 @@
   <p id="status-line"></p>
 </div>
 
-<%# ── 結果テーブル ── %>
-<div class="card" id="result-card" style="display:none">
-  <h3>Scan Results</h3>
-  <table class="result-table">
-    <thead><tr><th>CVE ID</th><th>Status</th><th>Details</th></tr></thead>
-    <tbody id="result-body"></tbody>
-  </table>
-</div>
+
 
 <%# ── Pipeline (会話ログ) ── %>
 <div class="card" id="log-card" style="display:none">
@@ -88,7 +82,7 @@
   <%# Persistent message bar — always available while scan is active %>
   <div id="chat-input-bar">
     <div class="chat-input-row">
-      <textarea id="chat-bar-input" rows="2" placeholder="AIへの質問・指示・コンテキストを入力して Send を押してください（次のラウンドに反映されます）"></textarea>
+      <textarea id="chat-bar-input" rows="2" placeholder="Ask a question, give context, or send instructions to the AI (applied to the next round)"></textarea>
       <button class="btn btn-send" id="chat-bar-send" onclick="sendStandaloneNote()">Send</button>
     </div>
   </div>
@@ -96,9 +90,10 @@
 
 <script>
 let currentScanId = null;
-let ws = null;
+window.ws = null;
 let activeLlmBubble = null; // currently streaming LLM bubble element
 let awaitingFollowup = false; // true when graph is halted before :handle_followup
+let chatTurnActive = false; // true between chat_turn_start and chat_turn_done
 
 function startScan() {
   const raw = document.getElementById("cve-input").value.trim();
@@ -110,7 +105,10 @@ function startScan() {
   document.getElementById("chat-log").innerHTML       = "";
   document.getElementById("chat-input-bar").style.display = "none";
   awaitingFollowup = false;
-  document.getElementById("result-card").style.display = "none";
+  chatTurnActive = false;
+  // Remove any previous inline results table from the pipeline log.
+  const prevResults = document.getElementById("inline-results");
+  if (prevResults) prevResults.parentElement.remove();
   activeLlmBubble = null;
 
   fetch("/scans", {
@@ -130,7 +128,7 @@ function startScan() {
 }
 
 function connectWebSocket(scanId) {
-  ws = new WebSocket(
+  window.ws = new WebSocket(
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/cable`
   );
 
@@ -188,9 +186,15 @@ function handleMessage(msg) {
     statusEl.textContent = msg.message;
   }
   else if (msg.type === "log") {
-    // Pipeline log messages (node transitions, command runs, report lines)
+    // Pipeline log messages (node transitions, command runs, report lines).
+    // If the LLM was mid-stream and a tool call starts, finalise the current
+    // bubble so subsequent tokens open a new one after the tool logs.
+    // Only subtype=="tool_call" triggers finalisation (not pipeline logs).
+    if (msg.subtype === "tool_call" && activeLlmBubble) {
+      activeLlmBubble.classList.remove("chat-cursor");
+      activeLlmBubble = null;
+    }
     addSystemLine(msg.message);
-    statusEl.textContent = msg.message.slice(0, 80);
   }
   else if (msg.type === "agent_step") {
     // Ruby agent emitting a step description
@@ -200,13 +204,22 @@ function handleMessage(msg) {
     // Agent is about to call the LLM — show the prompt preview.
     // FollowupAgent has its own followup_answer bubble; suppress the context preview.
     if (msg.role === "FollowupAgent") return;
-    addChatBubble("agent", "Agent › " + msg.role, "Sending context to LLM…\n" + msg.prompt_preview + (msg.prompt_preview.length >= 200 ? "…" : ""));
+    // Finalise any leftover streaming bubble from a previous turn.
+    if (activeLlmBubble) {
+      activeLlmBubble.classList.remove("chat-cursor");
+      activeLlmBubble = null;
+    }    chatTurnActive = true;    addChatBubble("agent", "Agent › " + msg.role, "Sending context to LLM…\n" + msg.prompt_preview + (msg.prompt_preview.length >= 200 ? "…" : ""));
+    // Do NOT pre-create the LLM bubble here. It will be created lazily when
+    // the first llm_token arrives, ensuring it appears AFTER any tool-call
+    // log messages rather than before them.
   }
   else if (msg.type === "llm_token") {
-    // Streaming token from the LLM — skip empty tokens.
+    // Streaming token from the LLM — skip empty tokens and stale tokens
+    // that arrive after chat_turn_done (ActionCable delivery is not strictly
+    // ordered with respect to chat_turn_done).
     // FollowupAgent output is raw JSON; suppress streaming and show only the
     // parsed followup_answer bubble instead.
-    if (!msg.token || msg.role === "FollowupAgent") return;
+    if (!msg.token || msg.role === "FollowupAgent" || !chatTurnActive) return;
     if (!activeLlmBubble) {
       activeLlmBubble = addChatBubble("llm", msg.role + " (streaming…)", "", {cursor: true});
     }
@@ -217,14 +230,59 @@ function handleMessage(msg) {
   else if (msg.type === "chat_turn_done") {
     // LLM finished streaming — finalise the bubble.
     // For FollowupAgent, no streaming bubble was created; skip finalisation.
-    if (msg.role === "FollowupAgent") { activeLlmBubble = null; return; }
-    if (activeLlmBubble) {
-      activeLlmBubble.classList.remove("chat-cursor");
-      activeLlmBubble.parentElement.querySelector(".chat-label").textContent = msg.role + " (done)";
-    } else {
-      addChatBubble("llm", msg.role + " (done)", msg.content || "");
+    if (msg.role === "FollowupAgent") { activeLlmBubble = null; chatTurnActive = false; return; }
+    chatTurnActive = false;
+
+    // Parse the content to detect intermediate routing decisions.
+    // decision:"need_more" means the agent is about to call more tools — treat
+    // this as an internal pipeline event (centre, like tool-call logs) rather
+    // than a user-facing LLM response.
+    // The LLM sometimes wraps JSON in markdown code fences (```json … ```)
+    // or includes leading/trailing prose, so we try multiple extraction strategies.
+    let parsed = null;
+    try {
+      let raw = (msg.content || "").trim();
+      // Strip markdown code fences if present.
+      raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      parsed = JSON.parse(raw);
+    } catch (_) {
+      // Fallback: extract the first {...} block from the content.
+      const m = (msg.content || "").match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (_) {} }
     }
-    activeLlmBubble = null;
+    // Both "need_more" and "done" are internal CveAnalyst routing decisions.
+    // Treat them as pipeline log events (centre) rather than LLM bubbles.
+    const isInternal = parsed && (parsed.decision === "need_more" || parsed.decision === "done");
+
+    if (isInternal) {
+      // Discard the streaming bubble (it was accumulating internal JSON tokens).
+      if (activeLlmBubble) {
+        activeLlmBubble.parentElement.remove();
+        activeLlmBubble = null;
+      }
+      if (parsed.decision === "need_more") {
+        // Intermediate routing decision — show as centre pipeline log.
+        const cmds = (parsed.proposed_commands || []).join(", ");
+        addSystemLine(`${msg.role} → need_more: proposing [${cmds}]`);
+      } else {
+        // decision === "done": render inline results table in the pipeline log.
+        const cveDetails = {};
+        Object.entries(parsed.reasoning || {}).forEach(([cve, r]) => {
+          cveDetails[cve] = { reasoning: r };
+        });
+        addResultTableInline(parsed.vulnerability_status || {}, cveDetails);
+      }
+    } else {
+      if (activeLlmBubble) {
+        activeLlmBubble.classList.remove("chat-cursor");
+        // Replace streaming tokens with the clean final output from the server.
+        activeLlmBubble.textContent = msg.content || "";
+        activeLlmBubble.parentElement.querySelector(".chat-label").textContent = msg.role + " (done)";
+      } else {
+        addChatBubble("llm", msg.role + " (done)", msg.content || "");
+      }
+      activeLlmBubble = null;
+    }
   }
   else if (msg.type === "awaiting_approval") {
     addSystemLine(`⏸ Awaiting approval for ${msg.approval_type} commands (Round ${msg.round})`);
@@ -233,7 +291,7 @@ function handleMessage(msg) {
   }
   else if (msg.type === "done") {
     addSystemLine(`✓ Scan complete — ${msg.check_iterations} check round(s) / ${msg.remediation_iterations} remediation round(s)`);
-    renderResults(msg.vulnerability_status, msg.cve_details || {});
+    addResultTableInline(msg.vulnerability_status || {}, msg.cve_details || {});
     statusEl.textContent = `Done — ${msg.check_iterations} check round(s) / ${msg.remediation_iterations} remediation round(s)`;
     document.getElementById("scan-btn").disabled = false;
     // Remove approval card if somehow still present
@@ -249,7 +307,7 @@ function handleMessage(msg) {
     // Switch chat bar to follow-up mode
     awaitingFollowup = true;
     const ta = document.getElementById("chat-bar-input");
-    ta.placeholder = "質問・再調査リクエスト・\'done\' で終了";
+    ta.placeholder = "Ask a follow-up question, request re-investigation, or type \'done\' to finish";
     document.getElementById("chat-input-bar").style.display = "block";
     document.getElementById("chat-bar-send").disabled = false;
     ta.focus();
@@ -263,12 +321,16 @@ function handleMessage(msg) {
       addSystemLine("🔧 Starting remediation phase…");
       awaitingFollowup = false;
     } else if (msg.decision === "done") {
+      // Session is over — update UI immediately without waiting for type:"done".
       awaitingFollowup = false;
+      document.getElementById("chat-input-bar").style.display = "none";
+      document.getElementById("scan-btn").disabled = false;
+      statusEl.textContent = "Done";
     }
     // For "answered" / "report", awaiting_followup will be set true again by the next awaiting_followup broadcast
   }
   else if (msg.type === "scan_report") {
-    renderResults(msg.vulnerability_status, msg.cve_details || {});
+    addResultTableInline(msg.vulnerability_status || {}, msg.cve_details || {});
     addSystemLine(`📋 Report updated — ${msg.check_iterations} check round(s) / ${msg.remediation_iterations} remediation round(s)`);
   }
   else if (msg.type === "error") {
@@ -331,21 +393,23 @@ function skipApproval(approvalType) {
 }
 
 function sendApproval(approvalType, commands, userNote) {
-  // Show the user's note in the chat log before submitting
-  if (userNote) {
-    addChatBubble("agent", "You", userNote);
-  }
-
-  // Replace inline approval card with a status line
+  // Remove the approval card and replace it with a user-bubble summary.
   const inlineBox = document.getElementById("approval-inline");
   if (inlineBox) {
-    const statusMsg = commands.length > 0
-      ? `Resuming with ${commands.length} approved command(s)...`
-      : `Skipping (0 commands approved)...`;
-    const statusDiv = document.createElement("div");
-    statusDiv.className = "chat-msg system";
-    statusDiv.innerHTML = `<div class="chat-bubble">${escHtml(statusMsg)}</div>`;
-    inlineBox.replaceWith(statusDiv);
+    let summary;
+    if (commands.length === 0) {
+      summary = userNote ? `Skipped. Note: ${userNote}` : "Skipped all commands.";
+    } else {
+      const cmdList = commands.map(c => `  • ${c}`).join("\n");
+      summary = userNote
+        ? `Approved:\n${cmdList}\n\nNote: ${userNote}`
+        : `Approved:\n${cmdList}`;
+    }
+    // Replace the approval card with a right-side user bubble.
+    const bubble = document.createElement("div");
+    bubble.className = "chat-msg agent";
+    bubble.innerHTML = `<div class="chat-label">You</div><div class="chat-bubble">${escHtml(summary)}</div>`;
+    inlineBox.replaceWith(bubble);
   }
 
   const body = new URLSearchParams({ approval_type: approvalType, user_note: userNote });
@@ -361,41 +425,47 @@ function sendApproval(approvalType, commands, userNote) {
   });
 }
 
-function renderResults(vulnStatus, cveDetails) {
-  const body = document.getElementById("result-body");
-  body.innerHTML = "";
+function addResultTableInline(vulnStatus, cveDetails) {
+  // Find or create the LLM bubble that holds the results table.
+  // It is rendered as a left-side (llm) bubble so it reads as CveAnalyst's answer.
+  let container = document.getElementById("inline-results");
+  if (!container) {
+    const bubble = addChatBubble("llm", "CveAnalyst (assessment)", "");
+    // Widen the bubble so the results table fits without truncation.
+    bubble.parentElement.classList.add("wide");
+    container = document.createElement("div");
+    container.id = "inline-results";
+    bubble.appendChild(container);
+  }
+
+  let rows = "";
   Object.entries(vulnStatus).forEach(([cveId, status]) => {
     const cls = status === "vulnerable" ? "vulnerable"
               : status === "not_vulnerable" ? "not_vulnerable"
               : status === "remediated" ? "remediated"
-              : status === "not_found" || status === "no_packages" ? "unknown"
               : "unknown";
-    const label = status === "vulnerable" ? "Vulnerable"
-                : status === "not_vulnerable" ? "Not Vulnerable"
-                : status === "remediated" ? "Remediated"
-                : status === "not_found" ? "CVE not found on Ubuntu tracker"
-                : status === "no_packages" ? "No Ubuntu packages affected"
-                : status;
-
+    const statusLabel = status === "vulnerable" ? "Vulnerable"
+                      : status === "not_vulnerable" ? "Not Vulnerable"
+                      : status === "remediated" ? "Remediated"
+                      : status === "not_found" ? "CVE not found on Ubuntu tracker"
+                      : status === "no_packages" ? "No Ubuntu packages affected"
+                      : status;
     const d = cveDetails[cveId] || {};
     let detail = "";
     if (status === "not_found") {
-      detail = `<div class="detail-reason">This CVE ID is not registered on the Ubuntu Security Tracker. It may be invalid, unreported, or not applicable to Ubuntu.</div>`;
+      detail = `<div class="detail-reason">This CVE ID is not registered on the Ubuntu Security Tracker.</div>`;
     } else {
-      if (d.description) {
-        detail += `<div class="detail-desc">${escHtml(d.description)}</div>`;
-      }
-      if (d.packages && d.packages.length) {
-        detail += `<div class="detail-pkg">Packages: ${d.packages.map(escHtml).join(", ")}</div>`;
-      }
-      if (d.reasoning) {
-        detail += `<div class="detail-reason">${escHtml(d.reasoning)}</div>`;
-      }
+      if (d.description) detail += `<div class="detail-desc">${escHtml(d.description)}</div>`;
+      if (d.packages && d.packages.length) detail += `<div class="detail-pkg">Packages: ${d.packages.map(escHtml).join(", ")}</div>`;
+      if (d.reasoning) detail += `<div class="detail-reason">${escHtml(d.reasoning)}</div>`;
     }
-
-    body.innerHTML += `<tr><td>${escHtml(cveId)}</td><td class="${cls}">${label}</td><td>${detail}</td></tr>`;
+    rows += `<tr><td>${escHtml(cveId)}</td><td class="${cls}">${statusLabel}</td><td>${detail}</td></tr>`;
   });
-  document.getElementById("result-card").style.display = "block";
+
+  container.innerHTML = `<table class="result-table"><thead><tr><th>CVE ID</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  const log = document.getElementById("chat-log");
+  log.scrollTop = log.scrollHeight;
 }
 
 // Send the note from the approval box WITHOUT approving/skipping

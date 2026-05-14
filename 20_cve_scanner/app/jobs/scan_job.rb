@@ -105,10 +105,10 @@ class ScanJob < ApplicationJob
   def self.handle_state(scan, state)
     scan_id = scan.id
 
-    # Broadcast each new message from the pipeline
-    state.messages.last(20).each do |msg|
-      broadcast(scan_id, {type: "log", message: msg})
-    end
+    # Individual nodes now broadcast their own informational messages in
+    # real-time (gather, check_cve_data, run_checks, run_remediation).
+    # We no longer replay state.messages here to avoid duplicate and
+    # out-of-order log lines.
 
     if state.halted?
       # Determine what kind of approval is needed based on current phase.

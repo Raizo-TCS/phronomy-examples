@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Feature C: Encrypted workflow checkpoint.
-#
-# A single-node workflow that summarises a conversation with an LLM.
-# The workflow uses a StateStore::ActiveRecord backed by PHRONOMY_ENCRYPTOR,
-# so state_json in phronomy_checkpoints is stored as AES-256-GCM ciphertext.
+# Feature C: Single-node summarization workflow.
+# v0.3.0: StateStore::ActiveRecord removed. The workflow runs synchronously
+# without checkpoint persistence.
 class SummarizationGraph
   class State
     include Phronomy::WorkflowContext
@@ -15,17 +13,11 @@ class SummarizationGraph
     field :summary, default: ""
   end
 
-  # Build the workflow with an encrypted ActiveRecord state store.
+  # Build the summarization workflow.
   #
-  # @param encryptor [Phronomy::StateStore::Encryptor::Base]
   # @return [Phronomy::Workflow]
-  def self.compile(encryptor:)
-    checkpointer = Phronomy::StateStore::ActiveRecord.new(
-      model_class: PhronomyCheckpoint,
-      encryptor: encryptor
-    )
-
-    Phronomy::Workflow.define(State, state_store: checkpointer) do
+  def self.compile
+    Phronomy::Workflow.define(State) do
       initial :summarize
 
       state :summarize, action: ->(state) {

@@ -1,0 +1,12 @@
+{
+  "name": "phronomy-examples-browser-tests",
+  "version": "1.0.0",
+  "description": "Playwright smoke tests for phronomy-examples Rails apps",
+  "private": true,
+  "scripts": {
+    "test": "node smoke_test.js"
+  },
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}

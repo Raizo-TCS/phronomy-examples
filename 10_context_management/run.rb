@@ -37,41 +37,46 @@ puts "effective_input:   #{budget.effective_input_limit}"
 puts
 
 # -----------------------------------------------------------------------
-# 3. ConversationManager (Recent retrieval) with token_budget
-#    — oldest messages are dropped when the budget is tight
+# 3. config[:messages] — application-managed conversation history
+#    Phronomy does not manage history internally. The app owns the array
+#    and passes prior messages via config[:messages]. Each invoke returns
+#    the updated history in result[:messages].
 # -----------------------------------------------------------------------
-puts "--- 3. ConversationManager (Recent retrieval) with token_budget ---"
+puts "--- 3. config[:messages] — application-managed conversation history ---"
 
-window = Phronomy::Memory::ConversationManager.new(
-  storage:   Phronomy::Memory::Storage::InMemory.new,
-  retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 50)
-)
+# Simulate two prior turns stored by the application.
+history = [
+  OpenStruct.new(role: :user,      content: "Hi, my name is Alice."),
+  OpenStruct.new(role: :assistant, content: "Hello Alice! How can I help you?"),
+  OpenStruct.new(role: :user,      content: "What is the weather today?"),
+  OpenStruct.new(role: :assistant, content: "I don't have live weather data.")
+]
 
-messages = Array.new(10) do |i|
-  OpenStruct.new(role: i.even? ? :user : :assistant, content: "Message #{i + 1}: " + ("x" * 40))
-end
-window.save(thread_id: "demo", messages: messages)
-
-small_budget = Phronomy::Context::TokenBudget.new(context_window: 100, max_output_tokens: 0)
-loaded = window.load(thread_id: "demo")
-
-puts "Stored #{messages.length} messages."
-puts "Loaded #{loaded.length} messages."
-puts "Newest kept: \"#{loaded.last&.content&.slice(0, 30)}...\""
+puts "Application-managed history: #{history.length} messages"
+puts "Newest message: [#{history.last.role}] #{history.last.content}"
+puts "Pass to next invoke: config: { messages: history, thread_id: 'session-1' }"
+puts "After invoke: history = result[:messages]  # save the updated array"
 puts
 
 # -----------------------------------------------------------------------
-# 4. ToolOutputPruner — truncate oversized tool results
+# 4. Limiting history size — keep last N messages
+#    Applications control which messages to pass. Slice the history array
+#    to stay within a budget before the next invoke.
 # -----------------------------------------------------------------------
-puts "--- 4. ToolOutputPruner ---"
+puts "--- 4. Limiting history size (keep last N messages) ---"
 
-pruner = Phronomy::Memory::Compression::ToolOutputPruner.new(max_chars: 50)
-big_tool_msg = OpenStruct.new(role: :tool, content: "Tool result: " + ("data " * 40))
-pruned = pruner.compress(thread_id: "demo", messages: [big_tool_msg])[:messages]
+all_messages = (1..20).flat_map do |i|
+  [
+    OpenStruct.new(role: :user,      content: "Question #{i}: What about topic #{i}?"),
+    OpenStruct.new(role: :assistant, content: "Answer #{i}: Here is information about #{i}.")
+  ]
+end
 
-puts "Original tool output: #{big_tool_msg.content.length} chars"
-puts "After pruning:        #{pruned.first.content.length} chars"
-puts "Content: #{pruned.first.content}"
+recent_messages = all_messages.last(10)
+puts "Total history:             #{all_messages.length} messages"
+puts "Passed to agent (last 10): #{recent_messages.length} messages"
+puts "Oldest kept: [#{recent_messages.first.role}] #{recent_messages.first.content}"
+puts "Newest kept: [#{recent_messages.last.role}]  #{recent_messages.last.content}"
 puts
 
 # -----------------------------------------------------------------------
@@ -96,39 +101,33 @@ end
 puts
 
 # -----------------------------------------------------------------------
-# 6. Retrieval::Composite — merge Recent + Semantic retrieval within a budget
+# 6. Context::Builder — fitting history within a token budget
+#    Builder assembles system prompt + messages within effective_input_limit.
+#    Older messages are automatically dropped to keep the context lean.
 # -----------------------------------------------------------------------
-puts "--- 6. Retrieval::Composite ---"
+puts "--- 6. Context::Builder — fit history within a token budget ---"
 
-storage2 = Phronomy::Memory::Storage::InMemory.new
-msgs_a = Array.new(4) { |i| OpenStruct.new(role: :user, content: "recent #{i + 1}") }
-
-# Retrieval::Semantic requires real embeddings — stub with a fake store to avoid an API call.
-fake_store = Phronomy::VectorStore::InMemory.new
-fake_store.add(
-  id: "s1",
-  embedding: [1.0, 0.0],
-  metadata: { thread_id: "c1", message: OpenStruct.new(role: :user, content: "semantic fact") }
+tight_budget = Phronomy::Context::TokenBudget.new(
+  context_window:    512,
+  max_output_tokens: 128,
+  overhead:          50
 )
-fake_embeddings = Object.new
-def fake_embeddings.embed(_text) = [1.0, 0.0]
-
-retrieval_composite = Phronomy::Memory::Retrieval::Composite.new(
-  sources: [
-    { retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 20),  weight: 0.7 },
-    { retrieval: Phronomy::Memory::Retrieval::Semantic.new(embeddings: fake_embeddings, k: 5), weight: 0.3 }
+long_history = (1..10).flat_map do |i|
+  [
+    OpenStruct.new(role: :user,      content: "Turn #{i}: question about topic #{i}?"),
+    OpenStruct.new(role: :assistant, content: "Turn #{i}: answer covering topic #{i}.")
   ]
-)
+end
 
-composite_manager = Phronomy::Memory::ConversationManager.new(
-  storage:   storage2,
-  retrieval: retrieval_composite
-)
-composite_manager.save(thread_id: "c1", messages: msgs_a)
-combined = composite_manager.load(thread_id: "c1", query: "recent")
+builder = Phronomy::Context::Builder.new(budget: tight_budget)
+  .add_system("You are a helpful assistant.")
+  .add_messages(long_history)
 
-puts "Combined #{combined.length} messages from Recent + Semantic retrieval."
-combined.each { |m| puts "  [#{m.role}] #{m.content}" }
+ctx = builder.build
+puts "History provided:       #{long_history.length} messages"
+puts "After budget trimming:  #{ctx[:messages].length} messages (newest kept)"
+estimated = Phronomy::Context::TokenEstimator.estimate(ctx[:messages])
+puts "Estimated tokens used:  ~#{estimated} / #{tight_budget.effective_input_limit} available"
 puts
 
 # -----------------------------------------------------------------------
@@ -206,10 +205,11 @@ end
 puts
 
 # -----------------------------------------------------------------------
-# 9. Agent + ConversationManager + token_budget — evidence that budget limits
-#    how many history messages are injected into the LLM context.
+# 9. Agent + config[:messages] — multi-turn conversation with history
+#    result[:messages] contains the full updated history after each call.
+#    Pass it back as config[:messages] to maintain context across turns.
 # -----------------------------------------------------------------------
-puts "--- 9. Agent + ConversationManager budget evidence ---"
+puts "--- 9. Agent + config[:messages] multi-turn conversation ---"
 
 # Define a simple agent that answers in one sentence.
 class ContextDemoAgent < Phronomy::Agent::Base
@@ -220,48 +220,24 @@ class ContextDemoAgent < Phronomy::Agent::Base
   context_overhead  80
 end
 
-agent_memory  = Phronomy::Memory::ConversationManager.new(
-  storage:   Phronomy::Memory::Storage::InMemory.new,
-  retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 200)
+session_messages = []
+
+r1 = ContextDemoAgent.new.invoke(
+  "My name is Alice. Please remember it.",
+  config: { messages: session_messages, thread_id: "demo" }
 )
-agent_thread  = "agent_demo"
+session_messages = r1[:messages]
+puts "Turn 1 response: #{r1[:output][0, 70]}"
+puts "History after turn 1: #{session_messages.length} messages"
 
-# Pre-fill memory with many turns so it clearly overflows the budget.
-all_prefill = (1..15).flat_map do |i|
-  [
-    OpenStruct.new(role: :user,      content: "Previous question #{i}: " + ("word " * 15).strip),
-    OpenStruct.new(role: :assistant, content: "Previous answer   #{i}: " + ("reply " * 10).strip)
-  ]
-end
-agent_memory.save(thread_id: agent_thread, messages: all_prefill)
-
-total_stored = agent_memory.load(thread_id: agent_thread).length
-puts "Messages stored in memory: #{total_stored}"
-
-# Use an intentionally small explicit budget to demonstrate truncation clearly.
-# (LM Studio / local models may have large context windows, so we fix a tight
-# budget here rather than deriving it from the model registry.)
-evidence_budget = Phronomy::Context::TokenBudget.new(
-  context_window:    512,
-  max_output_tokens: 128,
-  overhead:          50
+r2 = ContextDemoAgent.new.invoke(
+  "What is my name?",
+  config: { messages: session_messages, thread_id: "demo" }
 )
-budgeted_msgs  = agent_memory.load(thread_id: agent_thread)
-estimated_toks = Phronomy::Context::TokenEstimator.estimate(budgeted_msgs)
-
-puts "Budget effective_input_limit: #{evidence_budget.effective_input_limit} tokens"
-puts "Messages loaded: #{budgeted_msgs.length} / #{total_stored}"
-puts "Estimated tokens for those:   #{estimated_toks}"
-puts "Newest message kept: \"#{budgeted_msgs.last&.content&.slice(0, 60)}...\""
-
-result = ContextDemoAgent.new.invoke(
-  "What did we talk about?",
-  config: { memory: agent_memory, thread_id: agent_thread }
-)
-puts "Agent response: #{result[:output]}"
-if result[:usage]
-  puts "Actual API input tokens: #{result[:usage].input}"
-end
+session_messages = r2[:messages]
+puts "Turn 2 response: #{r2[:output][0, 70]}"
+puts "History after turn 2: #{session_messages.length} messages"
+puts "(Agent recalled 'Alice' from the messages passed via config[:messages])"
 puts
 
 # -----------------------------------------------------------------------
@@ -297,8 +273,9 @@ puts
 # -----------------------------------------------------------------------
 # 11. on_trim callback
 #     The oldest message is removed before the LLM call so the model
-#     always receives at most the most recent conversation turn.
-#     The underlying memory store is unaffected.
+#     always receives at most the most recent conversation context.
+#     Pass prior history via config[:messages]; on_trim receives the full
+#     message_elements list and may call ctx.remove(seq) to drop entries.
 # -----------------------------------------------------------------------
 puts "--- 11. on_trim callback ---"
 
@@ -314,17 +291,13 @@ class TrimDemoAgent < Phronomy::Agent::Base
   end
 end
 
-trim_memory = Phronomy::Memory::ConversationManager.new(
-  storage:   Phronomy::Memory::Storage::InMemory.new,
-  retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 20)
-)
-trim_thread = "trim_demo"
-
-TrimDemoAgent.new.invoke("Say 'turn 1'.",
-  config: { memory: trim_memory, thread_id: trim_thread })
-r_trim = TrimDemoAgent.new.invoke("Say 'turn 2'.",
-  config: { memory: trim_memory, thread_id: trim_thread })
-puts "Turn 2 response: #{r_trim[:output][0, 70]}"
+trim_session = []
+r_trim1 = TrimDemoAgent.new.invoke("Say 'turn 1'.",
+  config: { messages: trim_session })
+trim_session = r_trim1[:messages]
+r_trim2 = TrimDemoAgent.new.invoke("Say 'turn 2'.",
+  config: { messages: trim_session })
+puts "Turn 2 response: #{r_trim2[:output][0, 70]}"
 puts "(on_trim drops the oldest message from the LLM view before each call)"
 puts
 
@@ -352,17 +325,13 @@ class CompactionDemoAgent < Phronomy::Agent::Base
   end
 end
 
-cmpct_memory = Phronomy::Memory::ConversationManager.new(
-  storage:   Phronomy::Memory::Storage::InMemory.new,
-  retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 20)
-)
-cmpct_thread = "compact_demo"
-
-CompactionDemoAgent.new.invoke("Say 'first message'.",
-  config: { memory: cmpct_memory, thread_id: cmpct_thread })
-r_cmpct = CompactionDemoAgent.new.invoke("Say 'after compaction'.",
-  config: { memory: cmpct_memory, thread_id: cmpct_thread })
-puts "Response after compaction: #{r_cmpct[:output][0, 70]}"
+cmpct_session = []
+r_cmpct1 = CompactionDemoAgent.new.invoke("Say 'first message'.",
+  config: { messages: cmpct_session })
+cmpct_session = r_cmpct1[:messages]
+r_cmpct2 = CompactionDemoAgent.new.invoke("Say 'after compaction'.",
+  config: { messages: cmpct_session })
+puts "Response after compaction: #{r_cmpct2[:output][0, 70]}"
 puts "(on_compact replaced the oldest message with a summary before the LLM call)"
 puts
 

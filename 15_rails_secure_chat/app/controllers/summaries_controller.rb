@@ -22,7 +22,7 @@ class SummariesController < ApplicationController
       return
     end
 
-    app    = SummarizationGraph.compile(encryptor: PHRONOMY_ENCRYPTOR)
+    app    = SummarizationGraph.compile
     result = app.invoke(
       { messages: messages },
       config: { thread_id: "summary-#{thread_id}" }

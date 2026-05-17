@@ -16,8 +16,7 @@ class ConversationsController < ApplicationController
   def destroy
     thread_id = params[:id]
     if thread_id.present?
-      memory = build_memory
-      memory.purge(thread_id: thread_id)
+      PhronomyMessage.where(thread_id: thread_id).delete_all
       session.delete(:thread_id)
     end
     redirect_to root_path, notice: "Conversation deleted."

@@ -15,8 +15,9 @@ class MessagesController < ApplicationController
       return
     end
 
-    memory = PhronomyMessage.phronomy_memory
-    result = ChatAgent.new.invoke(content, config: { memory: memory, thread_id: thread_id })
+    messages = PhronomyMessage.load_messages(thread_id)
+    result = ChatAgent.new.invoke(content, config: { messages: messages, thread_id: thread_id })
+    PhronomyMessage.save_messages(thread_id, result[:messages])
 
     render json: { reply: result[:output] }
   rescue Phronomy::GuardrailError => e

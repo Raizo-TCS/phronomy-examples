@@ -17,12 +17,6 @@ RubyLLM.configure do |c|
   c.openai_api_base = LLM_BASE_URL
 end
 
-# Feature C: AES-256-GCM encryptor for graph checkpoint state_json.
-# Uses Rails secret_key_base so no extra secret management is needed.
-PHRONOMY_ENCRYPTOR = Phronomy::StateStore::Encryptor::ActiveSupport.new(
-  secret_key_base: Rails.application.secret_key_base
-)
-
 # Feature D: TTL in seconds.
 # 30 seconds for easy demo verification; use 30.days.to_i in production.
 PHRONOMY_MEMORY_TTL = 30

@@ -29,14 +29,10 @@ class LocalLlmJudge < Phronomy::Eval::Scorer::LlmJudge
   end
 end
 
-# Shared ConversationManager instance — persists ImproverAgent conversation across
-# multiple review sessions within the same process run.
-# Recent(k: 2) retains only the most recent user/assistant pair; on_trim and
-# on_compact in ImproverAgent handle further reduction within each call.
-REVIEW_MEMORY = Phronomy::Memory::ConversationManager.new(
-  storage:   Phronomy::Memory::Storage::InMemory.new,
-  retrieval: Phronomy::Memory::Retrieval::Recent.new(k: 2)
-)
+# Per-thread conversation history for ImproverAgent.
+# Keys are thread_id strings; values are Arrays of RubyLLM::Message.
+# Updated from the :done event payload after each stream call.
+REVIEW_SESSIONS = Hash.new { |h, k| h[k] = [] }
 
 # OutputGuardrail instance reused across improve nodes.
 CODE_OUTPUT_GUARDRAIL = CodeOutputGuardrail.new
@@ -232,7 +228,7 @@ IMPROVE_NODE = lambda do |state|
     print "\n[ImproverAgent] Generating improvements (streaming)...\n"
     ImproverAgent.new.stream(
       { message: user_prompt, priority: priority },
-      config: { memory: REVIEW_MEMORY, thread_id: thread_id }
+      config: { messages: REVIEW_SESSIONS[thread_id], thread_id: thread_id }
     ) do |event|
       case event.type
       when :token
@@ -244,6 +240,7 @@ IMPROVE_NODE = lambda do |state|
         end
       when :done
         puts "\n"
+        REVIEW_SESSIONS[thread_id] = event.payload[:messages]
       end
     end
 

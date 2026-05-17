@@ -18,19 +18,19 @@ class MessagesController < ApplicationController
     # Feature D: strip messages older than TTL before building context.
     purge_stale_messages(thread_id)
 
-    # Feature D: ConversationManager (legacy interface, compatible with model_class alone).
-    memory = build_memory
+    messages = PhronomyMessage.load_messages(thread_id)
 
     # Feature B: propagate session user_id to the tracer span.
     result = SecureChatAgent.new.invoke(
       content,
       config: {
-        memory:     memory,
+        messages:   messages,
         thread_id:  thread_id,
         user_id:    session[:user_id],
         session_id: session[:session_id]
       }
     )
+    PhronomyMessage.save_messages(thread_id, result[:messages])
 
     render json: { reply: result[:output] }
   rescue Phronomy::GuardrailError => e

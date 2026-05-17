@@ -55,11 +55,25 @@ module CveScanner
     # Strip leading/trailing markdown code fences produced by some LLMs.
     raw = raw.gsub(/\A```(?:json)?\s*/i, "").gsub(/\s*```\z/, "").strip
     # If the LLM added prose around the JSON, extract the first {...} block.
+    # Also attempt to repair truncated JSON by appending missing closing braces,
+    # which can happen when a model stops generating before the final "}}".
     parsed = begin
       JSON.parse(raw)
     rescue JSON::ParserError
       m = raw.match(/\{.*\}/m)
-      m ? JSON.parse(m[0]) : nil
+      if m
+        candidate = m[0]
+        repaired = nil
+        (0..5).each do |n|
+          begin
+            repaired = JSON.parse(candidate + ("}" * n))
+            break
+          rescue JSON::ParserError
+            next
+          end
+        end
+        repaired
+      end
     end
     if parsed
       # Broadcast clean, normalised JSON so the client never has to guess the format.
@@ -553,6 +567,29 @@ module CveScanner
   end
 
   # Recursively normalize hash keys to symbols (JSON round-trip safety).
+  # Maps Ubuntu version numbers to release codenames used by the Ubuntu security tracker.
+  UBUNTU_SERIES = {
+    "25.10" => "questing",
+    "25.04" => "plucky",
+    "24.10" => "oracular",
+    "24.04" => "noble",
+    "23.10" => "mantic",
+    "23.04" => "lunar",
+    "22.04" => "jammy",
+    "21.10" => "impish",
+    "21.04" => "hirsute",
+    "20.04" => "focal",
+    "18.04" => "bionic",
+    "16.04" => "xenial",
+    "14.04" => "trusty"
+  }.freeze
+
+  # Returns the Ubuntu release codename for a given version string (e.g. "24.04" -> "noble").
+  def self.ubuntu_series_codename(os_version)
+    version = os_version.to_s.split.first
+    UBUNTU_SERIES.fetch(version, version.downcase)
+  end
+
   def self.sym_keys(h)
     return {} unless h.is_a?(Hash)
     h.transform_keys(&:to_sym).transform_values { |v| v.is_a?(Hash) ? sym_keys(v) : v }
@@ -570,12 +607,23 @@ module CveScanner
     lines << "OS: Ubuntu #{state.os_version} / kernel #{state.kernel_version}"
     lines << ""
     lines << "CVE information (only CVEs with package data):"
+    host_series = ubuntu_series_codename(state.os_version.to_s)
     checkable_ids = state.cve_ids.reject { |id| %w[not_found no_packages].include?(state.vulnerability_status[id]) }
     checkable_ids.each do |cve_id|
       raw_info = state.cve_infos[cve_id] || {}
       info = sym_keys(raw_info)
-      pkgs = info[:packages].is_a?(Hash) ? info[:packages].keys.join(", ") : "?"
-      lines << "  #{cve_id}: priority=#{info[:priority] || "?"}, packages=#{pkgs}"
+      # Restrict to packages that have an entry for the host's Ubuntu series to
+      # avoid enumerating all 150+ kernel variants for linux CVEs.
+      # sym_keys() converts all nested keys to symbols, so compare with symbol.
+      host_series_sym = host_series.to_sym
+      host_pkgs = info[:packages].is_a?(Hash) ? info[:packages].select do |_, sm|
+        next false unless sm.is_a?(Hash)
+        detail = sm[host_series_sym]
+        # Skip packages that don't exist in this Ubuntu series.
+        detail.is_a?(Hash) && detail[:status].to_s !~ /\ANot in release/i
+      end : {}
+      pkgs_label = host_pkgs.any? ? host_pkgs.keys.join(", ") : "?"
+      lines << "  #{cve_id}: priority=#{info[:priority] || "?"}, packages=#{pkgs_label}"
       lines << "    description: #{info[:description]&.slice(0, 300)}"
 
       # Ubuntu security team notes — often contain critical triage context
@@ -589,15 +637,12 @@ module CveScanner
         lines << "    references: #{info[:references].first(5).join(", ")}"
       end
 
-      # Per-release package status for this host's Ubuntu release
-      if info[:packages].is_a?(Hash)
-        host_release = state.os_version.to_s.split.first.downcase  # e.g. "24.04" -> lookup by series
-        info[:packages].each do |pkg_name, series_map|
-          series_map.is_a?(Hash) && series_map.each do |series, detail|
-            d = detail.is_a?(Hash) ? detail.transform_keys(&:to_sym) : {}
-            lines << "    package #{pkg_name} [#{series}]: status=#{d[:status]}, fix=#{d[:fix_version] || "n/a"}"
-          end
-        end
+      # Per-release package status for the host's Ubuntu series only.
+      host_pkgs.each do |pkg_name, series_map|
+        detail = series_map[host_series_sym]
+        next unless detail.is_a?(Hash)
+        d = detail.transform_keys(&:to_sym)
+        lines << "    package #{pkg_name} [#{host_series}]: status=#{d[:status]}, fix=#{d[:fix_version] || "n/a"}"
       end
     end
     lines << ""

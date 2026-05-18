@@ -1,7 +1,7 @@
 GIT
   remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: f8284b3a10a468291465c4ddb6b24bd4aeab3065
-  branch: feature/v0.3.0-drop-memory-rails
+  revision: 2989a7402159337d8f70e356f1bdd732abbbfdb9
+  branch: feature/v0.4.0-remove-trust-pipeline
   specs:
     phronomy (0.3.0)
       ruby_llm (>= 1.3)

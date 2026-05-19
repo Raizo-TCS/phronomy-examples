@@ -6,15 +6,17 @@
 # collaborate via a shared KnowledgeStore to produce a multi-perspective code review.
 # Each agent reads what peers have already found before writing its own findings.
 #
-# Demonstrates: researchers, max_cycles, terminate_when, aggregate,
-#               custom tools (list_files + read_file), human-in-the-loop approval.
+# Demonstrates: member (with per-agent instruction), coordination, max_cycles,
+#               aggregate, custom tools (list_files + read_file), human-in-the-loop.
 
 require_relative "../shared/llm_config"
 require "phronomy"
 require_relative "tools"
 
 # ---------------------------------------------------------------------------
-# Researcher agents -- each has a different code-review lens
+# Member agents -- each has a different code-review lens
+# Agent instructions cover domain expertise only; coordination protocol is
+# defined by the Team below via `coordination` and `member instruction:`.
 # ---------------------------------------------------------------------------
 class StructureAnalyst < Phronomy::Agent::Base
   model        LLMConfig::MODEL
@@ -23,11 +25,7 @@ class StructureAnalyst < Phronomy::Agent::Base
   instructions <<~INST
     You are a software architect reviewing a Ruby codebase.
     Use list_files to discover all available files, then use read_file to read each one.
-    For each file, record one finding describing:
-    - The class or module responsibilities and whether they are well-separated
-    - Any coupling or dependencies you observe between classes
-    - The overall design pattern (e.g. service object, god class, utility class)
-    Submit exactly one sentence per file via write_finding.
+    For each file, identify class/module responsibilities, coupling, and design patterns.
   INST
 end
 
@@ -38,13 +36,7 @@ class SecurityAuditor < Phronomy::Agent::Base
   instructions <<~INST
     You are a security engineer auditing a Ruby codebase.
     Use list_files, then use read_file to inspect each file carefully.
-    Look for these vulnerabilities:
-    - SQL injection: user input interpolated directly into query strings
-    - Hardcoded credentials: API keys, passwords, or tokens as constants
-    - SSL verification disabled: VERIFY_NONE or equivalent
-    - Missing input validation before using user-supplied values
-    Submit exactly one sentence per vulnerability found via write_finding.
-    If a file has no issues, skip it and move to the next.
+    Look for SQL injection, hardcoded credentials, disabled SSL, and missing input validation.
   INST
 end
 
@@ -55,20 +47,33 @@ class QualityReviewer < Phronomy::Agent::Base
   instructions <<~INST
     You are a code quality reviewer analyzing a Ruby codebase.
     Use list_files, then use read_file for each file.
-    Look for these quality issues:
-    - Code duplication: identical or near-identical method bodies
-    - Magic numbers: unexplained numeric literals (e.g. 500, 25)
-    - Overly long methods: methods with more than 10 lines
-    - Missing error handling: risky operations with no rescue
-    Submit exactly one sentence per issue found via write_finding.
+    Look for code duplication, magic numbers, overly long methods, and missing error handling.
   INST
 end
 
 # ---------------------------------------------------------------------------
-# Review team -- shared state coordinates the three reviewers
+# Review team -- coordination protocol and per-agent focus defined here
 # ---------------------------------------------------------------------------
 class CodeReviewTeam < Phronomy::Agent::SharedState
-  researchers StructureAnalyst, SecurityAuditor, QualityReviewer
+  # Team-level coordination protocol: all members receive this instead of the
+  # built-in default guide.
+  coordination <<~COORD
+    You are part of a collaborative code review team sharing a knowledge store.
+    Two tools coordinate your work:
+      read_store     -- returns all current findings as JSON (no parameters)
+      write_finding  -- records one finding to the store (param: content)
+    You also have access to list_files and read_file to inspect source files.
+    Required workflow: call read_store first, then call write_finding once per insight.
+    Each write_finding call must contain exactly one unique insight.
+    If you have no new insights, call write_finding exactly once with: "No new findings in this cycle."
+    Do not output plain text -- every insight must be submitted via write_finding.
+  COORD
+
+  # Per-agent instruction narrows each member's focus without changing their
+  # core expertise instructions defined in the agent class above.
+  member StructureAnalyst
+  member SecurityAuditor,  instruction: "If a file has no security issues, skip it and move to the next file."
+  member QualityReviewer,  instruction: "Flag each issue in its own finding; do not bundle multiple issues."
 
   max_cycles 3
 

@@ -1,13 +1,3 @@
-GIT
-  remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: 28491c593d505c1840b11d35a90692d19396d7bf
-  branch: feature/v0.4.0-remove-trust-pipeline
-  specs:
-    phronomy (0.3.0)
-      ruby_llm (>= 1.3)
-      state_machines (~> 0.6)
-      zeitwerk (>= 2.6)
-
 GEM
   remote: https://rubygems.org/
   specs:
@@ -29,6 +19,10 @@ GEM
     multipart-post (2.4.1)
     net-http (0.9.1)
       uri (>= 0.11.1)
+    phronomy (0.4.0)
+      ruby_llm (>= 1.3)
+      state_machines (~> 0.6)
+      zeitwerk (>= 2.6)
     ruby_llm (1.15.0)
       base64
       event_stream_parser (~> 1)
@@ -39,7 +33,7 @@ GEM
       marcel (~> 1)
       ruby_llm-schema (~> 0)
       zeitwerk (~> 2)
-    ruby_llm-schema (0.3.0)
+    ruby_llm-schema (0.3.1)
     state_machines (0.101.0)
     uri (1.1.1)
     webrick (1.9.2)
@@ -50,7 +44,7 @@ PLATFORMS
   x86_64-linux-gnu
 
 DEPENDENCIES
-  phronomy!
+  phronomy (~> 0.4.0)
   webrick (~> 1.8)
 
 CHECKSUMS
@@ -66,9 +60,9 @@ CHECKSUMS
   marcel (1.1.0) sha256=fdcfcfa33cc52e93c4308d40e4090a5d4ea279e160a7f6af988260fa970e0bee
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
-  phronomy (0.3.0)
+  phronomy (0.4.0) sha256=5fca062b8310101d7ec8715d9a3917243f86ecdb9c4938d7273b6a801be1116d
   ruby_llm (1.15.0) sha256=ca207465bca1cca007010a79fce500d4012b1fbe188b025040cd37b884fb98af
-  ruby_llm-schema (0.3.0) sha256=a591edc5ca1b7f0304f0e2261de61ba4b3bea17be09f5cf7558153adfda3dec6
+  ruby_llm-schema (0.3.1) sha256=bfec093db924f8995e598c338147507e71b4dedfeb59de2de3ebf7985938d3d4
   state_machines (0.101.0) sha256=cbcec89699a0388493226a4b18d790bd5d49c38ba782d2099342a3dd78bcbca3
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131

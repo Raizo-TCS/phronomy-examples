@@ -2,5 +2,5 @@
 
 source "https://rubygems.org"
 
-gem "phronomy", github: "Raizo-TCS/phronomy", branch: "feature/v0.4.0-remove-trust-pipeline"
+gem "phronomy", "~> 0.4.0"
 gem "webrick", "~> 1.8"

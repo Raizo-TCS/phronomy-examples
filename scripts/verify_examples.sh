@@ -2,22 +2,29 @@
 # verify_examples.sh
 #
 # Smoke-tests all phronomy-examples:
-#   - CLI samples  (17 examples): Ruby syntax check per run.rb
-#   - Rails apps   (3 examples):  db:migrate, server boot, health check, Playwright GUI smoke test
+#   - CLI samples: Ruby syntax check per run.rb  (default)
+#                  OR actual LLM run with 120s timeout  (--with-llm)
+#   - Rails apps:  db:migrate, server boot, health check, Playwright GUI smoke test
 #
 # Usage:
 #   cd phronomy-examples
-#   bash scripts/verify_examples.sh
+#   bash scripts/verify_examples.sh              # syntax-only, no LLM required
+#   bash scripts/verify_examples.sh --with-llm  # full run via LLM (LM Studio must be up)
 #
 # The Rails GUI tests require the 'playwright' npm package (auto-installed into
 # scripts/browser_tests/node_modules on first run) and a Chromium browser
 # (installed via `npx playwright install chromium` automatically if missing).
 #
-# LLM connectivity is NOT required. CLI examples are verified by syntax only.
 # Rails server is started in development mode on dedicated ports to avoid
 # conflicts with any existing service.
 
 set -euo pipefail
+
+# ── Flag parsing ──────────────────────────────────────────────────────────────
+WITH_LLM=false
+for arg in "$@"; do
+  [[ "$arg" == "--with-llm" ]] && WITH_LLM=true
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
@@ -73,6 +80,40 @@ verify_cli() {
     local err
     err=$(cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" 2>&1 || true)
     fail "syntax error: $err"
+  fi
+}
+
+# ── CLI example verification with LLM ────────────────────────────────────────
+# Checks: Ruby syntax, then actual run via LLM with a 120-second timeout.
+verify_cli_run() {
+  local name="$1"
+  local dir="$BASE_DIR/$name"
+  header "$name [CLI + LLM]"
+
+  if [[ ! -f "$dir/run.rb" ]]; then
+    skip "no run.rb found"
+    return
+  fi
+
+  # Syntax check first.
+  if ! (cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" > /dev/null 2>&1); then
+    local err
+    err=$(cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" 2>&1 || true)
+    fail "syntax error: $err"
+    return
+  fi
+
+  # Actual run via LLM (120-second timeout).
+  # stdin is redirected from /dev/null so interactive prompts receive EOF and
+  # the example can exit gracefully without blocking.
+  local run_out run_rc=0
+  run_out=$(cd "$BASE_DIR" && timeout 120 bundle exec ruby "$name/run.rb" < /dev/null 2>&1) || run_rc=$?
+  if [[ $run_rc -eq 0 ]]; then
+    pass "run OK (exit 0)"
+  elif [[ $run_rc -eq 124 ]]; then
+    fail "run timed out (>120s)"
+  else
+    fail "run failed (exit $run_rc): ${run_out: -300}"
   fi
 }
 
@@ -203,7 +244,6 @@ CLI_EXAMPLES=(
   16_before_completion_hook
   17_multi_agent_handoff
   19_trust_pipeline
-  20_cve_scanner
   21_team_coordinator
   22_shared_state
 )
@@ -213,13 +253,18 @@ echo -e "${BOLD}  phronomy-examples verification${NC}"
 echo -e "${BOLD}======================================================${NC}"
 
 for example in "${CLI_EXAMPLES[@]}"; do
-  verify_cli "$example"
+  if $WITH_LLM; then
+    verify_cli_run "$example"
+  else
+    verify_cli "$example"
+  fi
 done
 
 # ── Rails apps (each on a dedicated port) ────────────────────────────────────
 verify_rails "09_rails_chat"        3009
 verify_rails "15_rails_secure_chat" 3015
 verify_rails "18_rails_agent_job"   3018
+verify_rails "20_cve_scanner"       3020
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
@@ -239,7 +284,11 @@ if [[ ${#FAILURES[@]} -gt 0 ]]; then
 fi
 
 echo -e "${BOLD}======================================================"
-echo -e "  CLI: syntax-only (no LLM required)"
+if $WITH_LLM; then
+  echo -e "  CLI: syntax + LLM run (timeout 120s)"
+else
+  echo -e "  CLI: syntax-only (no LLM required)"
+fi
 echo -e "  Rails: db + server + health + Playwright GUI"
 echo -e "======================================================${NC}"
 

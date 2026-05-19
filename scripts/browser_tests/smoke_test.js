@@ -2,7 +2,7 @@
 // Playwright smoke tests for phronomy-examples Rails apps.
 //
 // Environment variables:
-//   APP_NAME    — one of: 09_rails_chat, 15_rails_secure_chat, 18_rails_agent_job
+//   APP_NAME    — one of: 09_rails_chat, 15_rails_secure_chat, 18_rails_agent_job, 20_cve_scanner
 //   VERIFY_PORT — port number the Rails server is listening on
 //
 // Exit code: 0 = all checks passed, 1 = one or more checks failed.
@@ -78,11 +78,38 @@ async function testAgentJobApp(page) {
   console.log('    "Send" button visible');
 }
 
-// ── Test registry ─────────────────────────────────────────────────────────────
+/**
+ * 20_cve_scanner: root page shows a CVE ID textarea and a "Start Scan" button.
+ */
+async function testCveScannerApp(page) {
+  // 1. Load root page
+  await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  const title = await page.title();
+  console.log(`    page title: "${title}"`);
+
+  // 2. H1 heading must contain "CVE Scanner"
+  const h1 = page.locator('h1').first();
+  await h1.waitFor({ state: 'visible', timeout: 5000 });
+  const h1Text = await h1.innerText();
+  console.log(`    h1: "${h1Text.trim()}"`);
+
+  // 3. CVE input textarea (#cve-input) must be visible
+  const cveInput = page.locator('#cve-input');
+  await cveInput.waitFor({ state: 'visible', timeout: 5000 });
+  console.log('    #cve-input visible');
+
+  // 4. "Start Scan" button must be visible
+  const scanBtn = page.locator('#scan-btn');
+  await scanBtn.waitFor({ state: 'visible', timeout: 5000 });
+  console.log('    #scan-btn visible');
+}
+
+// ── Test registry ─────────────────────────────────────────────────────
 const TESTS = {
   '09_rails_chat':        testConversationApp,
   '15_rails_secure_chat': testConversationApp,
   '18_rails_agent_job':   testAgentJobApp,
+  '20_cve_scanner':       testCveScannerApp,
 };
 
 // ── Runner ─────────────────────────────────────────────────────────────────────

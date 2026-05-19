@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: 2989a7402159337d8f70e356f1bdd732abbbfdb9
+  revision: 28491c593d505c1840b11d35a90692d19396d7bf
   branch: feature/v0.4.0-remove-trust-pipeline
   specs:
     phronomy (0.3.0)
@@ -43,7 +43,7 @@ GEM
     state_machines (0.101.0)
     uri (1.1.1)
     webrick (1.9.2)
-    zeitwerk (2.7.5)
+    zeitwerk (2.8.0)
 
 PLATFORMS
   ruby
@@ -72,7 +72,7 @@ CHECKSUMS
   state_machines (0.101.0) sha256=cbcec89699a0388493226a4b18d790bd5d49c38ba782d2099342a3dd78bcbca3
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
-  zeitwerk (2.7.5) sha256=d8da92128c09ea6ec62c949011b00ed4a20242b255293dd66bf41545398f73dd
+  zeitwerk (2.8.0) sha256=474d0a1d2429f635af7c4574f5ddbce0d0cfc286067c7515858b93a26b4f3e3d
 
 BUNDLED WITH
   4.0.11

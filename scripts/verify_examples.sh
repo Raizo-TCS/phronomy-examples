@@ -204,6 +204,8 @@ CLI_EXAMPLES=(
   17_multi_agent_handoff
   19_trust_pipeline
   20_cve_scanner
+  21_team_coordinator
+  22_shared_state
 )
 
 echo -e "${BOLD}======================================================${NC}"

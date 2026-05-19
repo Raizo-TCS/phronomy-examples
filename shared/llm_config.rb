@@ -62,5 +62,9 @@ module LLMConfig
   RubyLLM.configure do |config|
     config.openai_api_key = API_KEY
     config.openai_api_base = BASE_URL
+    # LM Studio and similar local servers do not define a 'developer' role in
+    # their chat templates; force 'system' role so instructions are handled
+    # correctly by the endpoint.
+    config.openai_use_system_role = true
   end
 end

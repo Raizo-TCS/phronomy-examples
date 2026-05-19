@@ -228,7 +228,7 @@ IMPROVE_NODE = lambda do |state|
     print "\n[ImproverAgent] Generating improvements (streaming)...\n"
     ImproverAgent.new.stream(
       { message: user_prompt, priority: priority },
-      config: { messages: REVIEW_SESSIONS[thread_id], thread_id: thread_id }
+      messages: REVIEW_SESSIONS[thread_id], thread_id: thread_id
     ) do |event|
       case event.type
       when :token

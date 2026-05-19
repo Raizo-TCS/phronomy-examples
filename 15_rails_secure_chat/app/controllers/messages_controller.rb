@@ -23,9 +23,9 @@ class MessagesController < ApplicationController
     # Feature B: propagate session user_id to the tracer span.
     result = SecureChatAgent.new.invoke(
       content,
+      messages:   messages,
+      thread_id:  thread_id,
       config: {
-        messages:   messages,
-        thread_id:  thread_id,
         user_id:    session[:user_id],
         session_id: session[:session_id]
       }

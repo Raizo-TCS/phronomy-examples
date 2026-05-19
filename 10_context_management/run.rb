@@ -224,7 +224,7 @@ session_messages = []
 
 r1 = ContextDemoAgent.new.invoke(
   "My name is Alice. Please remember it.",
-  config: { messages: session_messages, thread_id: "demo" }
+  messages: session_messages, thread_id: "demo"
 )
 session_messages = r1[:messages]
 puts "Turn 1 response: #{r1[:output][0, 70]}"
@@ -232,12 +232,12 @@ puts "History after turn 1: #{session_messages.length} messages"
 
 r2 = ContextDemoAgent.new.invoke(
   "What is my name?",
-  config: { messages: session_messages, thread_id: "demo" }
+  messages: session_messages, thread_id: "demo"
 )
 session_messages = r2[:messages]
 puts "Turn 2 response: #{r2[:output][0, 70]}"
 puts "History after turn 2: #{session_messages.length} messages"
-puts "(Agent recalled 'Alice' from the messages passed via config[:messages])"
+puts "(Agent recalled 'Alice' from the messages passed via messages:)"
 puts
 
 # -----------------------------------------------------------------------

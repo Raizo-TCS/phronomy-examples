@@ -16,7 +16,7 @@ class MessagesController < ApplicationController
     end
 
     messages = PhronomyMessage.load_messages(thread_id)
-    result = ChatAgent.new.invoke(content, config: { messages: messages, thread_id: thread_id })
+    result = ChatAgent.new.invoke(content, messages: messages, thread_id: thread_id)
     PhronomyMessage.save_messages(thread_id, result[:messages])
 
     render json: { reply: result[:output] }

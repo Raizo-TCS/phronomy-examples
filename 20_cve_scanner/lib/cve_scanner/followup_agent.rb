@@ -32,9 +32,10 @@ class CveScanner::FollowupAgent < Phronomy::Agent::Base
                        (e.g. "scan again", "re-run", "check with updated packages")
     - "remediate"    — the operator explicitly asks to apply a fix or run remediation
                        commands (e.g. "fix it", "apply the patch", "run apt upgrade",
-                       "remediate", "修正して", "パッチを当てて", "apt upgradeを実行して")
+                       "remediate", or equivalent phrases in the operator's language)
     - "report"       — the operator asks for a report or summary document
-                       (e.g. "レポートを作成", "summarize", "report", "まとめて")
+                       (e.g. "summarize", "report", "create a report",
+                       or equivalent phrases in the operator's language)
     - "done"         — the operator is finished (e.g. "thanks", "done", "exit",
                        "that's all", "no more questions")
 

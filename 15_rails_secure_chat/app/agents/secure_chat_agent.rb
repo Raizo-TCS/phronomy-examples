@@ -1,11 +1,45 @@
 # frozen_string_literal: true
 
+# Application-level prompt injection guardrail.
+# PromptInjectionDetector was removed from phronomy; applications define
+# their own patterns so policy decisions stay in application code.
+class PromptInjectionGuardrail < Phronomy::Guardrail::InputGuardrail
+  PATTERNS = [
+    /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|prompts?)/i,
+    /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|prompts?)/i,
+    /forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|prompts?)/i,
+    /\bsystem\s*prompt\s*:/i,
+    /\byou\s+are\s+now\s+(?:a|an)\b/i,
+    /\bact\s+as\s+(?:a|an)\b/i,
+    /\bpretend\s+(?:you\s+are|to\s+be)\b/i,
+    /\bjailbreak\b/i,
+    /\bdan\s*mode\b/i,
+    /\bdev(?:eloper)?\s*mode\b/i
+  ].freeze
+
+  def check(value)
+    text = value.to_s
+    PATTERNS.each { |p| fail!("Potential prompt injection detected") if text.match?(p) }
+  end
+end
+
+# Application-level PII guardrail (input side).
+class PIIInputGuardrail < Phronomy::Guardrail::InputGuardrail
+  PATTERNS = {
+    credit_card: {pattern: /\b(?:\d{4}[- ]?){3}\d{4}\b/, label: "credit card number"},
+    email: {pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/, label: "email address"},
+    phone: {pattern: /(?:\+\d{1,3}[.\- ]?)?\(?\d{3}\)?[.\- ]?\d{3,4}[.\- ]?\d{4}\b/, label: "phone number"}
+  }.freeze
+
+  def check(value)
+    text = value.to_s
+    PATTERNS.each_value { |entry| fail!("PII detected in input: #{entry[:label]}") if text.match?(entry[:pattern]) }
+  end
+end
+
 # Feature A (output side): reject LLM responses that contain PII patterns.
-# Reuses the same pattern set as PIIPatternDetector to maintain consistency.
 class PIIOutputGuardrail < Phronomy::Guardrail::OutputGuardrail
-  PII_UNION = Regexp.union(
-    *Phronomy::Guardrail::Builtin::PIIPatternDetector::PATTERNS.values.map { |v| v[:pattern] }
-  )
+  PII_UNION = Regexp.union(*PIIInputGuardrail::PATTERNS.values.map { |v| v[:pattern] })
 
   def check(value)
     text = value.is_a?(Hash) ? value[:output].to_s : value.to_s
@@ -13,7 +47,7 @@ class PIIOutputGuardrail < Phronomy::Guardrail::OutputGuardrail
   end
 end
 
-# Feature A + B: NIST AI RMF Govern/Map -- Builtin guardrails and caller identity.
+# Feature A + B: NIST AI RMF Govern/Map -- custom guardrails and caller identity.
 # Guardrails are registered on each instance via #add_input_guardrail (instance API).
 class SecureChatAgent < Phronomy::Agent::Base
   model LLM_MODEL
@@ -24,8 +58,8 @@ class SecureChatAgent < Phronomy::Agent::Base
   def initialize
     super
     # Feature A (input): block PII and prompt-injection attempts before reaching the LLM.
-    add_input_guardrail Phronomy::Guardrail::Builtin::PromptInjectionDetector.new
-    add_input_guardrail Phronomy::Guardrail::Builtin::PIIPatternDetector.new
+    add_input_guardrail PromptInjectionGuardrail.new
+    add_input_guardrail PIIInputGuardrail.new
     # Feature A (output): block LLM responses that accidentally contain PII.
     add_output_guardrail PIIOutputGuardrail.new
   end

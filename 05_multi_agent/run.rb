@@ -7,10 +7,12 @@
 # tools so the orchestrator LLM decides autonomously when and how to
 # call them, rather than following a hardcoded execution order.
 #
-# Contrast with a Graph-based fixed pipeline:
-#   graph.add_node(:research) { |s| ... }
-#   graph.add_node(:write)    { |s| ... }
-#   graph.add_edge(:research, :write)
+# Contrast with a Workflow-based fixed pipeline:
+#   app = Phronomy::Workflow.define(MyContext) do
+#     state :research, action: RESEARCH_NODE
+#     state :write,    action: WRITE_NODE
+#     after :research, to: :write
+#   end
 #
 # Here the orchestrator LLM drives coordination via tool calls.
 

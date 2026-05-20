@@ -6,7 +6,7 @@ Demonstrates the "Agent-as-Tool" pattern for dynamic multi-agent orchestration.
 
 Wrap specialist sub-agents as tools so that an orchestrator agent can decide
 autonomously when and how to call them — instead of following a hardcoded
-execution order in a graph.
+execution order in a workflow.
 
 ## Phronomy Features
 

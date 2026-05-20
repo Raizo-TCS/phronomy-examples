@@ -246,6 +246,8 @@ CLI_EXAMPLES=(
   19_trust_pipeline
   21_team_coordinator
   22_shared_state
+  23_bounded_parallel
+  24_vector_store_dimension
 )
 
 echo -e "${BOLD}======================================================${NC}"

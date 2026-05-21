@@ -255,6 +255,7 @@ CLI_EXAMPLES=(
   23_bounded_parallel
   24_vector_store_dimension
   25_event_loop
+  26_agent_event_loop
 )
 
 echo -e "${BOLD}======================================================${NC}"

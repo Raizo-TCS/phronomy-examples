@@ -32,7 +32,7 @@ EVALUATE_NODE = ->(state) {
   })
   score = response.scan(/\d+/).first.to_i.clamp(0, 10)
   puts "[Iteration #{state.iterations}] Score: #{score}"
-  state.merge(score: score)
+  state.score = score
 }
 
 IMPROVE_NODE = ->(state) {
@@ -40,7 +40,8 @@ IMPROVE_NODE = ->(state) {
     system: "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text.",
     user:   state.text
   })
-  state.merge(text: improved.strip, iterations: state.iterations + 1)
+  state.text       = improved.strip
+  state.iterations = state.iterations + 1
 }
 
 FINISH_NODE = ->(state) {

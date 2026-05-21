@@ -101,11 +101,11 @@ end
 puts
 
 # -----------------------------------------------------------------------
-# 6. Context::Builder — fitting history within a token budget
-#    Builder assembles system prompt + messages within effective_input_limit.
+# 6. Context::Assembler — fitting history within a token budget
+#    Assembler assembles system prompt + messages within effective_input_limit.
 #    Older messages are automatically dropped to keep the context lean.
 # -----------------------------------------------------------------------
-puts "--- 6. Context::Builder — fit history within a token budget ---"
+puts "--- 6. Context::Assembler — fit history within a token budget ---"
 
 tight_budget = Phronomy::Context::TokenBudget.new(
   context_window:    512,
@@ -119,8 +119,8 @@ long_history = (1..10).flat_map do |i|
   ]
 end
 
-builder = Phronomy::Context::Builder.new(budget: tight_budget)
-  .add_system("You are a helpful assistant.")
+builder = Phronomy::Context::Assembler.new(budget: tight_budget)
+  .add_instruction("You are a helpful assistant.")
   .add_messages(long_history)
 
 ctx = builder.build
@@ -152,10 +152,10 @@ puts "  restored default:          #{Phronomy::Context::TokenEstimator.estimate(
 puts
 
 # -----------------------------------------------------------------------
-# 8. Context::Builder + LLM — assemble context within a budget, then call
+# 8. Context::Assembler + LLM — assemble context within a budget, then call
 #    the LLM.  Evidence: print message counts and estimated vs actual tokens.
 # -----------------------------------------------------------------------
-puts "--- 8. Context::Builder + LLM ---"
+puts "--- 8. Context::Assembler + LLM ---"
 
 # Build a modest budget to demonstrate truncation.
 ctx_budget = Phronomy::Context::TokenBudget.new(
@@ -176,9 +176,9 @@ history = (1..20).flat_map do |i|
   ]
 end
 
-builder = Phronomy::Context::Builder.new(budget: ctx_budget)
-  .add_system("You are a helpful assistant. Answer in one sentence.")
-  .add_knowledge("phronomy is a Ruby AI agent framework.")
+builder = Phronomy::Context::Assembler.new(budget: ctx_budget)
+  .add_instruction("You are a helpful assistant. Answer in one sentence.")
+  .add_knowledge("phronomy is a Ruby AI agent framework.", type: :entity)
   .add_messages(history)
 
 ctx = builder.build

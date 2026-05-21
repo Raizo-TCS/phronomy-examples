@@ -45,10 +45,10 @@ app = Phronomy::Workflow.define(MailState) do
   wait_state :awaiting_approval
   state :send, action: SEND_NODE
 
-  after :draft, to: :awaiting_approval
-  after :send,  to: :__finish__
+  transition from: :draft, to: :awaiting_approval
+  transition from: :send,  to: :__finish__
 
-  event :approve, from: :awaiting_approval, to: :send
+  transition from: :awaiting_approval, on: :approve, to: :send
 end
 
 puts "=== Interrupt / Resume Example ==="

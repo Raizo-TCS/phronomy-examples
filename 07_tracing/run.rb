@@ -33,7 +33,7 @@ GENERATE_NODE_WITH_TRACE = ->(state) {
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
   state :generate, action: GENERATE_NODE_WITH_TRACE
-  after :generate, to: :__finish__
+  transition from: :generate, to: :__finish__
 end
 
 puts "=== Tracing Example ==="

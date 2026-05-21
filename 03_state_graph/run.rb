@@ -54,10 +54,10 @@ app = Phronomy::Workflow.define(MyState) do
   state :improve,  action: IMPROVE_NODE
   state :finish,   action: FINISH_NODE
 
-  event :route, from: :evaluate, guard: ->(s) { s.score >= 7 || s.iterations >= 3 }, to: :finish
-  event :route, from: :evaluate, to: :improve
-  after :improve, to: :evaluate
-  after :finish,  to: :__finish__
+  transition from: :evaluate, guard: ->(s) { s.score >= 7 || s.iterations >= 3 }, to: :finish
+  transition from: :evaluate, to: :improve
+  transition from: :improve, to: :evaluate
+  transition from: :finish, to: :__finish__
 end
 
 puts "=== Workflow Conditional Routing Example ==="

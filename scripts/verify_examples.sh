@@ -248,6 +248,7 @@ CLI_EXAMPLES=(
   22_shared_state
   23_bounded_parallel
   24_vector_store_dimension
+  25_event_loop
 )
 
 echo -e "${BOLD}======================================================${NC}"

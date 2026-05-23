@@ -3,7 +3,7 @@
 #
 # Smoke-tests all phronomy-examples:
 #   - CLI samples: Ruby syntax check per run.rb  (default)
-#                  OR actual LLM run with 120s timeout  (--with-llm)
+#                  OR actual LLM run with 240s timeout  (--with-llm)
 #   - Rails apps:  db:migrate, server boot, health check, Playwright GUI smoke test
 #
 # Usage:
@@ -34,6 +34,11 @@ export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
 
 # ── Terminal colours ─────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BOLD='\033[1m'; NC='\033[0m'
+
+# ── Per-example LLM timeout overrides (seconds; default: 240) ────────────────
+# Add entries here for examples that require more than 240 seconds to run.
+declare -A EXAMPLE_TIMEOUTS
+EXAMPLE_TIMEOUTS["10_context_management"]=480   # 9 LLM calls ~270s typical
 
 # ── Counters & failure list ───────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
@@ -84,7 +89,7 @@ verify_cli() {
 }
 
 # ── CLI example verification with LLM ────────────────────────────────────────
-# Checks: Ruby syntax, then actual run via LLM with a 120-second timeout.
+# Checks: Ruby syntax, then actual run via LLM with a 240-second timeout.
 verify_cli_run() {
   local name="$1"
   local dir="$BASE_DIR/$name"
@@ -103,15 +108,16 @@ verify_cli_run() {
     return
   fi
 
-  # Actual run via LLM (120-second timeout).
+  # Actual run via LLM (240-second default timeout, overridable per example).
   # stdin is redirected from /dev/null so interactive prompts receive EOF and
   # the example can exit gracefully without blocking.
+  local llm_timeout=${EXAMPLE_TIMEOUTS[$name]:-240}
   local run_out run_rc=0
-  run_out=$(cd "$BASE_DIR" && timeout 120 bundle exec ruby "$name/run.rb" < /dev/null 2>&1) || run_rc=$?
+  run_out=$(cd "$BASE_DIR" && timeout $llm_timeout bundle exec ruby "$name/run.rb" < /dev/null 2>&1) || run_rc=$?
   if [[ $run_rc -eq 0 ]]; then
     pass "run OK (exit 0)"
   elif [[ $run_rc -eq 124 ]]; then
-    fail "run timed out (>120s)"
+    fail "run timed out (>${llm_timeout}s)"
   else
     fail "run failed (exit $run_rc): ${run_out: -300}"
   fi
@@ -248,6 +254,8 @@ CLI_EXAMPLES=(
   22_shared_state
   23_bounded_parallel
   24_vector_store_dimension
+  25_event_loop
+  26_agent_event_loop
 )
 
 echo -e "${BOLD}======================================================${NC}"
@@ -287,7 +295,7 @@ fi
 
 echo -e "${BOLD}======================================================"
 if $WITH_LLM; then
-  echo -e "  CLI: syntax + LLM run (timeout 120s)"
+  echo -e "  CLI: syntax + LLM run (timeout 240s)"
 else
   echo -e "  CLI: syntax-only (no LLM required)"
 fi

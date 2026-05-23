@@ -32,7 +32,7 @@ EVALUATE_NODE = ->(state) {
   })
   score = response.scan(/\d+/).first.to_i.clamp(0, 10)
   puts "[Iteration #{state.iterations}] Score: #{score}"
-  state.merge(score: score)
+  state.score = score
 }
 
 IMPROVE_NODE = ->(state) {
@@ -40,7 +40,8 @@ IMPROVE_NODE = ->(state) {
     system: "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text.",
     user:   state.text
   })
-  state.merge(text: improved.strip, iterations: state.iterations + 1)
+  state.text       = improved.strip
+  state.iterations = state.iterations + 1
 }
 
 FINISH_NODE = ->(state) {
@@ -54,10 +55,10 @@ app = Phronomy::Workflow.define(MyState) do
   state :improve,  action: IMPROVE_NODE
   state :finish,   action: FINISH_NODE
 
-  event :route, from: :evaluate, guard: ->(s) { s.score >= 7 || s.iterations >= 3 }, to: :finish
-  event :route, from: :evaluate, to: :improve
-  after :improve, to: :evaluate
-  after :finish,  to: :__finish__
+  transition from: :evaluate, guard: ->(s) { s.score >= 7 || s.iterations >= 3 }, to: :finish
+  transition from: :evaluate, to: :improve
+  transition from: :improve, to: :evaluate
+  transition from: :finish, to: :__finish__
 end
 
 puts "=== Workflow Conditional Routing Example ==="

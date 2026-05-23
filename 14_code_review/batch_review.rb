@@ -83,7 +83,7 @@ target_files.each_with_index do |path, idx|
       all_performance << per_t.value
       all_readability << red_t.value
       all_abstraction << abs_t.value
-    rescue RubyLLM::ContextLengthExceededError, RubyLLM::BadRequestError => e
+    rescue Phronomy::ContextLengthError, Phronomy::TransportError => e
       warn "\n  [SKIP chunk #{cidx + 1}] #{e.class}: #{e.message}"
     end
   end

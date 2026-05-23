@@ -29,7 +29,7 @@ GENERATE_NODE = ->(state) {
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
   state :generate, action: GENERATE_NODE
-  after :generate, to: :__finish__
+  transition from: :generate, to: :__finish__
 end
 
 puts "=== Basic Workflow Pipeline Example ==="

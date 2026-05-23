@@ -120,51 +120,51 @@ module CveScanner
       wait_state :awaiting_followup
 
       # ── Edges ─────────────────────────────────────────────────────────────
-      after :gather_scan_info, to: :check_cve_data
+      transition from: :gather_scan_info, to: :check_cve_data
       after :run_checks,       to: :evaluate_checks
       after :run_remediation,  to: :evaluate_remediation
       after :report,           to: :awaiting_followup
 
       # Skip to :report when all CVEs have no package data.
-      event :route, from: :check_cve_data,
+      transition from: :check_cve_data,
         guard: ->(s) {
           checkable = s.cve_ids.reject { |id| %w[not_found no_packages].include?(s.vulnerability_status[id]) }
           checkable.empty?
         }, to: :report
-      event :route, from: :check_cve_data, to: :propose_checks
+      transition from: :check_cve_data, to: :propose_checks
 
       # CHECK LOOP: agent may decide "done" in :propose_checks (skips checks).
-      event :route, from: :propose_checks,
+      transition from: :propose_checks,
         guard: ->(s) { s.check_decision == "need_more" }, to: :awaiting_check_approval
-      event :route, from: :propose_checks, to: :report
-      event :approve_checks, from: :awaiting_check_approval, to: :run_checks
+      transition from: :propose_checks, to: :report
+      transition from: :awaiting_check_approval, on: :approve_checks, to: :run_checks
 
-      event :route, from: :evaluate_checks,
+      transition from: :evaluate_checks,
         guard: ->(s) { s.check_decision == "need_more" }, to: :propose_checks
-      event :route, from: :evaluate_checks, to: :report
+      transition from: :evaluate_checks, to: :report
 
       # REMEDIATION LOOP
-      event :route, from: :propose_remediation,
+      transition from: :propose_remediation,
         guard: ->(s) { s.remediation_decision == "need_more" }, to: :awaiting_remediation_approval
-      event :route, from: :propose_remediation, to: :report
-      event :approve_remediation, from: :awaiting_remediation_approval, to: :run_remediation
+      transition from: :propose_remediation, to: :report
+      transition from: :awaiting_remediation_approval, on: :approve_remediation, to: :run_remediation
 
-      event :route, from: :evaluate_remediation,
+      transition from: :evaluate_remediation,
         guard: ->(s) { s.remediation_decision == "need_more" }, to: :propose_remediation
-      event :route, from: :evaluate_remediation, to: :report
+      transition from: :evaluate_remediation, to: :report
 
       # FOLLOW-UP LOOP: after report wait for user questions.
-      event :submit_followup, from: :awaiting_followup, to: :handle_followup
+      transition from: :awaiting_followup, on: :submit_followup, to: :handle_followup
 
-      event :route, from: :handle_followup,
+      transition from: :handle_followup,
         guard: ->(s) { s.followup_decision == "answered" },      to: :awaiting_followup
-      event :route, from: :handle_followup,
+      transition from: :handle_followup,
         guard: ->(s) { s.followup_decision == "reinvestigate" }, to: :gather_scan_info
-      event :route, from: :handle_followup,
+      transition from: :handle_followup,
         guard: ->(s) { s.followup_decision == "remediate" },     to: :propose_remediation
-      event :route, from: :handle_followup,
+      transition from: :handle_followup,
         guard: ->(s) { s.followup_decision == "report" },        to: :report
-      event :route, from: :handle_followup, to: :__finish__
+      transition from: :handle_followup, to: :__finish__
     end
   end
 

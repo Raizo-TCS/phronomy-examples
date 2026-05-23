@@ -300,12 +300,12 @@ def build_pipeline
     state :improve,  action: IMPROVE_NODE
     state :evaluate, action: EVALUATE_NODE
 
-    after :load_and_split,  to: :parallel_review
-    after :parallel_review, to: :awaiting_priority
-    after :improve,         to: :evaluate
-    after :evaluate,        to: :__finish__
+    transition from: :load_and_split,  to: :parallel_review
+    transition from: :parallel_review, to: :awaiting_priority
+    transition from: :improve,         to: :evaluate
+    transition from: :evaluate,        to: :__finish__
 
     # User selects a review priority before the improver runs.
-    event :proceed, from: :awaiting_priority, to: :improve
+    transition from: :awaiting_priority, on: :proceed, to: :improve
   end
 end

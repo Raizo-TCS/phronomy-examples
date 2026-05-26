@@ -65,55 +65,31 @@ LOAD_AND_SPLIT_NODE = lambda do |state|
   end
 end
 
-# Seconds without receiving a streaming token before treating the LLM call as hung.
-# A watchdog thread raises in the branch thread so the parallel error handler can recover.
+# Dedicated pool for branch-level parallelism (one slot per branch).
+# Kept separate from the shared blocking_io pool so that branch workers can
+# submit inner chunk-level calls to blocking_io without deadlocking.
+BRANCH_POOL = Phronomy::Runtime.instance.pool("review_branches", size: 4)
+
+# Maximum seconds allowed for a single chunk LLM call before BlockingAdapterPool
+# marks the operation as abandoned and raises Phronomy::TimeoutError on await.
 REVIEWER_ACTIVITY_TIMEOUT = 90
 
-# WARNING: raw Thread / preemptive-raise pattern below is a temporary workaround.
-# Phronomy's cooperative-first concurrency model (ADR-010, Rule 3) requires
-# blocking I/O to be isolated behind BlockingAdapterPool, which is not available
-# in phronomy 0.7.1; this example has not yet been migrated to that API.
-# Once the API is available, replace this watchdog with a BlockingAdapterPool
-# call that accepts a native timeout.
-# - `branch_thread.raise` performs preemptive thread interruption and may leave
-#   resources in an inconsistent state; NOT recommended for production use.
-# - `watchdog.kill` is unsafe in general; prefer cooperative cancellation.
-#
 # Calls one reviewer agent on a single chunk using streaming.
-# A watchdog thread monitors token activity; if no token arrives within
-# REVIEWER_ACTIVITY_TIMEOUT seconds the watchdog raises RuntimeError in the
-# calling thread, which is rescued by PARALLEL_REVIEW_NODE's error-handling block.
-def review_chunk_streaming(agent_class, chunk_text, idx, total)
-  output = +""
-  last_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  branch_thread = Thread.current
-
-  watchdog = Thread.new do
-    loop do
-      sleep 10
-      idle = Process.clock_gettime(Process::CLOCK_MONOTONIC) - last_at
-      if idle > REVIEWER_ACTIVITY_TIMEOUT
-        branch_thread.raise(
-          RuntimeError,
-          "[#{agent_class.name}] chunk #{idx}/#{total}: no token for #{idle.to_i}s (activity timeout)"
-        )
-        break
-      end
-    end
-  end
-
-  begin
+# Submitted to the shared blocking_io pool with a per-chunk timeout (ADR-010,
+# Rule 3). No watchdog thread or preemptive Thread#raise is needed.
+def review_chunk(agent_class, chunk_text, idx, total)
+  pool = Phronomy::Runtime.instance.blocking_io
+  op = pool.submit(timeout: REVIEWER_ACTIVITY_TIMEOUT) do
+    output = +""
     agent_class.new.stream(chunk_text) do |event|
-      if event.type == :token
-        output << event.payload[:content].to_s
-        last_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      end
+      output << event.payload[:content].to_s if event.type == :token
     end
-  ensure
-    watchdog.kill
+    output.strip
   end
-
-  output.strip
+  op.await
+rescue Phronomy::TimeoutError
+  warn "[#{agent_class.name}] chunk #{idx}/#{total}: timed out after #{REVIEWER_ACTIVITY_TIMEOUT}s"
+  ""
 end
 
 # Runs a single reviewer agent over all chunks and concatenates findings.
@@ -124,7 +100,7 @@ def review_all_chunks(agent_class, chunks, source_code)
   texts.each_with_index.map do |chunk_text, idx|
     print chunks.size > 1 ? "." : ""
     $stdout.flush
-    output = review_chunk_streaming(agent_class, chunk_text, idx + 1, texts.size)
+    output = review_chunk(agent_class, chunk_text, idx + 1, texts.size)
     warn "[DEBUG][#{agent_class.name}] chunk=#{idx + 1}/#{texts.size} " \
          "input_chars=#{chunk_text.length} output_chars=#{output.length} " \
          "output_empty=#{output.empty?}"
@@ -165,35 +141,28 @@ ABSTRACTION_BRANCH = lambda do |state|
 end
 
 # ---- Node: parallel_review (application-level parallel execution) ----
-# Runs four reviewer agents concurrently using Ruby threads.
-# This is an application-level parallel pattern; phronomy does not provide
-# a built-in parallel node abstraction.
-#
-# WARNING: raw Thread.new / Mutex usage here is a temporary demo workaround.
-# Phronomy's cooperative-first concurrency model (ADR-010, Rule 1) normally
-# avoids creating raw threads inside framework components. This example has not
-# yet been migrated to BlockingAdapterPool (Rule 3), which is not available in
-# phronomy 0.7.1. Once the API is available, migrate to it to restore
-# cooperative-first compliance.
+# Runs four reviewer branches concurrently via BRANCH_POOL (ADR-010, Rule 3).
+# Each branch is submitted as a blocking operation; the calling thread collects
+# results via op.await once all four are enqueued.
+# Per-chunk LLM timeouts are enforced inside review_chunk via separate
+# blocking_io pool calls, keeping the two pools independent to avoid deadlock.
 #
 # Errors from individual branches are logged (best_effort semantics);
 # the partial reviews collected so far are merged into the state.
 PARALLEL_REVIEW_NODE = lambda do |state|
   branches = [SECURITY_BRANCH, PERFORMANCE_BRANCH, READABILITY_BRANCH, ABSTRACTION_BRANCH]
+  ops = branches.map { |branch| BRANCH_POOL.submit { branch.call(state) } }
   results = []
   errors = []
-  mutex = Mutex.new
 
-  threads = branches.map do |branch|
-    Thread.new do
-      result = branch.call(state)
-      mutex.synchronize { results << result } if result
+  ops.each do |op|
+    begin
+      result = op.await
+      results << result if result
     rescue => e
-      mutex.synchronize { errors << e }
+      errors << e
     end
   end
-
-  threads.each(&:join)
 
   errors.each { |e| warn "[parallel_review] branch error: #{e.message}" }
 

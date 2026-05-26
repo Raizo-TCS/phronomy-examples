@@ -4,7 +4,7 @@ source "https://rubygems.org"
 gem "rails", "~> 8.1.3"
 
 # Phronomy AI agent framework
-gem "phronomy", github: "Raizo-TCS/phronomy"
+gem "phronomy", "~> 0.7.1"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 # Use sqlite3 as the database for Active Record

@@ -4,7 +4,7 @@ source "https://rubygems.org"
 gem "rails", "~> 8.1.3"
 
 # Phronomy AI agent framework
-gem "phronomy", github: "Raizo-TCS/phronomy", branch: "feature/v0.3.0-drop-memory-rails"
+gem "phronomy", "~> 0.7.1"
 
 # HTML parsing for Ubuntu CVE page scraping
 gem "nokogiri"

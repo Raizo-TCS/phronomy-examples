@@ -94,7 +94,7 @@ single CLI pipeline.  Supply a Ruby source file and the pipeline:
 
 1. **InputGuardrail** — rejects invalid/missing files before any LLM call
 2. **Splitter** — splits large files into chunks with `RecursiveSplitter`
-3. **Graph + Parallel branches** — runs Security / Performance / Readability / Abstraction agents concurrently via application-level `Thread.new` (see pipeline.rb note)
+3. **Graph + Parallel branches** — runs Security / Performance / Readability / Abstraction agents concurrently via `Runtime` named pools and `BlockingAdapterPool`
 4. **Interrupt/Resume** — pauses after reviews so you can choose which area to fix
 5. **PromptTemplate** — formats the improvement prompt from variables
 6. **Agent (streaming)** — generates improved code with real-time token output

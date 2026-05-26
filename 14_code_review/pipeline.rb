@@ -71,8 +71,9 @@ REVIEWER_ACTIVITY_TIMEOUT = 90
 
 # WARNING: raw Thread / preemptive-raise pattern below is a temporary workaround.
 # Phronomy's cooperative-first concurrency model (ADR-010, Rule 3) requires
-# blocking I/O to be isolated behind BlockingAdapterPool, which is not yet
-# implemented. Once available, replace this watchdog with a BlockingAdapterPool
+# blocking I/O to be isolated behind BlockingAdapterPool, which is not available
+# in phronomy 0.7.1; this example has not yet been migrated to that API.
+# Once the API is available, replace this watchdog with a BlockingAdapterPool
 # call that accepts a native timeout.
 # - `branch_thread.raise` performs preemptive thread interruption and may leave
 #   resources in an inconsistent state; NOT recommended for production use.
@@ -170,9 +171,10 @@ end
 #
 # WARNING: raw Thread.new / Mutex usage here is a temporary demo workaround.
 # Phronomy's cooperative-first concurrency model (ADR-010, Rule 1) normally
-# avoids creating raw threads inside framework components. This example deviates
-# because BlockingAdapterPool (Rule 3) is not yet implemented. Once available,
-# migrate to BlockingAdapterPool to restore cooperative-first compliance.
+# avoids creating raw threads inside framework components. This example has not
+# yet been migrated to BlockingAdapterPool (Rule 3), which is not available in
+# phronomy 0.7.1. Once the API is available, migrate to it to restore
+# cooperative-first compliance.
 #
 # Errors from individual branches are logged (best_effort semantics);
 # the partial reviews collected so far are merged into the state.

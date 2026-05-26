@@ -35,5 +35,9 @@ puts "Query: #{query}"
 puts
 puts "--- Agent Response ---"
 
-result = FileExplorerAgent.new.invoke(query)
-puts result[:output]
+begin
+  result = FileExplorerAgent.new.invoke(query)
+  puts result[:output]
+ensure
+  list_files_tool.close
+end

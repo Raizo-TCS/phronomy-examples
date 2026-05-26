@@ -69,6 +69,15 @@ end
 # A watchdog thread raises in the branch thread so the parallel error handler can recover.
 REVIEWER_ACTIVITY_TIMEOUT = 90
 
+# WARNING: raw Thread / preemptive-raise pattern below is a temporary workaround.
+# Phronomy's cooperative-first concurrency model (ADR-010, Rule 3) requires
+# blocking I/O to be isolated behind BlockingAdapterPool, which is not yet
+# implemented. Once available, replace this watchdog with a BlockingAdapterPool
+# call that accepts a native timeout.
+# - `branch_thread.raise` performs preemptive thread interruption and may leave
+#   resources in an inconsistent state; NOT recommended for production use.
+# - `watchdog.kill` is unsafe in general; prefer cooperative cancellation.
+#
 # Calls one reviewer agent on a single chunk using streaming.
 # A watchdog thread monitors token activity; if no token arrives within
 # REVIEWER_ACTIVITY_TIMEOUT seconds the watchdog raises RuntimeError in the
@@ -158,6 +167,13 @@ end
 # Runs four reviewer agents concurrently using Ruby threads.
 # This is an application-level parallel pattern; phronomy does not provide
 # a built-in parallel node abstraction.
+#
+# WARNING: raw Thread.new / Mutex usage here is a temporary demo workaround.
+# Phronomy's cooperative-first concurrency model (ADR-010, Rule 1) normally
+# avoids creating raw threads inside framework components. This example deviates
+# because BlockingAdapterPool (Rule 3) is not yet implemented. Once available,
+# migrate to BlockingAdapterPool to restore cooperative-first compliance.
+#
 # Errors from individual branches are logged (best_effort semantics);
 # the partial reviews collected so far are merged into the state.
 PARALLEL_REVIEW_NODE = lambda do |state|

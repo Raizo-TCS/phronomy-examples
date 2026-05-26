@@ -10,8 +10,34 @@ bundle install
 
 ## LLM Configuration
 
-All examples load LLM settings from `shared/llm_config.rb`.  
-Edit that file to switch providers or models.
+All examples load LLM settings from `shared/llm_config.rb`, which reads from
+environment variables.  No source file editing is required.
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PHRONOMY_MODEL` | `gpt-4o-mini` | Model identifier (e.g. `gpt-4o`, `claude-3-5-sonnet-20241022`) |
+| `PHRONOMY_PROVIDER` | _(auto-inferred)_ | Provider symbol (e.g. `openai`, `anthropic`). Leave unset for standard models. |
+| `PHRONOMY_BASE_URL` | _(provider default)_ | Base URL for local/custom endpoints (LM Studio, Ollama, vLLM, etc.) |
+| `PHRONOMY_API_KEY` | _(from `OPENAI_API_KEY`)_ | API key. Falls back to `OPENAI_API_KEY` for OpenAI. |
+| `PHRONOMY_CONTEXT_WINDOW` | _(auto-detected or 8192)_ | Override context window size in tokens. |
+
+### Quick start — OpenAI
+
+```bash
+export OPENAI_API_KEY="sk-..."
+bundle exec ruby 01_basic_chain/run.rb
+```
+
+### Quick start — local LM Studio
+
+```bash
+export PHRONOMY_MODEL="openai/gpt-oss-20b"
+export PHRONOMY_BASE_URL="http://127.0.0.1:1234/v1"
+export PHRONOMY_API_KEY="lm-studio"
+bundle exec ruby 01_basic_chain/run.rb
+```
 
 ## Running an example
 

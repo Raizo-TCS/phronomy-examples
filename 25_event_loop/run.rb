@@ -81,19 +81,26 @@ class AsyncState
   field :summary,  type: :replace, default: ""
 end
 
-# Entry action for :fetching. Returns immediately after spawning an IO thread.
-# The IO thread simulates a 150 ms HTTP round-trip, writes the result into the
-# shared context, then posts :fetch_done so the EventLoop can advance the FSM.
+# Shared store for IO results, keyed by workflow thread_id.
+# Written by IO threads BEFORE posting :fetch_done;
+# read and deleted by SUMMARIZE_ACTION on the EventLoop dispatch thread.
+# The EventLoop queue provides the happens-before guarantee — no Mutex needed.
 #
-# Context safety: the IO thread writes s.response before posting :fetch_done.
-# The EventLoop thread reads s.response only after dequeuing :fetch_done.
-# Thread::Queue provides the happens-before guarantee; no Mutex is required.
+# Context safety: the IO thread must not mutate WorkflowContext fields directly
+# when EventLoop mode is active (raises WorkflowContextOwnershipError).
+# Passing data through an external Hash and using the EventLoop queue as the
+# synchronization barrier is the correct pattern for async IO in EventLoop mode.
+FETCH_RESULTS = {}
+
+# Entry action for :fetching. Returns immediately after spawning an IO thread.
+# The IO thread simulates a 150 ms HTTP round-trip, stores the result in
+# FETCH_RESULTS, then posts :fetch_done so the EventLoop can advance the FSM.
 FETCH_ACTION = ->(s) {
   url       = s.url
   thread_id = s.thread_id
   Thread.new do
     sleep 0.15                                               # simulate IO
-    s.response = "Content for #{url}: Lorem ipsum dolor sit amet."
+    FETCH_RESULTS[thread_id] = "Content for #{url}: Lorem ipsum dolor sit amet."
     Phronomy::EventLoop.instance.post(
       Phronomy::Event.new(type: :fetch_done, target_id: thread_id, payload: nil)
     )
@@ -102,7 +109,8 @@ FETCH_ACTION = ->(s) {
 }
 
 SUMMARIZE_ACTION = ->(s) {
-  s.summary = "SUMMARY: #{s.response[0, 40]}..."
+  response = FETCH_RESULTS.delete(s.thread_id) || ""
+  s.summary = "SUMMARY: #{response[0, 40]}..."
 }
 
 async_app = Phronomy::Workflow.define(AsyncState) do

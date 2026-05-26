@@ -3,15 +3,17 @@
 
 # 06 Guardrails
 #
-# Demonstrates Input/Output guardrails on an Agent.
-# The built-in guardrail classes were removed from phronomy because which
-# patterns to block is an application-level policy decision — not a library
-# default. This example shows how to implement them yourself by extending
-# Phronomy::Guardrail::InputGuardrail or OutputGuardrail:
+# Demonstrates how to implement application-specific Input/Output guardrails.
 #
-#   - PromptInjectionGuardrail rejects common English injection patterns.
-#     An extra case shows adding language-specific patterns (Japanese) via
-#     the additional_patterns: argument.
+# phronomy ships a built-in Phronomy::Guardrail::PromptInjectionGuardrail for
+# common English injection patterns. This example goes further and shows how to
+# extend InputGuardrail / OutputGuardrail to enforce your own application
+# policies — useful when you need domain-specific rules the built-in class does
+# not cover:
+#
+#   - PromptInjectionGuardrail re-implements injection detection to illustrate
+#     the pattern; it also shows how to add language-specific patterns (Japanese)
+#     via the additional_patterns: argument.
 #   - PIIGuardrail rejects inputs containing PII (email, phone, credit card).
 #     The detect: option selects individual categories.
 #   - NoURLOutputGuardrail (output side) rejects any LLM response containing

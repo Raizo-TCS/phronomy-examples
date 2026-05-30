@@ -64,6 +64,7 @@ bundle exec ruby 01_basic_chain/run.rb
 | 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
 | 19 | `19_trust_pipeline/` | Trustworthy output via Citation Tracking + Self-Review Loop + Confidence Gate |
 | 20 | `20_cve_scanner/` | Rails 8 Web UI — CVE vulnerability scanning + remediation with CHECK LOOP / REMEDIATION LOOP, interrupt/approve gates, ActionCable real-time streaming |
+| 27 | `27_issue_analyzer/` | Batch GitHub Issue classifier — two-axis (WHAT × WHERE) LLM classification, 2D histogram, CSV export; demonstrates `Agent::Base` for structured-output batch processing |
 
 ## 09: Rails Chat (`09_rails_chat/`)
 

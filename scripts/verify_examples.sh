@@ -39,6 +39,7 @@ GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BOLD='\033[1m'; NC='\
 # Add entries here for examples that require more than 240 seconds to run.
 declare -A EXAMPLE_TIMEOUTS
 EXAMPLE_TIMEOUTS["10_context_management"]=480   # 9 LLM calls ~270s typical
+EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900       # 25 batches × up to ~10s each
 
 # ── Counters & failure list ───────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
@@ -256,6 +257,7 @@ CLI_EXAMPLES=(
   24_vector_store_dimension
   25_event_loop
   26_agent_event_loop
+  27_issue_analyzer
 )
 
 echo -e "${BOLD}======================================================${NC}"

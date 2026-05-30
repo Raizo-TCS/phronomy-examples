@@ -19,8 +19,7 @@ class LocalLlmJudge < Phronomy::Eval::Scorer::LlmJudge
     )
     chat = RubyLLM.chat(
       model: LLMConfig::MODEL,
-      provider: LLMConfig::PROVIDER,
-      assume_model_exists: true
+      **(LLMConfig::PROVIDER ? { provider: LLMConfig::PROVIDER, assume_model_exists: true } : {})
     )
     chat.ask(prompt).content.to_s.strip.scan(/-?\d+\.?\d*/).first.to_f.clamp(0.0, 1.0)
   rescue => e

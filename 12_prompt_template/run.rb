@@ -3,7 +3,7 @@
 
 # 12 Prompt Template
 #
-# Demonstrates Phronomy::PromptTemplate — named variable interpolation
+# Demonstrates Phronomy::Agent::Context::Instruction::PromptTemplate — named variable interpolation
 # using {{variable}} placeholders in human and system templates.
 #
 # Part 1: Standalone template rendering with #variables and #invoke.
@@ -19,7 +19,7 @@ require "phronomy"
 puts "=== PromptTemplate Example ==="
 puts
 
-tmpl = Phronomy::PromptTemplate.new(
+tmpl = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
   template: "Translate the following text to {{language}}: {{text}}",
   system_template: "You are a professional {{language}} translator. Reply with only the translated text."
 )
@@ -38,7 +38,7 @@ puts
 puts "--- Agent with PromptTemplate instructions ---"
 puts
 
-translator_prompt = Phronomy::PromptTemplate.new(
+translator_prompt = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
   template: "Translate this text: {{text}}",
   system_template: "You are a professional {{language}} translator. Reply with only the translated text."
 )

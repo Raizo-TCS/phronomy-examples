@@ -23,7 +23,7 @@ IMPROVE_OVERHEAD_TOKENS = 150 + 150 + 200 + IMPROVER_MAX_OUTPUT_TOKENS
 # Static output-format policy cached once per ImproverAgent instance.
 # ContextVersionCache ensures this text is fingerprinted and not re-assembled
 # on every call when the source text has not changed.
-IMPROVEMENT_POLICY = Phronomy::KnowledgeSource::StaticKnowledge.new(
+IMPROVEMENT_POLICY = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
   "Return ONLY the improved Ruby code inside a ```ruby ... ``` fenced block. " \
   "No explanations, preamble, or commentary outside the code block.",
   type: :policy
@@ -33,7 +33,7 @@ IMPROVEMENT_POLICY = Phronomy::KnowledgeSource::StaticKnowledge.new(
 # Variables: priority, source_excerpt, char_count, review_text.
 # Uses source_excerpt (truncated) rather than the full source to stay within
 # the model's context window (LLMConfig::CONTEXT_WINDOW tokens).
-IMPROVE_TEMPLATE = Phronomy::PromptTemplate.new(
+IMPROVE_TEMPLATE = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
   template: <<~TMPL,
     Focus area: {{priority}}
 

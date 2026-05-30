@@ -9,7 +9,7 @@ require_relative "../shared/llm_config"
 # rebuilt on subsequent calls as long as the text remains unchanged.
 # ---------------------------------------------------------------------------
 
-SECURITY_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
+SECURITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
   "Key security risks to detect in Ruby: SQL injection via string interpolation, " \
   "command injection (system/exec/backtick), exposed credentials or API keys, " \
   "insecure deserialization (YAML.load/Marshal.load), mass assignment, path traversal, " \
@@ -17,14 +17,14 @@ SECURITY_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
   type: :policy
 )
 
-PERFORMANCE_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
+PERFORMANCE_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
   "Key performance risks to detect in Ruby: N+1 database queries, " \
   "unnecessary object allocations inside loops, repeated costly computations, " \
   "missing memoization, synchronous I/O that could be async, missing DB indexes.",
   type: :policy
 )
 
-READABILITY_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
+READABILITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
   "Key readability issues to detect in Ruby: overly long methods (> 20 lines), " \
   "missing or outdated documentation, poor variable/method naming, " \
   "deeply nested conditions (> 2 levels), magic numbers or string literals, " \
@@ -32,7 +32,7 @@ READABILITY_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
   type: :policy
 )
 
-ABSTRACTION_CRITERIA = Phronomy::KnowledgeSource::StaticKnowledge.new(
+ABSTRACTION_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
   "Abstraction-level consistency rules for Ruby code: " \
   "(1) Methods in the same class/module should operate at the same level — mixing high-level " \
   "business operations (e.g. process_order) with low-level implementation helpers " \

@@ -2,7 +2,7 @@
 
 # 21 Team Coordinator
 #
-# Demonstrates Agent::TeamCoordinator — the "Agent teams" coordination pattern.
+# Demonstrates MultiAgent::TeamCoordinator — the "Agent teams" coordination pattern.
 #
 # A coordinator LLM agent breaks a blog topic into sections (enqueue_task),
 # then a pool of two worker agents writes each section. Workers carry forward
@@ -30,7 +30,7 @@ end
 # ---------------------------------------------------------------------------
 # Team: coordinator decomposes the topic, two workers share the writing load
 # ---------------------------------------------------------------------------
-class BlogWritingTeam < Phronomy::Agent::TeamCoordinator
+class BlogWritingTeam < Phronomy::MultiAgent::TeamCoordinator
   coordinator_model        LLMConfig::MODEL
   coordinator_provider     LLMConfig::PROVIDER
   coordinator_instructions <<~INST

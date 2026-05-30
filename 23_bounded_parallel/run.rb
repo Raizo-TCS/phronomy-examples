@@ -3,7 +3,7 @@
 # 23 Bounded Parallel Dispatch
 #
 # Demonstrates the concurrency control keyword arguments added to
-# Phronomy::Agent::Orchestrator#dispatch_parallel and #fan_out in v0.5.4:
+# Phronomy::MultiAgent::Orchestrator#dispatch_parallel and #fan_out in v0.5.4:
 #
 #   max_concurrency: N  — cap the number of concurrent worker threads
 #   on_error: :skip     — fill failed task slots with nil; never raise

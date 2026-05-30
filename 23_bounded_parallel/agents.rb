@@ -25,7 +25,7 @@ class KeywordExtractor < Phronomy::Agent::Base
 end
 
 # Orchestrator that coordinates parallel review analysis.
-class ReviewOrchestrator < Phronomy::Agent::Orchestrator
+class ReviewOrchestrator < Phronomy::MultiAgent::Orchestrator
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "Coordinate product-review analysis tasks."

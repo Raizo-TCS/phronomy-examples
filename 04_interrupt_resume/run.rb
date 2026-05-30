@@ -20,7 +20,7 @@ class MailState
 end
 
 llm = lambda do |input|
-  chat = RubyLLM.chat(model: LLMConfig::MODEL, provider: LLMConfig::PROVIDER, assume_model_exists: true)
+  chat = RubyLLM.chat(model: LLMConfig::MODEL, **(LLMConfig::PROVIDER ? { provider: LLMConfig::PROVIDER, assume_model_exists: true } : {}))
   chat.with_instructions(input[:system]) if input[:system]
   chat.ask(input[:user]).content
 end

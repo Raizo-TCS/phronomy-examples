@@ -17,7 +17,7 @@ puts "=== Context Management Example ===\n\n"
 # -----------------------------------------------------------------------
 puts "--- 1. TokenEstimator ---"
 sample = "Hello, world!"
-tokens = Phronomy::Context::TokenEstimator.estimate(sample)
+tokens = Phronomy::LlmContextWindow::TokenEstimator.estimate(sample)
 puts "\"#{sample}\" => #{tokens} tokens (estimated)"
 puts
 
@@ -25,7 +25,7 @@ puts
 # 2. TokenBudget (explicit values — no model registry lookup needed)
 # -----------------------------------------------------------------------
 puts "--- 2. TokenBudget (explicit values) ---"
-budget = Phronomy::Context::TokenBudget.new(
+budget = Phronomy::LlmContextWindow::TokenBudget.new(
   context_window:    8192,
   max_output_tokens: 1024,
   overhead:           200
@@ -84,7 +84,7 @@ puts
 # -----------------------------------------------------------------------
 puts "--- 5. VectorStore::InMemory ---"
 
-store = Phronomy::VectorStore::InMemory.new
+store = Phronomy::Agent::Context::Knowledge::VectorStore::InMemory.new
 store.add(id: "A", embedding: [1.0, 0.0], metadata: { label: "A" })
 store.add(id: "B", embedding: [0.0, 1.0], metadata: { label: "B" })
 store.add(id: "C", embedding: [0.7, 0.7], metadata: { label: "C" })
@@ -107,7 +107,7 @@ puts
 # -----------------------------------------------------------------------
 puts "--- 6. Context::Assembler — fit history within a token budget ---"
 
-tight_budget = Phronomy::Context::TokenBudget.new(
+tight_budget = Phronomy::LlmContextWindow::TokenBudget.new(
   context_window:    512,
   max_output_tokens: 128,
   overhead:          50
@@ -119,14 +119,14 @@ long_history = (1..10).flat_map do |i|
   ]
 end
 
-builder = Phronomy::Context::Assembler.new(budget: tight_budget)
+builder = Phronomy::LlmContextWindow::Assembler.new(budget: tight_budget)
   .add_instruction("You are a helpful assistant.")
   .add_messages(long_history)
 
 ctx = builder.build
 puts "History provided:       #{long_history.length} messages"
 puts "After budget trimming:  #{ctx[:messages].length} messages (newest kept)"
-estimated = Phronomy::Context::TokenEstimator.estimate(ctx[:messages])
+estimated = Phronomy::LlmContextWindow::TokenEstimator.estimate(ctx[:messages])
 puts "Estimated tokens used:  ~#{estimated} / #{tight_budget.effective_input_limit} available"
 puts
 
@@ -136,19 +136,19 @@ puts
 puts "--- 7. Custom Tokenizer ---"
 
 sample_text = "Hello, world!"
-default_estimate = Phronomy::Context::TokenEstimator.estimate(sample_text)
+default_estimate = Phronomy::LlmContextWindow::TokenEstimator.estimate(sample_text)
 
 # Replace with a "word count" tokenizer as a simple demonstration.
-Phronomy::Context::TokenEstimator.tokenizer = ->(text) { text.split.length }
+Phronomy::LlmContextWindow::TokenEstimator.tokenizer = ->(text) { text.split.length }
 
-custom_estimate = Phronomy::Context::TokenEstimator.estimate(sample_text)
+custom_estimate = Phronomy::LlmContextWindow::TokenEstimator.estimate(sample_text)
 puts "Text: \"#{sample_text}\""
 puts "  default heuristic (len/4): #{default_estimate} tokens"
 puts "  custom tokenizer (words):  #{custom_estimate} tokens"
 
 # Restore default before subsequent sections rely on it.
-Phronomy::Context::TokenEstimator.tokenizer = nil
-puts "  restored default:          #{Phronomy::Context::TokenEstimator.estimate(sample_text)} tokens"
+Phronomy::LlmContextWindow::TokenEstimator.tokenizer = nil
+puts "  restored default:          #{Phronomy::LlmContextWindow::TokenEstimator.estimate(sample_text)} tokens"
 puts
 
 # -----------------------------------------------------------------------
@@ -158,7 +158,7 @@ puts
 puts "--- 8. Context::Assembler + LLM ---"
 
 # Build a modest budget to demonstrate truncation.
-ctx_budget = Phronomy::Context::TokenBudget.new(
+ctx_budget = Phronomy::LlmContextWindow::TokenBudget.new(
   context_window:    1024,
   max_output_tokens: 256,
   overhead:          100
@@ -176,13 +176,13 @@ history = (1..20).flat_map do |i|
   ]
 end
 
-builder = Phronomy::Context::Assembler.new(budget: ctx_budget)
+builder = Phronomy::LlmContextWindow::Assembler.new(budget: ctx_budget)
   .add_instruction("You are a helpful assistant. Answer in one sentence.")
   .add_knowledge("phronomy is a Ruby AI agent framework.", type: :entity)
   .add_messages(history)
 
 ctx = builder.build
-est_history = Phronomy::Context::TokenEstimator.estimate(ctx[:messages])
+est_history = Phronomy::LlmContextWindow::TokenEstimator.estimate(ctx[:messages])
 
 puts "History stored:       #{history.length} messages"
 puts "Messages within budget: #{ctx[:messages].length} messages (newest kept)"
@@ -252,7 +252,7 @@ class StaticKnowledgeAgent < Phronomy::Agent::Base
   provider    LLMConfig::PROVIDER
   instructions "You are a helpful assistant."
   max_output_tokens 64
-  static_knowledge Phronomy::KnowledgeSource::StaticKnowledge.new(
+  static_knowledge Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
     "Policy: always reply in exactly one sentence.",
     type: :policy
   )

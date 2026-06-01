@@ -35,6 +35,14 @@ export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
 # ── Terminal colours ─────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BOLD='\033[1m'; NC='\033[0m'
 
+# ── LM Studio / LLM configuration ────────────────────────────────────────────
+# These variables are inherited from the caller's environment if already set.
+# Defaults point to a local LM Studio instance used for CI/verification.
+export PHRONOMY_MODEL="${PHRONOMY_MODEL:-openai/gpt-oss-20b}"
+export PHRONOMY_BASE_URL="${PHRONOMY_BASE_URL:-http://192.168.122.1:1234/v1}"
+export PHRONOMY_API_KEY="${PHRONOMY_API_KEY:-lm-studio}"
+export PHRONOMY_PROVIDER="${PHRONOMY_PROVIDER:-openai}"
+
 # ── Per-example LLM timeout overrides (seconds; default: 240) ────────────────
 # Add entries here for examples that require more than 240 seconds to run.
 declare -A EXAMPLE_TIMEOUTS
@@ -129,6 +137,7 @@ verify_cli_run() {
 verify_rails() {
   local name="$1"
   local port="$2"
+  local extra_env="${3:-}"   # optional extra env vars (e.g. "CVE_SCANNER_MOCK_LLM=1")
   local dir="$BASE_DIR/$name"
   header "$name [Rails, port $port]"
 
@@ -151,7 +160,7 @@ verify_rails() {
   local log_file
   log_file="$(mktemp /tmp/rails-${name}-XXXXXX.log)"
 
-  (cd "$dir" && PORT=$port RAILS_ENV=development bundle exec rails server \
+  (cd "$dir" && env PORT=$port RAILS_ENV=development $extra_env bundle exec rails server \
       >> "$log_file" 2>&1) &
   local server_pid=$!
   SERVER_PIDS+=("$server_pid")
@@ -183,7 +192,7 @@ verify_rails() {
   fi
 
   # 4. Playwright GUI smoke test ───────────────────────────────────────────────
-  run_playwright_test "$name" "$port"
+  run_playwright_test "$name" "$port" "$extra_env"
 
   # 5. Stop server ─────────────────────────────────────────────────────────────
   kill "$server_pid" 2>/dev/null || true
@@ -196,6 +205,7 @@ verify_rails() {
 run_playwright_test() {
   local name="$1"
   local port="$2"
+  local extra_env="${3:-}"
 
   # Ensure npm dependencies are installed.
   if [[ ! -d "$BROWSER_TESTS_DIR/node_modules/playwright" ]]; then
@@ -223,7 +233,7 @@ run_playwright_test() {
 
   # Run the smoke test.
   local pw_out
-  if pw_out=$(cd "$BROWSER_TESTS_DIR" && APP_NAME="$name" VERIFY_PORT="$port" \
+  if pw_out=$(cd "$BROWSER_TESTS_DIR" && env APP_NAME="$name" VERIFY_PORT="$port" $extra_env \
               node smoke_test.js 2>&1); then
     echo "$pw_out" | sed 's/^/  /'
     pass "Playwright smoke test"
@@ -276,7 +286,7 @@ done
 verify_rails "09_rails_chat"        3009
 verify_rails "15_rails_secure_chat" 3015
 verify_rails "18_rails_agent_job"   3018
-verify_rails "20_cve_scanner"       3020
+verify_rails "20_cve_scanner"       3020 "CVE_SCANNER_MOCK_LLM=1"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

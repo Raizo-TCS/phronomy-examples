@@ -80,6 +80,9 @@ async function testAgentJobApp(page) {
 
 /**
  * 20_cve_scanner: root page shows a CVE ID textarea and a "Start Scan" button.
+ * Always runs a full scan end-to-end using mock mode (CVE_SCANNER_MOCK_LLM=1
+ * must be set on the Rails server — verify_examples.sh handles this automatically):
+ *   enter CVE ID → start scan → wait for awaiting_followup → send "done" → verify completion.
  */
 async function testCveScannerApp(page) {
   // 1. Load root page
@@ -102,6 +105,52 @@ async function testCveScannerApp(page) {
   const scanBtn = page.locator('#scan-btn');
   await scanBtn.waitFor({ state: 'visible', timeout: 5000 });
   console.log('    #scan-btn visible');
+
+  // 5. Enter a CVE ID and start the scan
+  await cveInput.fill('CVE-2024-1234');
+  console.log('    filled #cve-input with "CVE-2024-1234"');
+
+  await scanBtn.click();
+  console.log('    clicked #scan-btn');
+
+  // 6. Pipeline log card should appear immediately (startScan() shows it synchronously)
+  const logCard = page.locator('#log-card');
+  await logCard.waitFor({ state: 'visible', timeout: 10000 });
+  console.log('    #log-card visible (scan started)');
+
+  // 7. Wait for awaiting_followup state — #chat-input-bar becomes visible.
+  //    Generous timeout: the Ubuntu CVE scraper has up to 20 s read_timeout;
+  //    mock LLM agent calls are instant once the HTTP fetch completes.
+  const chatInputBar = page.locator('#chat-input-bar');
+  await chatInputBar.waitFor({ state: 'visible', timeout: 90000 });
+  console.log('    #chat-input-bar visible (awaiting_followup reached)');
+
+  // 8. The server runs with CVE_SCANNER_MOCK_LLM=1 so CveAnalystAgent returns
+  //    decision:"done" immediately — graph must NOT halt at awaiting_check_approval.
+  //    Verify that no approval card was rendered.
+  const approvalInline = page.locator('#approval-inline');
+  const approvalVisible = await approvalInline.isVisible().catch(() => false);
+  if (approvalVisible) {
+    throw new Error('#approval-inline visible in mock mode — check/remediation approval was NOT skipped');
+  }
+  console.log('    #approval-inline absent (mock correctly skipped approval)');
+
+  // 9. Type "done" to end the session. "done" matches DONE_KEYWORDS on the
+  //    server side, so the FollowupAgent short-circuits without an LLM call.
+  const chatBarInput = page.locator('#chat-bar-input');
+  await chatBarInput.fill('done');
+  console.log('    filled #chat-bar-input with "done"');
+
+  await page.locator('#chat-bar-send').click();
+  console.log('    clicked #chat-bar-send');
+
+  // 10. The followup_answer handler (decision:"done") re-enables #scan-btn
+  //     and hides #chat-input-bar — use that as the completion signal.
+  await page.locator('#scan-btn:not([disabled])').waitFor({ timeout: 30000 });
+  console.log('    #scan-btn re-enabled (scan completed)');
+
+  const statusText = await page.locator('#status-line').innerText().catch(() => '');
+  console.log(`    status-line: "${statusText.trim()}"`);
 }
 
 // ── Test registry ─────────────────────────────────────────────────────

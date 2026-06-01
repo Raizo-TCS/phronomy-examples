@@ -121,9 +121,9 @@ module CveScanner
 
       # ── Edges ─────────────────────────────────────────────────────────────
       transition from: :gather_scan_info, to: :check_cve_data
-      after :run_checks,       to: :evaluate_checks
-      after :run_remediation,  to: :evaluate_remediation
-      after :report,           to: :awaiting_followup
+      transition from: :run_checks, to: :evaluate_checks
+      transition from: :run_remediation, to: :evaluate_remediation
+      transition from: :report, to: :awaiting_followup
 
       # Skip to :report when all CVEs have no package data.
       transition from: :check_cve_data,

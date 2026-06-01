@@ -23,7 +23,7 @@ IMPROVE_OVERHEAD_TOKENS = 150 + 150 + 200 + IMPROVER_MAX_OUTPUT_TOKENS
 # Static output-format policy cached once per ImproverAgent instance.
 # ContextVersionCache ensures this text is fingerprinted and not re-assembled
 # on every call when the source text has not changed.
-IMPROVEMENT_POLICY = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+IMPROVEMENT_POLICY = Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
   "Return ONLY the improved Ruby code inside a ```ruby ... ``` fenced block. " \
   "No explanations, preamble, or commentary outside the code block.",
   type: :policy
@@ -55,15 +55,11 @@ IMPROVE_TEMPLATE = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
 #
 # Context management strategy (fits within LLMConfig::CONTEXT_WINDOW tokens):
 #
-#   static_knowledge        — IMPROVEMENT_POLICY cached via ContextVersionCache;
-#                             system text is not rebuilt when fingerprint is stable.
-#   on_trim                 — drops the single oldest message if history grows
-#                             beyond 4 messages (2 user/assistant pairs), ensuring
-#                             only the most recent interaction is visible to the LLM.
-#   on_compaction_trigger   — fires whenever more than 2 history messages remain
-#                             after trimming, signalling that a summary is worthwhile.
-#   on_compact              — replaces all but the last 2 messages with a one-line
-#                             summary per message, keeping history tokens minimal.
+#   static_knowledge    — IMPROVEMENT_POLICY cached via ContextVersionCache;
+#                         system text is not rebuilt when fingerprint is stable.
+#   build_context       — trims and compacts history to stay within token budget:
+#                         * drops oldest message when history exceeds 4 messages
+#                         * compacts messages beyond 2 into a one-line summary
 class ImproverAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
@@ -73,25 +69,19 @@ class ImproverAgent < Phronomy::Agent::Base
   max_output_tokens IMPROVER_MAX_OUTPUT_TOKENS
   max_iterations 1
 
-  # Drop the oldest message when history exceeds 2 pairs (4 messages).
-  on_trim do |ctx|
-    ctx.remove(ctx.message_elements.first[:seq]) if ctx.message_elements.size > 4
-  end
+  protected
 
-  # Trigger compaction whenever more than 2 messages remain after trimming.
-  on_compaction_trigger { |ctx| ctx.message_elements.size > 2 }
-
-  # Summarise all but the last 2 messages into a compact text block.
-  on_compact do |ctx|
-    keep = 2
-    compact_end = ctx.message_elements.size - keep - 1
-    next if compact_end < 0
-
-    ctx.compact(0..compact_end) do |elements|
-      lines = elements.map do |e|
-        "[#{e[:role]}] #{e[:message].content[0, 100].tr("\n", " ")}"
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    # Drop the oldest message when history exceeds 2 pairs (4 messages).
+    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 4
+    # Compact all but the last 2 messages into a summary.
+    if msgs.size > 2
+      msgs = compact_messages(msgs, keep_tail: 2) do |dropped|
+        lines = dropped.map { |m| "[#{m.role}] #{m.content.to_s[0, 100].tr("\n", " ")}" }
+        "Prior session summary:\n#{lines.join("\n")}"
       end
-      "Prior session summary:\n#{lines.join("\n")}"
     end
+    super(input, messages: msgs, **opts)
   end
 end

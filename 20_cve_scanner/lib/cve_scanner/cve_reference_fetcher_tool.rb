@@ -7,7 +7,7 @@ require "nokogiri"
 # Tool: fetches a CVE reference page, then uses CveReferenceSummarizerAgent to
 # produce a focused summary and a list of further reference URLs found on the page.
 # Only HTTPS URLs on an explicit allowlist of trusted security domains are accepted.
-class CveScanner::CveReferenceFetcherTool < Phronomy::Tool::Base
+class CveScanner::CveReferenceFetcherTool < Phronomy::Agent::Context::Capability::Base
   description "Fetch a security-related URL (e.g. NVD entry, upstream advisory, " \
               "mailing list thread, Launchpad bug, vendor bulletin, or any other " \
               "page relevant to a vulnerability or its remediation) and return a " \

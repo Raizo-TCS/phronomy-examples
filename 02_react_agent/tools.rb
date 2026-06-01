@@ -3,7 +3,7 @@
 require "phronomy"
 
 # Dummy tool: returns a fixed current time for the given city.
-class GetCurrentTimeTool < Phronomy::Tool::Base
+class GetCurrentTimeTool < Phronomy::Agent::Context::Capability::Base
   description "Returns the current time for the given city."
   param :city, type: :string, desc: "City name (e.g. Tokyo)"
 
@@ -13,7 +13,7 @@ class GetCurrentTimeTool < Phronomy::Tool::Base
 end
 
 # Dummy tool: returns a fixed weather for the given city.
-class GetWeatherTool < Phronomy::Tool::Base
+class GetWeatherTool < Phronomy::Agent::Context::Capability::Base
   description "Returns the current weather for the given city."
   param :city, type: :string, desc: "City name (e.g. Tokyo)"
 

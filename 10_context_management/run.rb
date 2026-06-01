@@ -84,7 +84,7 @@ puts
 # -----------------------------------------------------------------------
 puts "--- 5. VectorStore::InMemory ---"
 
-store = Phronomy::Agent::Context::Knowledge::VectorStore::InMemory.new
+store = Phronomy::VectorStore::InMemory.new
 store.add(id: "A", embedding: [1.0, 0.0], metadata: { label: "A" })
 store.add(id: "B", embedding: [0.0, 1.0], metadata: { label: "B" })
 store.add(id: "C", embedding: [0.7, 0.7], metadata: { label: "C" })
@@ -252,7 +252,7 @@ class StaticKnowledgeAgent < Phronomy::Agent::Base
   provider    LLMConfig::PROVIDER
   instructions "You are a helpful assistant."
   max_output_tokens 64
-  static_knowledge Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+  static_knowledge Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
     "Policy: always reply in exactly one sentence.",
     type: :policy
   )
@@ -271,13 +271,11 @@ puts "Fingerprint unchanged: #{fp1 == fp2}  (system text re-used on 2nd call)"
 puts
 
 # -----------------------------------------------------------------------
-# 11. on_trim callback
-#     The oldest message is removed before the LLM call so the model
-#     always receives at most the most recent conversation context.
-#     Pass prior history via config[:messages]; on_trim receives the full
-#     message_elements list and may call ctx.remove(seq) to drop entries.
+# 11. build_context override — trim oldest message before each LLM call
+#     Override build_context and call trim_messages to control what is
+#     passed to the model. This replaces the removed on_trim callback DSL.
 # -----------------------------------------------------------------------
-puts "--- 11. on_trim callback ---"
+puts "--- 11. build_context + trim_messages ---"
 
 class TrimDemoAgent < Phronomy::Agent::Base
   model       LLMConfig::MODEL
@@ -285,9 +283,12 @@ class TrimDemoAgent < Phronomy::Agent::Base
   instructions "You are a helpful assistant."
   max_output_tokens 64
 
-  on_trim do |ctx|
-    first = ctx.message_elements.first
-    ctx.remove(first[:seq]) if first
+  protected
+
+  def build_context(input, messages: [], **opts)
+    # Drop the oldest message so the model sees at most the recent context.
+    msgs = trim_messages(Array(messages), keep: [Array(messages).size - 1, 1].max)
+    super(input, messages: msgs, **opts)
   end
 end
 
@@ -298,15 +299,16 @@ trim_session = r_trim1[:messages]
 r_trim2 = TrimDemoAgent.new.invoke("Say 'turn 2'.",
   config: { messages: trim_session })
 puts "Turn 2 response: #{r_trim2[:output][0, 70]}"
-puts "(on_trim drops the oldest message from the LLM view before each call)"
+puts "(build_context override drops the oldest message from the LLM view before each call)"
 puts
 
 # -----------------------------------------------------------------------
-# 12. on_compaction_trigger + on_compact
-#     The trigger always fires; on_compact replaces the oldest message
-#     with a brief summary string, keeping the context window lean.
+# 12. build_context override — compact_messages
+#     Replace the oldest messages with a brief summary string before the
+#     LLM call, keeping the context window lean.
+#     This replaces the removed on_compact / on_compaction_trigger DSL.
 # -----------------------------------------------------------------------
-puts "--- 12. on_compaction_trigger + on_compact ---"
+puts "--- 12. build_context + compact_messages ---"
 
 class CompactionDemoAgent < Phronomy::Agent::Base
   model       LLMConfig::MODEL
@@ -314,14 +316,17 @@ class CompactionDemoAgent < Phronomy::Agent::Base
   instructions "You are a helpful assistant."
   max_output_tokens 64
 
-  on_compaction_trigger { |_ctx| true }
+  protected
 
-  on_compact do |ctx|
-    next if ctx.message_elements.empty?
-    ctx.compact(0..0) do |elements|
-      excerpt = elements.first[:message].content[0, 60]
-      "Summary of earlier turn: #{excerpt}"
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    if msgs.size > 1
+      msgs = compact_messages(msgs, keep_tail: msgs.size - 1) do |dropped|
+        excerpt = dropped.first&.content.to_s[0, 60]
+        "Summary of earlier turn: #{excerpt}"
+      end
     end
+    super(input, messages: msgs, **opts)
   end
 end
 
@@ -332,7 +337,7 @@ cmpct_session = r_cmpct1[:messages]
 r_cmpct2 = CompactionDemoAgent.new.invoke("Say 'after compaction'.",
   config: { messages: cmpct_session })
 puts "Response after compaction: #{r_cmpct2[:output][0, 70]}"
-puts "(on_compact replaced the oldest message with a summary before the LLM call)"
+puts "(build_context override replaced the oldest message with a summary before the LLM call)"
 puts
 
 puts "=== Done ==="

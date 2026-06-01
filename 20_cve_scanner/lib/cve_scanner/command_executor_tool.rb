@@ -5,7 +5,7 @@ require "timeout"
 
 # Tool: executes a single pre-approved shell command on the host.
 # Only commands matching the allowlist are permitted for security.
-class CveScanner::CommandExecutorTool < Phronomy::Tool::Base
+class CveScanner::CommandExecutorTool < Phronomy::Agent::Context::Capability::Base
   description "Execute a pre-approved shell command and return its output"
 
   param :command, type: :string, desc: "The shell command to execute (must be on the allowlist)"

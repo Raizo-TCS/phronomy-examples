@@ -19,7 +19,7 @@ puts "=== 24 VectorStore Dimension Validation ===\n\n"
 puts "[1] Creating store with explicit dimension: 4"
 puts "    Adding 3 documents with matching 4-dimensional embeddings..."
 
-store = Phronomy::Agent::Context::Knowledge::VectorStore::InMemory.new(dimension: 4)
+store = Phronomy::VectorStore::InMemory.new(dimension: 4)
 
 store.add(id: "doc1", embedding: [0.90, 0.10, 0.00, 0.00],
           metadata: {text: "Ruby threads and concurrency"})
@@ -63,7 +63,7 @@ puts
 # ── [5] Inferred dimension ───────────────────────────────────────────────────
 puts "[5] Dimension inferred from first add (no explicit dimension:)\n\n"
 
-store2 = Phronomy::Agent::Context::Knowledge::VectorStore::InMemory.new
+store2 = Phronomy::VectorStore::InMemory.new
 store2.add(id: "a", embedding: [0.7, 0.7], metadata: {text: "two-dim doc"})
 
 puts "    Inferred dimension: 2"

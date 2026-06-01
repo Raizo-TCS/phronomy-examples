@@ -2,14 +2,14 @@
 # verify_examples.sh
 #
 # Smoke-tests all phronomy-examples:
-#   - CLI samples: Ruby syntax check per run.rb  (default)
-#                  OR actual LLM run with 240s timeout  (--with-llm)
+#   - CLI samples: actual LLM run with 240s timeout  (default)
+#                  OR Ruby syntax check only           (--syntax-only)
 #   - Rails apps:  db:migrate, server boot, health check, Playwright GUI smoke test
 #
 # Usage:
 #   cd phronomy-examples
-#   bash scripts/verify_examples.sh              # syntax-only, no LLM required
-#   bash scripts/verify_examples.sh --with-llm  # full run via LLM (LM Studio must be up)
+#   bash scripts/verify_examples.sh               # full run via LLM (LM Studio must be up)
+#   bash scripts/verify_examples.sh --syntax-only # syntax-only, no LLM required
 #
 # The Rails GUI tests require the 'playwright' npm package (auto-installed into
 # scripts/browser_tests/node_modules on first run) and a Chromium browser
@@ -21,9 +21,9 @@
 set -euo pipefail
 
 # ── Flag parsing ──────────────────────────────────────────────────────────────
-WITH_LLM=false
+WITH_LLM=true
 for arg in "$@"; do
-  [[ "$arg" == "--with-llm" ]] && WITH_LLM=true
+  [[ "$arg" == "--syntax-only" ]] && WITH_LLM=false
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

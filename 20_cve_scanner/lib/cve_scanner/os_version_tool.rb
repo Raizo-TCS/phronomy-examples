@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Tool: runs lsb_release and uname to detect the host OS version.
-class CveScanner::OsVersionTool < Phronomy::Tool::Base
+class CveScanner::OsVersionTool < Phronomy::Agent::Context::Capability::Base
   description "Detect the Ubuntu OS version and kernel version of the host system"
 
   def execute

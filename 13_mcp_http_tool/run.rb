@@ -22,7 +22,7 @@ begin
   puts "MCP server running at http://localhost:#{PORT}/mcp"
   puts
 
-  greet_tool = Phronomy::Tool::McpTool.from_server(
+  greet_tool = Phronomy::Tools::Mcp.from_server(
     "http://localhost:#{PORT}/mcp",
     tool_name: "greet"
   )

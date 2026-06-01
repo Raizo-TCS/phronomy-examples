@@ -6,7 +6,7 @@ require "nokogiri"
 
 # Tool: fetches and parses the Ubuntu security page for a given CVE ID.
 # Returns a JSON string with priority, description, and affected packages.
-class CveScanner::UbuntuCveScraperTool < Phronomy::Tool::Base
+class CveScanner::UbuntuCveScraperTool < Phronomy::Agent::Context::Capability::Base
   description "Fetch CVE details from the Ubuntu security tracker page"
 
   param :cve_id, type: :string, desc: "CVE ID (e.g. CVE-2024-1234)"

@@ -35,7 +35,7 @@ end
 
 # Lists all Ruby source files in the approved directory.
 # Call this first to discover which files are available for analysis.
-class ListFilesTool < Phronomy::Tool::Base
+class ListFilesTool < Phronomy::Agent::Context::Capability::Base
   description "List all Ruby source files available for analysis. " \
               "Call this first before reading any file."
 
@@ -53,7 +53,7 @@ end
 
 # Reads the contents of a single Ruby source file.
 # Pass a relative path as returned by list_files.
-class ReadFileTool < Phronomy::Tool::Base
+class ReadFileTool < Phronomy::Agent::Context::Capability::Base
   description "Read the full contents of a Ruby source file. " \
               "Pass a relative path as returned by list_files."
   param :filename, type: :string,

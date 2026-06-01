@@ -18,12 +18,12 @@ class PolicyDraftAgent < Phronomy::Agent::Base
     "If the knowledge does not cover the question, say so honestly."
 
   static_knowledge(
-    Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+    Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
       REFUND_POLICY,
       type: :policy,
       source: "refund_policy.md"
     ),
-    Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+    Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
       SHIPPING_POLICY,
       type: :policy,
       source: "shipping_policy.md"

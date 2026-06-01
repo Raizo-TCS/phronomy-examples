@@ -2,7 +2,7 @@
 
 # Tool that returns the current date and time.
 # Registered on ChatAgent so the LLM can call it when asked about time/date.
-class CurrentTimeTool < Phronomy::Tool::Base
+class CurrentTimeTool < Phronomy::Agent::Context::Capability::Base
   description "Returns the current date and time in the specified timezone."
   param :timezone, type: :string, desc: "Timezone name (default: UTC)",
                    required: false,

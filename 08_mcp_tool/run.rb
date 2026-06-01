@@ -4,7 +4,7 @@
 # 08 MCP Tool
 #
 # Demonstrates wrapping an MCP (Model Context Protocol) server's tool with
-# Phronomy::Tool::McpTool and exposing it to an Agent.
+# Phronomy::Tools::Mcp and exposing it to an Agent.
 # The bundled mcp_server.rb provides a single `list_files` tool over stdio.
 
 require_relative "../shared/llm_config"
@@ -12,7 +12,7 @@ require "phronomy"
 
 server_command = "ruby #{File.join(__dir__, "mcp_server.rb")}"
 
-list_files_tool = Phronomy::Tool::McpTool.from_server(
+list_files_tool = Phronomy::Tools::Mcp.from_server(
   "stdio://#{server_command}",
   tool_name: "list_files"
 )

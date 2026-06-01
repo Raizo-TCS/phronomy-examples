@@ -9,7 +9,7 @@ require_relative "../shared/llm_config"
 # rebuilt on subsequent calls as long as the text remains unchanged.
 # ---------------------------------------------------------------------------
 
-SECURITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+SECURITY_CRITERIA = Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
   "Key security risks to detect in Ruby: SQL injection via string interpolation, " \
   "command injection (system/exec/backtick), exposed credentials or API keys, " \
   "insecure deserialization (YAML.load/Marshal.load), mass assignment, path traversal, " \
@@ -17,14 +17,14 @@ SECURITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge
   type: :policy
 )
 
-PERFORMANCE_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+PERFORMANCE_CRITERIA = Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
   "Key performance risks to detect in Ruby: N+1 database queries, " \
   "unnecessary object allocations inside loops, repeated costly computations, " \
   "missing memoization, synchronous I/O that could be async, missing DB indexes.",
   type: :policy
 )
 
-READABILITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+READABILITY_CRITERIA = Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
   "Key readability issues to detect in Ruby: overly long methods (> 20 lines), " \
   "missing or outdated documentation, poor variable/method naming, " \
   "deeply nested conditions (> 2 levels), magic numbers or string literals, " \
@@ -32,7 +32,7 @@ READABILITY_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowle
   type: :policy
 )
 
-ABSTRACTION_CRITERIA = Phronomy::Agent::Context::Knowledge::Source::StaticKnowledge.new(
+ABSTRACTION_CRITERIA = Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
   "Abstraction-level consistency rules for Ruby code: " \
   "(1) Methods in the same class/module should operate at the same level — mixing high-level " \
   "business operations (e.g. process_order) with low-level implementation helpers " \
@@ -61,7 +61,7 @@ REVIEWER_MAX_OUTPUT_TOKENS = [512, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.15).
 #   static_knowledge  — security criteria cached via ContextVersionCache.
 #   max_output_tokens — bounded to REVIEWER_MAX_OUTPUT_TOKENS; one line per finding
 #                       is well within this limit even for files with many issues.
-#   on_trim           — drops the oldest message if unexpected history builds up.
+#   build_context     — drops the oldest message if unexpected history builds up.
 class SecurityReviewerAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
@@ -77,7 +77,14 @@ class SecurityReviewerAgent < Phronomy::Agent::Base
   static_knowledge SECURITY_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-  on_trim { |ctx| ctx.remove(ctx.message_elements.first[:seq]) if ctx.message_elements.size > 2 }
+
+  protected
+
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
+    super(input, messages: msgs, **opts)
+  end
 end
 
 # Reviews Ruby source code for performance problems.
@@ -99,7 +106,14 @@ class PerformanceReviewerAgent < Phronomy::Agent::Base
   static_knowledge PERFORMANCE_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-  on_trim { |ctx| ctx.remove(ctx.message_elements.first[:seq]) if ctx.message_elements.size > 2 }
+
+  protected
+
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
+    super(input, messages: msgs, **opts)
+  end
 end
 
 # Reviews Ruby source code for readability and maintainability issues.
@@ -121,7 +135,14 @@ class ReadabilityReviewerAgent < Phronomy::Agent::Base
   static_knowledge READABILITY_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-  on_trim { |ctx| ctx.remove(ctx.message_elements.first[:seq]) if ctx.message_elements.size > 2 }
+
+  protected
+
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
+    super(input, messages: msgs, **opts)
+  end
 end
 
 # Reviews Ruby source code for abstraction-level consistency.
@@ -156,5 +177,12 @@ class AbstractionConsistencyReviewerAgent < Phronomy::Agent::Base
   static_knowledge ABSTRACTION_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-  on_trim { |ctx| ctx.remove(ctx.message_elements.first[:seq]) if ctx.message_elements.size > 2 }
+
+  protected
+
+  def build_context(input, messages: [], **opts)
+    msgs = Array(messages)
+    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
+    super(input, messages: msgs, **opts)
+  end
 end

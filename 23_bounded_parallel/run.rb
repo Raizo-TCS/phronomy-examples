@@ -15,6 +15,7 @@
 # agents on selected reviews simultaneously (dispatch_parallel).
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
@@ -33,7 +34,10 @@ puts "=== 23 Bounded Parallel Dispatch ===\n\n"
 # ── Part 1: fan_out — same agent, 5 inputs, max 3 concurrent threads ─────────
 puts "[1] Sentiment analysis — fan_out, max_concurrency: 3\n\n"
 
-sentiments = orchestrator.analyze_sentiments(REVIEWS)
+sentiments = OutputValidator.validate(
+  "fan_out returns 5 sentiment results",
+  check: ->(r) { r.compact.size >= 3 && r.compact.all? { |x| x[:output].length >= 5 } }
+) { orchestrator.analyze_sentiments(REVIEWS) }
 
 sentiments.each_with_index do |result, i|
   if result
@@ -48,7 +52,10 @@ puts
 # ── Part 2: dispatch_parallel — 2 different agents, max 2 concurrent threads ─
 puts "[2] Mixed analysis — dispatch_parallel, max_concurrency: 2\n\n"
 
-analyses = orchestrator.mixed_analysis(REVIEWS)
+analyses = OutputValidator.validate(
+  "dispatch_parallel returns 2 analysis results",
+  check: ->(r) { r.compact.size >= 1 && r.compact.all? { |x| x[:output].length >= 5 } }
+) { orchestrator.mixed_analysis(REVIEWS) }
 
 labels = ["Sentiment [review 1]", "Keywords [review 2]"]
 analyses.each_with_index do |result, i|

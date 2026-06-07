@@ -8,6 +8,7 @@
 # questions about a city's current time and weather.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "tools"
 
@@ -27,5 +28,8 @@ puts "Query: #{query}"
 puts
 puts "--- Agent Response ---"
 
-result = CityInfoAgent.new.invoke(query)
+result = OutputValidator.validate(
+  "agent reports time and weather for Tokyo",
+  check: ->(r) { r[:output].length >= 30 }
+) { CityInfoAgent.new.invoke(query) }
 puts result[:output]

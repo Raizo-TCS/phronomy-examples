@@ -10,6 +10,7 @@
 # result[:agent] reports which agent produced the final answer.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
@@ -46,7 +47,10 @@ SCENARIOS.each.with_index(1) do |scenario, i|
   puts "--- Scenario #{i}: #{scenario[:label]} ---"
   puts "User: \"#{scenario[:input]}\""
 
-  result = runner.invoke(scenario[:input])
+  result = OutputValidator.validate(
+    "handoff scenario #{i}: agent produces response",
+    check: ->(r) { r[:output].length >= 20 }
+  ) { runner.invoke(scenario[:input]) }
 
   puts "→ Handled by: #{result[:agent].class.name}"
   puts "Response: #{result[:output]}"

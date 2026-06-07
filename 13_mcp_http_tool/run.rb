@@ -8,6 +8,7 @@
 # via a background Thread, then torn down in an ensure block.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "mcp_server"
 
@@ -40,7 +41,10 @@ begin
   puts
   puts "--- Agent Response ---"
 
-  result = GreetingAgent.new.invoke(query)
+  result = OutputValidator.validate(
+    "MCP HTTP agent greets Alice",
+    check: ->(r) { r[:output].downcase.include?("alice") || r[:output].length >= 20 }
+  ) { GreetingAgent.new.invoke(query) }
   puts result[:output]
 ensure
   server.shutdown

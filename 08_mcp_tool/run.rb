@@ -8,6 +8,7 @@
 # The bundled mcp_server.rb provides a single `list_files` tool over stdio.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 server_command = "ruby #{File.join(__dir__, "mcp_server.rb")}"
@@ -36,7 +37,10 @@ puts
 puts "--- Agent Response ---"
 
 begin
-  result = FileExplorerAgent.new.invoke(query)
+  result = OutputValidator.validate(
+    "agent lists files via MCP tool",
+    check: ->(r) { r[:output].length >= 20 }
+  ) { FileExplorerAgent.new.invoke(query) }
   puts result[:output]
 ensure
   list_files_tool.close

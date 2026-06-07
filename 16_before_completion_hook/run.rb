@@ -14,6 +14,7 @@
 # may return a Hash to merge into the LLM call params (e.g. temperature, stop).
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
@@ -38,13 +39,24 @@ puts "=== 16 Before-Completion Hook ===\n\n"
 # ---------------------------------------------------------------------------
 puts "--- Scenario 1: Global hook (call logging) ---"
 agent1 = LoggingAgent.new
-result1a = agent1.invoke("What is the capital of France?")
+result1a = OutputValidator.validate(
+  "scenario 1a: agent answers capital of France",
+  check: ->(r) { r[:output].length >= 5 }
+) { agent1.invoke("What is the capital of France?") }
 puts "  Result: #{result1a[:output]}\n\n"
 
-result1b = agent1.invoke("What is 2 + 2?")
+result1b = OutputValidator.validate(
+  "scenario 1b: agent answers arithmetic",
+  check: ->(r) { r[:output].length >= 1 }
+) { agent1.invoke("What is 2 + 2?") }
 puts "  Result: #{result1b[:output]}\n\n"
 
 puts "  Calls logged so far: #{call_log.size}\n\n"
+
+OutputValidator.validate(
+  "global hook captured at least 2 LLM calls",
+  check: ->(_) { call_log.size >= 2 }
+) { [1] }
 
 # ---------------------------------------------------------------------------
 # Scenario 2: Class-level hook — DeterministicAgent forces temperature=0.0

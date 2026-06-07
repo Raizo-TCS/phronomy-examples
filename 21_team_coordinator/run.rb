@@ -10,6 +10,7 @@
 # consistent throughout the post.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 # ---------------------------------------------------------------------------
@@ -63,16 +64,20 @@ puts "=== 21 Team Coordinator ===\n\n"
 puts "Topic: \"#{TOPIC}\"\n\n"
 puts "[Coordinator] Planning blog sections...\n\n"
 
-team = BlogWritingTeam.new
-
-result = team.stream(TOPIC) do |event|
-  label = event[:type] == :task_completed ? "✓" : "✗"
-  desc  = event[:task][:description].split(".").first
-  snippet = (event[:result] || event[:error]&.message || "").gsub(/\s+/, " ").slice(0, 80)
-  puts "#{label} [Worker #{event[:worker]}] #{desc}"
-  puts "  #{snippet}..."
-  puts
-end
+result = OutputValidator.validate(
+  "team coordinator produces 4+ blog sections",
+  check: ->(r) { r[:sections].size >= 4 && r[:sections].all? { |s| s[:content].to_s.length >= 50 } }
+) {
+  team = BlogWritingTeam.new
+  team.stream(TOPIC) do |event|
+    label = event[:type] == :task_completed ? "\u2713" : "\u2717"
+    desc  = event[:task][:description].split(".").first
+    snippet = (event[:result] || event[:error]&.message || "").gsub(/\s+/, " ").slice(0, 80)
+    puts "#{label} [Worker #{event[:worker]}] #{desc}"
+    puts "  #{snippet}..."
+    puts
+  end
+}
 
 puts "\n=== Final Blog Post: #{result[:sections].size} sections ===\n\n"
 

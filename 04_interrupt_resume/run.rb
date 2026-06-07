@@ -9,6 +9,7 @@
 # sent.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 class MailState
@@ -55,7 +56,10 @@ puts "=== Interrupt / Resume Example ==="
 topic = "Project completion report"
 puts "Topic: #{topic}"
 
-state = app.invoke({topic: topic})
+state = OutputValidator.validate(
+  "email draft generated for topic",
+  check: ->(r) { r.draft.length >= 100 }
+) { app.invoke({topic: topic}) }
 
 puts
 puts "[DRAFT GENERATED]"

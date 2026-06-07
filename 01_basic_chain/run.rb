@@ -10,6 +10,7 @@
 # pipeline is stateless and reusable.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 class CodeState
@@ -38,6 +39,9 @@ puts "=== Basic Workflow Pipeline Example ==="
   puts
   puts "Language: #{language}"
   puts "--- Response ---"
-  result = app.invoke({language: language})
+  result = OutputValidator.validate(
+    "#{language} Hello World code generated",
+    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+  ) { app.invoke({language: language}) }
   puts result.output
 end

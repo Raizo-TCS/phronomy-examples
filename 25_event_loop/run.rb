@@ -14,6 +14,7 @@
 #               and finish in ~150 ms total (not 3 x 150 ms)
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 # Activate EventLoop mode globally. The invoke / send_event / resume API
@@ -123,7 +124,10 @@ async_app = Phronomy::Workflow.define(AsyncState) do
 end
 
 t0      = Time.now
-result  = async_app.invoke({url: "https://example.com/doc"})
+result  = OutputValidator.validate(
+  "event loop async workflow produces SUMMARY",
+  check: ->(r) { r.summary.to_s.start_with?("SUMMARY:") }
+) { async_app.invoke({url: "https://example.com/doc"}) }
 elapsed = ((Time.now - t0) * 1000).round
 
 puts "URL:     #{result.url}"

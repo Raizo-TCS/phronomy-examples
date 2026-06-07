@@ -9,6 +9,7 @@
 # it rewrites the text and re-evaluates.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 class MyState
@@ -66,7 +67,10 @@ initial_text = "Ruby is ok."
 puts "Initial text: #{initial_text.inspect}"
 puts
 
-final = app.invoke({text: initial_text, score: 0, iterations: 0})
+final = OutputValidator.validate(
+  "improved text longer than original",
+  check: ->(r) { r.text.length > initial_text.length && r.score >= 0 }
+) { app.invoke({text: initial_text, score: 0, iterations: 0}) }
 
 puts
 puts "Final text:"

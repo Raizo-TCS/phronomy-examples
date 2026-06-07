@@ -14,9 +14,11 @@ require "uri"
 #   export OPENAI_API_KEY="sk-..."             # required for OpenAI
 #
 # For a local LM Studio instance:
-#   export PHRONOMY_MODEL="openai/gpt-oss-20b"
+#   export PHRONOMY_MODEL="gpt-4o-mini"        # LM Studio ignores the name and uses the loaded model
 #   export PHRONOMY_BASE_URL="http://192.168.122.1:1234/v1"
 #   export PHRONOMY_API_KEY="lm-studio"
+#   (Use a plain OpenAI-recognised model name so RubyLLM routes via openai_api_base.
+#    Slash-prefixed names like "openai/gpt-oss-20b" are treated as OpenRouter.)
 #
 # See README.md for a full list of supported environment variables.
 module LLMConfig

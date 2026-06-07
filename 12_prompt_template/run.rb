@@ -11,6 +11,7 @@
 #         injecting system prompt variables from the invoke Hash.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 # ---------------------------------------------------------------------------
@@ -50,10 +51,15 @@ end
 
 TranslatorAgent.instructions(translator_prompt)
 
-result = TranslatorAgent.new.invoke({
-  language: "Spanish",
-  text: "Good morning, how are you?",
-  message: "Good morning, how are you?"
-})
+result = OutputValidator.validate(
+  "translator agent produces non-empty Spanish translation",
+  check: ->(r) { r[:output].length >= 5 }
+) {
+  TranslatorAgent.new.invoke({
+    language: "Spanish",
+    text: "Good morning, how are you?",
+    message: "Good morning, how are you?"
+  })
+}
 
 puts "Translation: #{result[:output]}"

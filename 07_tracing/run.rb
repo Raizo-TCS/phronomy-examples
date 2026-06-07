@@ -7,6 +7,7 @@
 # ConsoleTracer prints span start/end events with elapsed time.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "tracer"
 
@@ -38,7 +39,10 @@ end
 
 puts "=== Tracing Example ==="
 puts
-result = app.invoke({language: "Go"})
+result = OutputValidator.validate(
+  "Go Hello World code generated with tracing",
+  check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+) { app.invoke({language: "Go"}) }
 puts
 puts "--- LLM Response ---"
 puts result.output

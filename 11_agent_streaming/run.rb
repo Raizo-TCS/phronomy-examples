@@ -8,6 +8,7 @@
 # StreamEvent types: :token, :tool_call, :tool_result, :done, :error
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 class StreamingAgent < Phronomy::Agent::Base
@@ -25,10 +26,13 @@ puts
 
 print "Response: "
 
+tokens_received = []
 StreamingAgent.new.stream(query) do |event|
   case event.type
   when :token
-    print event.payload[:content] if event.payload[:content]
+    content = event.payload[:content]
+    tokens_received << content if content
+    print content if content
     $stdout.flush
   when :tool_call
     puts "\n[Tool call: #{event.payload[:tool_call].name}]"
@@ -44,3 +48,8 @@ StreamingAgent.new.stream(query) do |event|
     puts "\nError: #{event.payload[:error].message}"
   end
 end
+
+OutputValidator.validate(
+  "streaming produced non-empty token output",
+  check: ->(_) { tokens_received.any? && tokens_received.join.length >= 20 }
+) { [1] }

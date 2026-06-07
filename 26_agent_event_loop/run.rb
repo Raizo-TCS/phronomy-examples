@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
 # ============================================================
@@ -8,7 +9,7 @@ require "phronomy"
 #
 # Demonstrates two patterns for running agents through the EventLoop:
 #   Pattern 1 — Agent#invoke  (routes through AgentFSM automatically)
-#   Pattern 2 — Agent#run_as_child embedded inside a Workflow
+#   Pattern 2 — invoke_async + Task#map embedded inside a Workflow
 # ============================================================
 
 Phronomy.configure do |c|
@@ -47,9 +48,15 @@ TranslationWorkflow = Phronomy::Workflow.define(TranslationContext) do
 
   state :translate
   entry :translate, ->(ctx) {
-    TranslationAgent.new.run_as_child(ctx.query, ctx: ctx) { |r| ctx.answer = r[:output] }
+    # invoke_async returns a Task. Task#map transforms the agent result into a
+    # WorkflowContext, which FSMSession picks up via the :action_completed path.
+    TranslationAgent.new.invoke_async(ctx.query).map do |result|
+      ctx.merge(answer: result[:output])
+    end
   }
-  transition from: :translate, on: :child_completed, to: :done
+  # invoke_async returns a Task; Task#map transforms the agent result into a
+  # WorkflowContext, which FSMSession picks up via the :action_completed path.
+  transition from: :translate, to: :done
 
   state :done, action: ->(ctx) { ctx.status = "done" }
   transition from: :done, to: :__finish__
@@ -65,7 +72,10 @@ puts
 puts "--- Pattern 1: Agent#invoke via EventLoop ---"
 question = "What is 2 + 2? Reply with just the number."
 t0     = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
-result = QnAAgent.new.invoke(question)
+result = OutputValidator.validate(
+  "pattern 1: QnA agent answers arithmetic",
+  check: ->(r) { r[:output].match?(/\d/) }
+) { QnAAgent.new.invoke(question) }
 elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - t0
 puts "Q: #{question}"
 puts "A: #{result[:output]}"
@@ -74,10 +84,15 @@ puts
 
 # Pattern 2
 puts "--- Pattern 2: Agent as child FSM inside a Workflow ---"
-final = TranslationWorkflow.invoke(
-  { query: 'Translate "hello" to Japanese' },
-  config: { thread_id: "26-demo" }
-)
+final = OutputValidator.validate(
+  "pattern 2: translation workflow completes via EventLoop",
+  check: ->(r) { r.status == "done" }
+) {
+  TranslationWorkflow.invoke(
+    { query: 'Translate "hello" to Japanese' },
+    config: { thread_id: "26-demo" }
+  )
+}
 puts "Query:  #{final.query}"
 puts "Answer: #{final.answer}"
 puts "Status: #{final.status}"

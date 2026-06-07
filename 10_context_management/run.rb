@@ -7,6 +7,7 @@
 # any real LLM API calls.  Each section is self-contained and printable.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require "ostruct"
 
@@ -189,13 +190,18 @@ puts "Messages within budget: #{ctx[:messages].length} messages (newest kept)"
 puts "Estimated tokens used:  #{est_history} / #{ctx_budget.effective_input_limit} available"
 
 # Call the LLM with only the budget-constrained context.
-chat = RubyLLM.chat(
-  model:                LLMConfig::MODEL,
-  provider:             LLMConfig::PROVIDER,
-  assume_model_exists:  true
-)
-ctx[:messages].each { |m| chat.messages << m }
-response = chat.ask("Summarise what you know about phronomy in one sentence.")
+response = OutputValidator.validate(
+  "section 8: LLM summarises phronomy",
+  check: ->(r) { r.content.length >= 10 }
+) {
+  chat = RubyLLM.chat(
+    model:                LLMConfig::MODEL,
+    provider:             LLMConfig::PROVIDER,
+    assume_model_exists:  true
+  )
+  ctx[:messages].each { |m| chat.messages << m }
+  chat.ask("Summarise what you know about phronomy in one sentence.")
+}
 
 puts "LLM response:   #{response.content}"
 if response.tokens
@@ -222,18 +228,28 @@ end
 
 session_messages = []
 
-r1 = ContextDemoAgent.new.invoke(
-  "My name is Alice. Please remember it.",
-  messages: session_messages, thread_id: "demo"
-)
+r1 = OutputValidator.validate(
+  "section 9 turn 1: agent responds",
+  check: ->(r) { r[:output].length >= 5 }
+) {
+  ContextDemoAgent.new.invoke(
+    "My name is Alice. Please remember it.",
+    messages: session_messages, thread_id: "demo"
+  )
+}
 session_messages = r1[:messages]
 puts "Turn 1 response: #{r1[:output][0, 70]}"
 puts "History after turn 1: #{session_messages.length} messages"
 
-r2 = ContextDemoAgent.new.invoke(
-  "What is my name?",
-  messages: session_messages, thread_id: "demo"
-)
+r2 = OutputValidator.validate(
+  "section 9 turn 2: agent recalls Alice",
+  check: ->(r) { r[:output].downcase.include?("alice") }
+) {
+  ContextDemoAgent.new.invoke(
+    "What is my name?",
+    messages: session_messages, thread_id: "demo"
+  )
+}
 session_messages = r2[:messages]
 puts "Turn 2 response: #{r2[:output][0, 70]}"
 puts "History after turn 2: #{session_messages.length} messages"

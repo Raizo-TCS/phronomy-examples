@@ -17,6 +17,7 @@
 # Here the orchestrator LLM drives coordination via tool calls.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
@@ -26,7 +27,10 @@ puts "=== Multi-Agent Example ==="
 puts "Task: #{task}"
 puts
 
-result = OrchestratorAgent.new.invoke(task)
+result = OutputValidator.validate(
+  "multi-agent produces article of 300+ chars",
+  check: ->(r) { r[:output].length >= 300 }
+) { OrchestratorAgent.new.invoke(task) }
 
 puts
 puts "--- Final Article ---"

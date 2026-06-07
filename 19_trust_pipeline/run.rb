@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require_relative "agents"
 
 # This example demonstrates the Generator-Verifier pattern with three trust mechanisms:
@@ -96,6 +97,9 @@ end
 
 SCENARIOS.each_with_index do |question, i|
   puts "Question #{i + 1}: #{question}"
-  result = pipeline.invoke(question)
+  result = OutputValidator.validate(
+    "trust pipeline scenario #{i + 1}: produces answer",
+    check: ->(r) { r.output.length >= 20 }
+  ) { pipeline.invoke(question) }
   print_result("Scenario #{i + 1}", result)
 end

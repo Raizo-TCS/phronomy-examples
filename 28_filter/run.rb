@@ -146,4 +146,42 @@ puts "PiiMaskFilter registered at both input and output boundaries."
 puts "Any PII in user input or in the LLM's final answer will be masked."
 puts
 
+# ── Scenario 5: class-level DSL ────────────────────────────────────────────
+puts "--- Scenario 5: class-level filter DSL ---"
+
+# Filters declared inside the class body apply to every instance.
+class SecureCustomerAgent < Phronomy::Agent::Base
+  model        LLMConfig::MODEL
+  provider     LLMConfig::PROVIDER
+  instructions "You are a secure customer support assistant."
+  tools        CustomerLookupTool
+
+  # All invocations automatically mask PII in user input.
+  input_filter PiiMaskFilter.new
+
+  # All invocations automatically mask PII in the final LLM output.
+  output_filter PiiMaskFilter.new
+
+  # CustomerLookupTool results are always masked for every instance.
+  tool_result_filter PiiMaskFilter.new
+end
+
+# Verify: the class-level tool_result_filter is applied without any
+# instance-level registration.
+wrapped_class = SecureCustomerAgent.new.send(:prepare_tool_class, CustomerLookupTool)
+class_filtered = wrapped_class.new.call({customer_id: "C002"})
+
+puts "SecureCustomerAgent tool result: #{class_filtered}"
+
+OutputValidator.validate(
+  "class-level tool_result_filter masks PII automatically",
+  check: ->(_) {
+    !class_filtered.include?("alice@example.com") &&
+      class_filtered.include?("[EMAIL]")
+  }
+) { [1] }
+
+puts "Class-level input_filter and output_filter will mask PII on every invoke."
+puts
+
 puts "Done."

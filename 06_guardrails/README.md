@@ -15,7 +15,7 @@ content at both boundaries.
 | `Phronomy::Guardrail::InputGuardrail` | Validates (and optionally blocks) user input |
 | `Phronomy::Guardrail::OutputGuardrail` | Validates (and optionally blocks) LLM output |
 | `Phronomy::GuardrailError` | Raised when a guardrail calls `fail!` |
-| `add_input_guardrail` / `add_output_guardrail` | Attaches guardrails to an agent |
+| `add_input_filter` / `add_output_filter` | Attaches guardrails (or filters) to an agent |
 
 ## Guardrails in This Example
 

@@ -11,8 +11,8 @@
 #   - add_tool_result_filter — applied to a specific tool's return value
 #
 # The same filter class can be reused at any combination of sites.
-# Guardrails (add_input_guardrail / add_output_guardrail) continue to work
-# and now participate in the same filter chain.
+# Guardrail subclasses (Phronomy::Guardrail::InputGuardrail etc.) can be passed
+# directly to add_input_filter / add_output_filter since they implement #call.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"

@@ -48,7 +48,8 @@ class PIIOutputGuardrail < Phronomy::Guardrail::OutputGuardrail
 end
 
 # Feature A + B: NIST AI RMF Govern/Map -- custom guardrails and caller identity.
-# Guardrails are registered on each instance via #add_input_guardrail (instance API).
+# Guardrail instances are registered via add_input_filter / add_output_filter
+# (they implement #call so they participate in the unified filter chain).
 class SecureChatAgent < Phronomy::Agent::Base
   model LLM_MODEL
   provider :openai
@@ -58,9 +59,9 @@ class SecureChatAgent < Phronomy::Agent::Base
   def initialize
     super
     # Feature A (input): block PII and prompt-injection attempts before reaching the LLM.
-    add_input_guardrail PromptInjectionGuardrail.new
-    add_input_guardrail PIIInputGuardrail.new
+    add_input_filter PromptInjectionGuardrail.new
+    add_input_filter PIIInputGuardrail.new
     # Feature A (output): block LLM responses that accidentally contain PII.
-    add_output_guardrail PIIOutputGuardrail.new
+    add_output_filter PIIOutputGuardrail.new
   end
 end

@@ -2,5 +2,5 @@
 
 source "https://rubygems.org"
 
-gem "phronomy", "~> 0.10"
+gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git", branch: "main"
 gem "webrick", "~> 1.8"

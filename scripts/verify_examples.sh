@@ -268,6 +268,7 @@ CLI_EXAMPLES=(
   25_event_loop
   26_agent_event_loop
   27_issue_analyzer
+  28_filter
 )
 
 echo -e "${BOLD}======================================================${NC}"

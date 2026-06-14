@@ -156,14 +156,11 @@ class SecureCustomerAgent < Phronomy::Agent::Base
   instructions "You are a secure customer support assistant."
   tools        CustomerLookupTool
 
-  # All invocations automatically mask PII in user input.
-  input_filter PiiMaskFilter.new
-
-  # All invocations automatically mask PII in the final LLM output.
-  output_filter PiiMaskFilter.new
-
-  # CustomerLookupTool results are always masked for every instance.
-  tool_result_filter PiiMaskFilter.new
+  # Pass the class — phronomy calls .new automatically at registration time.
+  # Each registration site gets an independent instance.
+  input_filter       PiiMaskFilter
+  output_filter      PiiMaskFilter
+  tool_result_filter PiiMaskFilter
 end
 
 # Verify: the class-level tool_result_filter is applied without any

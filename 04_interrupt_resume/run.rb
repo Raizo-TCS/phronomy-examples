@@ -20,18 +20,15 @@ class MailState
   field :approved, type: :replace, default: false
 end
 
-llm = lambda do |input|
-  chat = RubyLLM.chat(model: LLMConfig::MODEL, **(LLMConfig::PROVIDER ? { provider: LLMConfig::PROVIDER, assume_model_exists: true } : {}))
-  chat.with_instructions(input[:system]) if input[:system]
-  chat.ask(input[:user]).content
+class DraftAgent < Phronomy::Agent::Base
+  model        LLMConfig::MODEL
+  provider     LLMConfig::PROVIDER
+  instructions "You are a business email expert. Write a polite email including subject and body."
 end
 
 DRAFT_NODE = ->(state) {
-  draft = llm.call({
-    system: "You are a business email expert. Write a polite email including subject and body.",
-    user:   "Topic: #{state.topic}"
-  })
-  state.merge(draft: draft.strip)
+  result = DraftAgent.new.invoke("Topic: #{state.topic}")
+  state.merge(draft: result[:output].strip)
 }
 
 SEND_NODE = ->(state) {

@@ -22,13 +22,19 @@ class CodeState
   field :output,   type: :replace, default: ""
 end
 
+# Agent::Base routes LLM calls through phronomy's pipeline, so spans are
+# emitted automatically via the configured tracer — no manual trace block needed.
+class CodeGeneratorAgent < Phronomy::Agent::Base
+  model        LLMConfig::MODEL
+  provider     LLMConfig::PROVIDER
+  instructions "You are a programming expert."
+end
+
 GENERATE_NODE_WITH_TRACE = ->(state) {
-  Phronomy.configuration.tracer.trace(:generate, input: state) do
-    chat = RubyLLM.chat(model: LLMConfig::MODEL, **(LLMConfig::PROVIDER ? { provider: LLMConfig::PROVIDER, assume_model_exists: true } : {}))
-    chat.with_instructions("You are a programming expert.")
-    response = chat.ask("Write a Hello World program in #{state.language}. Return code only.")
-    state.merge(output: response.content)
-  end
+  result = CodeGeneratorAgent.new.invoke(
+    "Write a Hello World program in #{state.language}. Return code only."
+  )
+  state.merge(output: result[:output])
 }
 
 app = Phronomy::Workflow.define(CodeState) do

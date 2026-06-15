@@ -13,6 +13,12 @@ class SummarizationGraph
     field :summary, default: ""
   end
 
+  class SummarizationAgent < Phronomy::Agent::Base
+    model        LLM_MODEL
+    provider     :openai
+    instructions "You are a helpful assistant that summarizes conversations concisely."
+  end
+
   # Build the summarization workflow.
   #
   # @return [Phronomy::Workflow]
@@ -21,11 +27,10 @@ class SummarizationGraph
       initial :summarize
 
       state :summarize, action: ->(state) {
-        chat = RubyLLM.chat(model: LLM_MODEL, provider: :openai, assume_model_exists: true)
         text = state.messages.map { |m| "#{m["role"]}: #{m["content"]}" }.join("\n")
         prompt = "Summarize the following conversation in 3-5 concise sentences:\n\n#{text}"
-        response = chat.ask(prompt)
-        state.merge(summary: response.content)
+        result = SummarizationAgent.new.invoke(prompt)
+        state.merge(summary: result[:output])
       }
     end
   end

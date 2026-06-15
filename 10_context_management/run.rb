@@ -156,6 +156,16 @@ puts
 # 8. Context::Assembler + LLM — assemble context within a budget, then call
 #    the LLM.  Evidence: print message counts and estimated vs actual tokens.
 # -----------------------------------------------------------------------
+
+# Agent used for LLM calls in sections 8 and 9.
+class ContextDemoAgent < Phronomy::Agent::Base
+  model             LLMConfig::MODEL
+  provider          LLMConfig::PROVIDER
+  instructions      "You are a concise assistant. Answer in one sentence only."
+  max_output_tokens 256
+  context_overhead  80
+end
+
 puts "--- 8. Context::Assembler + LLM ---"
 
 # Build a modest budget to demonstrate truncation.
@@ -189,24 +199,21 @@ puts "History stored:       #{history.length} messages"
 puts "Messages within budget: #{ctx[:messages].length} messages (newest kept)"
 puts "Estimated tokens used:  #{est_history} / #{ctx_budget.effective_input_limit} available"
 
-# Call the LLM with only the budget-constrained context.
+# Call the LLM via Agent, passing only the budget-constrained messages as history.
+# Agent::Base routes through phronomy's pipeline (tracing, filters, BlockingAdapterPool).
 response = OutputValidator.validate(
   "section 8: LLM summarises phronomy",
-  check: ->(r) { r.content.length >= 10 }
+  check: ->(r) { r[:output].length >= 10 }
 ) {
-  chat = RubyLLM.chat(
-    model:                LLMConfig::MODEL,
-    provider:             LLMConfig::PROVIDER,
-    assume_model_exists:  true
+  ContextDemoAgent.new.invoke(
+    "Summarise what you know about phronomy in one sentence.",
+    messages: ctx[:messages]
   )
-  ctx[:messages].each { |m| chat.messages << m }
-  chat.ask("Summarise what you know about phronomy in one sentence.")
 }
 
-puts "LLM response:   #{response.content}"
-if response.tokens
-  puts "Actual usage:   input=#{response.tokens.input}, " \
-       "output=#{response.tokens.output} tokens"
+puts "LLM response:   #{response[:output]}"
+if (usage = response[:usage])
+  puts "Actual usage:   input=#{usage.input}, output=#{usage.output} tokens"
 end
 puts
 
@@ -217,14 +224,7 @@ puts
 # -----------------------------------------------------------------------
 puts "--- 9. Agent + config[:messages] multi-turn conversation ---"
 
-# Define a simple agent that answers in one sentence.
-class ContextDemoAgent < Phronomy::Agent::Base
-  model       LLMConfig::MODEL
-  provider    LLMConfig::PROVIDER
-  instructions "You are a concise assistant. Answer in one sentence only."
-  max_output_tokens 256
-  context_overhead  80
-end
+# ContextDemoAgent is defined above (section 8).
 
 session_messages = []
 

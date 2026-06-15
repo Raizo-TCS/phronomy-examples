@@ -20,11 +20,17 @@ class CodeState
   field :output,   type: :replace, default: ""
 end
 
+class CodeGeneratorAgent < Phronomy::Agent::Base
+  model        LLMConfig::MODEL
+  provider     LLMConfig::PROVIDER
+  instructions "You are a programming expert."
+end
+
 GENERATE_NODE = ->(state) {
-  chat = RubyLLM.chat(model: LLMConfig::MODEL, **(LLMConfig::PROVIDER ? { provider: LLMConfig::PROVIDER, assume_model_exists: true } : {}))
-  chat.with_instructions("You are a programming expert.")
-  response = chat.ask("Write a Hello World program in #{state.language}. Return code only.")
-  state.merge(output: response.content)
+  result = CodeGeneratorAgent.new.invoke(
+    "Write a Hello World program in #{state.language}. Return code only."
+  )
+  state.merge(output: result[:output])
 }
 
 app = Phronomy::Workflow.define(CodeState) do

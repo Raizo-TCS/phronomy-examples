@@ -1,21 +1,22 @@
-# 01 Basic Graph Pipeline
+# 01 Basic Workflow Pipeline
 
-Demonstrates a simple two-node pipeline using `StateGraph`.
+Demonstrates a simple single-node pipeline using `Phronomy::Workflow`.
 
 ## Purpose
 
-Build a stateless, reusable code-generation pipeline with two nodes connected
-by a linear edge. The same graph instance is invoked multiple times with
-different inputs to show it has no side-effects between calls.
+Build a stateless, reusable code-generation pipeline with one node backed by
+an `Agent::Base` subclass. The same workflow instance is invoked multiple times
+with different inputs to show it has no side-effects between calls.
 
 ## Phronomy Features
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Graph::State` | Defines `language` and `output` fields |
-| `Phronomy::Graph::StateGraph` | Graph definition API |
-| `add_node` / `add_edge` / `set_entry_point` | Assembles the pipeline |
-| `compile` / `invoke` | Executes the graph |
+| `Phronomy::WorkflowContext` | Defines `language` and `output` fields via `field` |
+| `Phronomy::Workflow.define` | Workflow definition API |
+| `initial` / `state` / `transition` | Assembles the pipeline |
+| `Phronomy::Agent::Base` | `CodeGeneratorAgent` drives the `:generate` node |
+| `invoke` | Executes the workflow with an initial state hash |
 
 ## How to Run
 
@@ -26,10 +27,10 @@ bundle exec ruby 01_basic_chain/run.rb
 ## Expected Output (approximate)
 
 ```
-=== Basic Graph Pipeline Example ===
+=== Basic Workflow Pipeline Example ===
 Language: Ruby
 --- Response ---
 puts "Hello, World!"
 ```
 
-The pipeline is invoked for Ruby, Python, and JavaScript in sequence.
+The workflow is invoked for Ruby, Python, and JavaScript in sequence.

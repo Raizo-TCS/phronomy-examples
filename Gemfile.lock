@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: 0cc799247ace193f0a3e415b4f3a631bbf65bc3b
+  revision: a4e7f49346524113982dd32739e36439ac084056
   branch: main
   specs:
     phronomy (0.10.0)

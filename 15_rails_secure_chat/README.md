@@ -13,8 +13,8 @@ and automatic TTL-based memory purging.
 
 | Feature | Class / API | Role |
 |---------|------------|------|
-| **A — Guardrails** | `Guardrail::Builtin::PromptInjectionDetector` | Blocks prompt injection attempts |
-| **A — Guardrails** | `Guardrail::Builtin::PIIPatternDetector` | Blocks emails, phone numbers, credit cards, My Number |
+| **A — Blocking Filters** | `Filter::PromptInjectionFilter` | Blocks prompt injection attempts |
+| **A — Blocking Filters** | `Filter::Base` (PII pattern) | Blocks emails, phone numbers, credit cards, My Number |
 | **B — Caller identity** | `Agent::Base config: { user_id: }` | Propagates session UUID to tracer spans |
 | **C — Encrypted checkpoint** | `StateStore::Encryptor::ActiveSupport` | AES-256-GCM encryption of graph state in DB |
 | **D — TTL purge** | `ConversationManager ttl:` | Auto-deletes messages older than the configured threshold |

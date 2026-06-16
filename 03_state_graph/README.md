@@ -1,21 +1,22 @@
-# 03 State Graph
+# 03 Workflow with Conditional Routing
 
-Demonstrates conditional branching and looping inside a `StateGraph`.
+Demonstrates conditional branching and looping using `Phronomy::Workflow` with
+guard-based transitions.
 
 ## Purpose
 
-Build a self-improving text pipeline. The graph evaluates text quality and,
-if the score is below the threshold (and the iteration limit has not been
+Build a self-improving text pipeline. The workflow evaluates text quality and,
+if the score is below the threshold (and the iteration cap has not been
 reached), rewrites the text and re-evaluates — up to three times.
 
 ## Phronomy Features
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Graph::State` | `field` DSL with `:replace` / `:append` policies |
-| `StateGraph` | Node / edge / conditional-edge definitions |
-| `add_conditional_edges` | Router function controlling loop or exit |
-| `compile` → `invoke` | Graph execution |
+| `Phronomy::WorkflowContext` | `field` DSL with `:replace` / `:append` policies |
+| `Phronomy::Workflow.define` | State and transition definitions |
+| `transition` with `guard:` | Lambda-based conditional routing |
+| `Phronomy::Agent::Base` | `EvaluatorAgent` and `ImproverAgent` subclasses |
 
 ## State Fields
 
@@ -42,11 +43,12 @@ bundle exec ruby 03_state_graph/run.rb
 ## Expected Output (approximate)
 
 ```
-=== State Graph Example ===
+=== Workflow Conditional Routing Example ===
 Initial text: "Ruby is ok."
 
-[Iteration 1] Score: 4 → improving...
-[Iteration 2] Score: 7 → done.
+[Iteration 0] Score: 4
+[Iteration 1] Score: 7
+[Done] Final score: 7
 
 Final text: "Ruby is an elegant, expressive language ..."
 ```

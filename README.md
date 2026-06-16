@@ -54,11 +54,11 @@ bundle exec ruby 01_basic_chain/run.rb
 | 03 | `03_state_graph/` | Stateful branching graph |
 | 04 | `04_interrupt_resume/` | Human-in-the-loop with interrupt/resume |
 | 05 | `05_multi_agent/` | Multi-Agent LLM-driven coordination (Agent-as-Tool) |
-| 06 | `06_guardrails/` | Input and output guardrails |
+| 06 | `06_guardrails/` | Input and output blocking filters |
 | 07 | `07_tracing/` | Custom span-based tracer |
 | 08 | `08_mcp_tool/` | MCP server tool integration |
 | 09 | `09_rails_chat/` | Rails web chat app using `Phronomy::Agent` with manually persisted conversation history (DB-backed via `PhronomyMessage`) |
-| 14 | `14_code_review/` | **Comprehensive pipeline** — Guardrail, Splitter, Graph, Parallel branches, Interrupt/Resume, PromptTemplate, Agent (streaming), OutputGuardrail, Eval (LLMJudge), Tracing |
+| 14 | `14_code_review/` | **Comprehensive pipeline** — BlockingFilter, Splitter, Graph, Parallel branches, Interrupt/Resume, PromptTemplate, Agent (streaming), OutputFilter, Eval (LLMJudge), Tracing |
 | 16 | `16_before_completion_hook/` | Global / class / instance `before_completion` hooks — logging, param overrides |
 | 17 | `17_multi_agent_handoff/` | Hub-and-spoke routing with `Phronomy::Agent::Runner` — triage → specialist handoff |
 | 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
@@ -93,13 +93,13 @@ Then open http://localhost:4567/.
 A comprehensive example that exercises the majority of phronomy's features in a
 single CLI pipeline.  Supply a Ruby source file and the pipeline:
 
-1. **InputGuardrail** — rejects invalid/missing files before any LLM call
+1. **InputFilter** — rejects invalid/missing files before any LLM call
 2. **Splitter** — splits large files into chunks with `RecursiveSplitter`
 3. **Graph + Parallel branches** — runs Security / Performance / Readability / Abstraction agents concurrently via `Runtime` named pools and `BlockingAdapterPool`
 4. **Interrupt/Resume** — pauses after reviews so you can choose which area to fix
 5. **PromptTemplate** — formats the improvement prompt from variables
 6. **Agent (streaming)** — generates improved code with real-time token output
-7. **OutputGuardrail** — validates that the improved code contains a code block
+7. **OutputFilter** — validates that the improved code contains a code block
 8. **Eval (LLMJudge)** — scores review quality and improvement quality out of 10
 9. **Tracing** — measures and prints elapsed time for every pipeline stage
 

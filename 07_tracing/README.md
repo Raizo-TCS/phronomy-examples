@@ -27,13 +27,17 @@ bundle exec ruby 07_tracing/run.rb
 ```
 === Tracing Example ===
 
-[SPAN START] graph.invoke  input="..."
-  [SPAN START] node.render_prompt
-  [SPAN END]   node.render_prompt  elapsed=0.001s
-  [SPAN START] node.generate_code
-  [SPAN END]   node.generate_code  elapsed=1.234s
-[SPAN END]   graph.invoke  elapsed=1.237s
+[SPAN START] workflow.invoke  input="..."
+  [SPAN START] agent.invoke
+  [SPAN END]   agent.invoke  elapsed=1.234s
+[SPAN END]   workflow.invoke  elapsed=1.237s
 
---- Generated Code ---
-puts "Hello, World!"
+--- LLM Response ---
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
 ```

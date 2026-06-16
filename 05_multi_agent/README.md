@@ -13,16 +13,25 @@ execution order in a workflow.
 | Feature | Usage |
 |---------|-------|
 | `Phronomy::Agent::Base` | Defines specialist and orchestrator agents |
-| `Phronomy::Tool::Base` | Wraps sub-agents as callable tools |
+| `Phronomy::Agent::Context::Capability::Base` | Wraps sub-agents as callable tools |
 | `tools` DSL | Registers sub-agent tools on the orchestrator |
 
-## Agents
+## Agents and Tools
 
-| Agent | Role |
-|-------|------|
-| `ResearchAgent` | Searches and summarises information on a topic |
-| `WriterAgent` | Writes a polished article from research notes |
-| `OrchestratorAgent` | Uses the above two agents as tools to fulfil the task |
+| Class | Type | Role |
+|-------|------|------|
+| `ResearcherAgent` | Agent | Lists key bullet points on a given topic |
+| `WriterAgent` | Agent | Writes a technical blog post from given instructions |
+| `ResearchTool` | Tool | Wraps `ResearcherAgent` as a callable tool |
+| `WriteTool` | Tool | Wraps `WriterAgent` as a callable tool |
+| `OrchestratorAgent` | Agent | Uses `ResearchTool` and `WriteTool` to fulfil the task |
+
+## File Structure
+
+| File | Purpose |
+|------|---------|
+| `run.rb` | Entry point; invokes `OrchestratorAgent` with the task |
+| `agents.rb` | Defines all agents and tool wrappers |
 
 ## How to Run
 
@@ -34,11 +43,11 @@ bundle exec ruby 05_multi_agent/run.rb
 
 ```
 === Multi-Agent Example ===
-Task: Write a short article about the Ruby programming language.
+Task: Write a technical blog post about Ruby 3.4 new features.
 
-[Orchestrator calls ResearchAgent...]
-[Orchestrator calls WriterAgent...]
+  [ResearchTool] topic=Ruby 3.4 new features
+  [WriteTool] writing article...
 
 --- Final Article ---
-Ruby is a dynamic, open-source programming language...
+Ruby 3.4 introduces several exciting features...
 ```

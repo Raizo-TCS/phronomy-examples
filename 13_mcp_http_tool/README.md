@@ -1,6 +1,6 @@
 # 13 MCP HTTP Tool
 
-Demonstrates `Phronomy::Tool::McpTool` over HTTP/JSON-RPC transport.
+Demonstrates `Phronomy::Tools::Mcp` over HTTP/JSON-RPC transport.
 
 ## Purpose
 
@@ -12,9 +12,8 @@ a local port, and torn down after the agent finishes.
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Tool::McpTool.from_server("http://...", tool_name:)` | HTTP transport |
-| `McpTool::HttpTransport` | JSON-RPC over HTTP (`application/json`) |
-| `tools` DSL | Registers the HTTP MCP tool on the agent |
+| `Phronomy::Tools::Mcp.from_server("http://...", tool_name:)` | Wraps a single named tool from an HTTP MCP server |
+| `tools` DSL | Registers the MCP tool on the agent class |
 
 ## MCP Server (`mcp_server.rb`)
 
@@ -24,6 +23,9 @@ Implements two JSON-RPC endpoints:
 |--------|------------|---------|
 | `tools/list` | — | Tool definition for `greet` |
 | `tools/call` | `name: String` | `"Hello, <name>! (via MCP HTTP)"` |
+
+The server listens on port `19876` and is started in a background thread,
+then shut down in an `ensure` block.
 
 ## How to Run
 
@@ -35,8 +37,9 @@ bundle exec ruby 13_mcp_http_tool/run.rb
 
 ```
 === MCP HTTP Tool Example ===
+MCP server running at http://localhost:19876/mcp
 
-Query: Please greet Alice using the tool.
+Query: Please greet Alice using the greet tool.
 
 --- Agent Response ---
 Hello, Alice! (via MCP HTTP)

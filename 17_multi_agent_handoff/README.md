@@ -15,8 +15,8 @@ in application code. The LLM decides when and where to hand off.
 User input
     │
     ▼
-TriageAgent  ──transfer_to_billing_agent──▶  BillingAgent
-             ──transfer_to_tech_support──▶   TechSupportAgent
+TriageAgent  ──transfer_to_billing_agent──────▶  BillingAgent
+             ──transfer_to_tech_support_agent──▶  TechSupportAgent
 ```
 
 Handoff tools (`transfer_to_billing_agent`, `transfer_to_tech_support_agent`)

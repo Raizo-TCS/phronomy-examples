@@ -1,6 +1,6 @@
 # 08 MCP Tool (stdio)
 
-Demonstrates wrapping a stdio MCP server's tool with `Phronomy::Tool::McpTool`.
+Demonstrates wrapping a stdio MCP server's tool with `Phronomy::Tools::Mcp`.
 
 ## Purpose
 
@@ -11,9 +11,8 @@ tools to an `Agent::Base` via the stdio transport.
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Tool::McpTool.from_server("stdio://...", tool_name:)` | Wraps a tool from a stdio MCP server |
-| `McpTool::StdioTransport` | JSON-RPC over stdin/stdout |
-| `tools` DSL | Registers the MCP tool on the agent |
+| `Phronomy::Tools::Mcp.from_server("stdio://...", tool_name:)` | Wraps a named tool from a stdio MCP server |
+| `tools` DSL | Registers the MCP tool on the agent at runtime |
 
 ## MCP Server (`mcp_server.rb`)
 
@@ -29,7 +28,8 @@ bundle exec ruby 08_mcp_tool/run.rb
 
 ```
 === MCP Tool Example ===
-Query: List the files in the current directory.
+Starting MCP server...
+Query: List the files in the current directory ('.').
 
 --- Agent Response ---
 The current directory contains: run.rb, mcp_server.rb, ...

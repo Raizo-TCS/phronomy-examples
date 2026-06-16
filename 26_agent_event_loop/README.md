@@ -53,7 +53,7 @@ Elapsed: 843ms
 
 --- Pattern 2: Agent as child FSM inside a Workflow ---
 Query:  Translate "hello" to Japanese
-Answer: こんにちは
+Answer: konnichiwa (or equivalent Japanese greeting)
 Status: done
 ```
 

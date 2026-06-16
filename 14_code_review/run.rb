@@ -5,7 +5,7 @@
 #
 # A comprehensive example demonstrating the breadth of phronomy features:
 #
-#   InputGuardrail   — validates the file path before processing
+#   Filter::Base    — validates the file path before processing
 #   Splitter         — splits large files into manageable chunks
 #   Graph            — orchestrates the full review pipeline
 #   Parallel threads — runs Security / Performance / Readability reviews concurrently
@@ -87,9 +87,9 @@ end
 
 def run_review(app, path, priority_override = nil)
   begin
-    INPUT_GUARDRAIL.run!(path)
-  rescue Phronomy::GuardrailError => e
-    puts "[InputGuardrail] Rejected: #{e.message}"
+    INPUT_GUARDRAIL.call(path)
+  rescue Phronomy::FilterBlockError => e
+    puts "[InputFilter] Rejected: #{e.message}"
     return
   end
 

@@ -1,28 +1,28 @@
-# 06 Guardrails
+# 06 Filters (formerly Guardrails)
 
-Demonstrates input and output guardrails on an `Agent::Base`.
+Demonstrates input and output filters on an `Agent::Base`.
 
 ## Purpose
 
-Show how to attach validation logic before the LLM sees the user's input
-and after the LLM produces its output, blocking unsafe or non-compliant
+Show how to attach blocking or transforming logic before the LLM sees the user's
+input and after the LLM produces its output, rejecting unsafe or non-compliant
 content at both boundaries.
 
 ## Phronomy Features
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Guardrail::InputGuardrail` | Validates (and optionally blocks) user input |
-| `Phronomy::Guardrail::OutputGuardrail` | Validates (and optionally blocks) LLM output |
-| `Phronomy::GuardrailError` | Raised when a guardrail calls `fail!` |
-| `add_input_filter` / `add_output_filter` | Attaches guardrails (or filters) to an agent |
+| `Phronomy::Filter::Base` | Subclass to transform or block values |
+| `Phronomy::FilterBlockError` | Raised when a filter calls `block!` |
+| `add_input_filter` / `add_output_filter` | Attaches filters to an agent |
 
-## Guardrails in This Example
+## Filters in This Example
 
-| Guardrail | Trigger | Action |
-|-----------|---------|--------|
-| `NoPIIInputGuardrail` | Input contains a 12-digit number (My Number format) | Blocks with `GuardrailError` |
-| `NoURLOutputGuardrail` | LLM output contains an `http(s)://` URL | Blocks with `GuardrailError` |
+| Filter | Trigger | Action |
+|--------|---------|--------|
+| `PIIFilter` | Input contains credit card / phone / email | Blocks with `FilterBlockError` |
+| `PromptInjectionFilter` | Input contains injection patterns | Blocks with `FilterBlockError` |
+| `NoURLOutputFilter` | LLM output contains an `http(s)://` URL | Blocks with `FilterBlockError` |
 
 ## How to Run
 

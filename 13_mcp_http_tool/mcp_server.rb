@@ -10,11 +10,13 @@ require "json"
 class McpHttpServer
   TOOL_DEF = {
     name: "greet",
-    description: "Returns a greeting for the given name",
+    description: "Returns a greeting for the given name. " \
+                 "Accepts an optional delay_ms to simulate slow MCP responses.",
     inputSchema: {
       type: "object",
       properties: {
-        name: {type: "string", description: "Name of the person to greet"}
+        name: {type: "string", description: "Name of the person to greet"},
+        delay_ms: {type: "integer", description: "Optional response delay in milliseconds (default: 0)"}
       },
       required: ["name"]
     }
@@ -65,6 +67,8 @@ class McpHttpServer
       {tools: [TOOL_DEF]}
     when "tools/call"
       name = params.dig("arguments", "name") || "World"
+      delay_ms = params.dig("arguments", "delay_ms").to_i
+      sleep(delay_ms / 1000.0) if delay_ms > 0
       auth_note = api_key ? " [key=#{api_key}]" : ""
       {content: [{type: "text", text: "Hello, #{name}! (via MCP HTTP)#{auth_note}"}]}
     else

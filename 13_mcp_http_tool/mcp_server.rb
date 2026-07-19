@@ -43,7 +43,9 @@ class McpHttpServer
 
   def handle(req, res)
     body = JSON.parse(req.body)
-    result = dispatch(body["method"], body.fetch("params", {}))
+    # Extract custom headers so tools/call can reflect them in the response.
+    api_key = req["X-Api-Key"]
+    result = dispatch(body["method"], body.fetch("params", {}), api_key: api_key)
     res.status = 200
     res["Content-Type"] = "application/json"
     res.body = JSON.generate(jsonrpc: "2.0", id: body["id"], result: result)
@@ -57,13 +59,14 @@ class McpHttpServer
     )
   end
 
-  def dispatch(method, params)
+  def dispatch(method, params, api_key: nil)
     case method
     when "tools/list"
       {tools: [TOOL_DEF]}
     when "tools/call"
       name = params.dig("arguments", "name") || "World"
-      {content: [{type: "text", text: "Hello, #{name}! (via MCP HTTP)"}]}
+      auth_note = api_key ? " [key=#{api_key}]" : ""
+      {content: [{type: "text", text: "Hello, #{name}! (via MCP HTTP)#{auth_note}"}]}
     else
       raise "Unknown method: #{method}"
     end

@@ -63,6 +63,14 @@ class McpHttpServer
 
   def dispatch(method, params, api_key: nil)
     case method
+    when "initialize"
+      {
+        protocolVersion: "2025-03-26",
+        capabilities: {tools: {listChanged: false}},
+        serverInfo: {name: "phronomy-example-mcp-http", version: "0.0.1"}
+      }
+    when "notifications/initialized"
+      {} # notification: return empty result
     when "tools/list"
       {tools: [TOOL_DEF]}
     when "tools/call"

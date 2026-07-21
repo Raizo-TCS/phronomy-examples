@@ -34,8 +34,14 @@ def handle(request)
   when "initialize"
     {
       jsonrpc: "2.0", id: id,
-      result: {protocolVersion: "0.1", serverInfo: {name: "phronomy-example-mcp", version: "0.0.1"}}
+      result: {
+        protocolVersion: "2025-03-26",
+        capabilities: {tools: {listChanged: false}},
+        serverInfo: {name: "phronomy-example-mcp", version: "0.0.1"}
+      }
     }
+  when "notifications/initialized"
+    nil # notification: no response required
   when "tools/list"
     {jsonrpc: "2.0", id: id, result: {tools: TOOL_DEFS}}
   when "tools/call"
@@ -67,5 +73,6 @@ while (line = $stdin.gets)
     $stdout.puts({jsonrpc: "2.0", id: nil, error: {code: -32700, message: "Parse error: #{e.message}"}}.to_json)
     next
   end
-  $stdout.puts(handle(request).to_json)
+  result = handle(request)
+  $stdout.puts(result.to_json) if result
 end

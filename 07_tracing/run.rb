@@ -31,10 +31,9 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
 end
 
 GENERATE_NODE_WITH_TRACE = ->(state) {
-  result = CodeGeneratorAgent.new.invoke(
+  CodeGeneratorAgent.new.invoke_async(
     "Write a Hello World program in #{state.language}. Return code only."
-  )
-  state.merge(output: result[:output])
+  ).map { |result| state.merge(output: result[:output]) }
 }
 
 app = Phronomy::Workflow.define(CodeState) do

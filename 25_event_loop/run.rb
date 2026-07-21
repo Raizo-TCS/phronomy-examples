@@ -17,9 +17,7 @@ require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 
-# Activate EventLoop mode globally. The invoke / send_event / resume API
-# is identical to sync mode — only the execution driver changes.
-Phronomy.configure { |c| c.event_loop = true }
+# Note: EventLoop is always active in Phronomy (no configuration needed).
 
 puts "=== 25 EventLoop Opt-In Execution Mode ==="
 puts

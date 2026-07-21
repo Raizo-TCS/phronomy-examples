@@ -27,8 +27,9 @@ class DraftAgent < Phronomy::Agent::Base
 end
 
 DRAFT_NODE = ->(state) {
-  result = DraftAgent.new.invoke("Topic: #{state.topic}")
-  state.merge(draft: result[:output].strip)
+  DraftAgent.new.invoke_async("Topic: #{state.topic}").map do |result|
+    state.merge(draft: result[:output].strip)
+  end
 }
 
 SEND_NODE = ->(state) {

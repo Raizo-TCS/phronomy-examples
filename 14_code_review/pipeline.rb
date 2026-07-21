@@ -70,7 +70,7 @@ end
 BRANCH_POOL = Phronomy::Runtime.instance.pool("review_branches", size: 4)
 
 # Maximum seconds allowed for a single chunk LLM call before BlockingAdapterPool
-# marks the operation as abandoned and raises Phronomy::TimeoutError on await.
+# marks the operation as abandoned and raises Phronomy::TimeoutError on blocking_wait.
 REVIEWER_ACTIVITY_TIMEOUT = 90
 
 # Calls one reviewer agent on a single chunk using streaming.
@@ -85,7 +85,7 @@ def review_chunk(agent_class, chunk_text, idx, total)
     end
     output.strip
   end
-  op.await
+  op.blocking_wait
 rescue Phronomy::TimeoutError
   warn "[#{agent_class.name}] chunk #{idx}/#{total}: timed out after #{REVIEWER_ACTIVITY_TIMEOUT}s"
   ""
@@ -142,7 +142,7 @@ end
 # ---- Node: parallel_review (application-level parallel execution) ----
 # Runs four reviewer branches concurrently via BRANCH_POOL (ADR-010, Rule 3).
 # Each branch is submitted as a blocking operation; the calling thread collects
-# results via op.await once all four are enqueued.
+# results via op.blocking_wait once all four are enqueued.
 # Per-chunk LLM timeouts are enforced inside review_chunk via separate
 # blocking_io pool calls, keeping the two pools independent to avoid deadlock.
 #
@@ -156,7 +156,7 @@ PARALLEL_REVIEW_NODE = lambda do |state|
 
   ops.each do |op|
     begin
-      result = op.await
+      result = op.blocking_wait
       results << result if result
     rescue => e
       errors << e

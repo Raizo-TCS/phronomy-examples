@@ -33,18 +33,22 @@ class ImproverAgent < Phronomy::Agent::Base
 end
 
 EVALUATE_NODE = ->(state) {
-  response = EvaluatorAgent.new.invoke(
+  EvaluatorAgent.new.invoke_async(
     "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
-  )
-  score = response[:output].scan(/\d+/).first.to_i.clamp(0, 10)
-  puts "[Iteration #{state.iterations}] Score: #{score}"
-  state.score = score
+  ).map do |response|
+    score = response[:output].scan(/\d+/).first.to_i.clamp(0, 10)
+    puts "[Iteration #{state.iterations}] Score: #{score}"
+    state.merge(score: score)
+  end
 }
 
 IMPROVE_NODE = ->(state) {
-  response = ImproverAgent.new.invoke(state.text)
-  state.text       = response[:output].strip
-  state.iterations = state.iterations + 1
+  ImproverAgent.new.invoke_async(state.text).map do |response|
+    state.merge(
+      text: response[:output].strip,
+      iterations: state.iterations + 1
+    )
+  end
 }
 
 FINISH_NODE = ->(state) {

@@ -13,7 +13,6 @@ require "phronomy"
 # ============================================================
 
 Phronomy.configure do |c|
-  c.event_loop = true
   c.default_model = LLMConfig::MODEL
 end
 

@@ -1,10 +1,12 @@
 GIT
   remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: 38ae2d58a01c05ea3e5f16359b74041fe06b20af
+  revision: d164e480fe354f543872834deeb6bb667679acc8
   branch: main
   specs:
     phronomy (0.13.0)
-      mcp (>= 0.3)
+      event_stream_parser (>= 1, < 2)
+      faraday (>= 2, < 3)
+      mcp (~> 1.0)
       ruby_llm (>= 1.3, < 2)
       state_machines (~> 0.6)
       zeitwerk (>= 2.6, < 3)
@@ -35,7 +37,7 @@ GEM
       simpleidn (~> 0.2)
     logger (1.7.0)
     marcel (1.2.1)
-    mcp (0.25.0)
+    mcp (1.0.0)
       json_schemer (>= 2.4)
     multipart-post (2.4.1)
     net-http (0.9.1)
@@ -90,7 +92,7 @@ CHECKSUMS
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   marcel (1.2.1) sha256=1678e9360e32f9eafa917c80029e2f6d10b2715c66a4b87b6d0da9b9cd1f859f
-  mcp (0.25.0) sha256=8acf3a5f3b60b6fd6e5d9b8ac5eb85ac504766976cbadaca182d2ffe7d795d98
+  mcp (1.0.0) sha256=219909a79da4c6e4b04c567dc19f3541897ed494e2c466e372551bb264f693d2
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
   phronomy (0.13.0)

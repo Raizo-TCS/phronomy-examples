@@ -100,7 +100,7 @@ FETCH_ACTION = ->(s) {
   Thread.new do
     sleep 0.15                                               # simulate IO
     FETCH_RESULTS[thread_id] = "Content for #{url}: Lorem ipsum dolor sit amet."
-    Phronomy::EventLoop.instance.post(
+    Phronomy::Runtime.instance.event_loop.post(
       Phronomy::Event.new(type: :fetch_done, target_id: thread_id, payload: nil)
     )
   end

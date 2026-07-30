@@ -24,6 +24,12 @@ class FileExplorerAgent < Phronomy::Agent::Base
   instructions "You are a file system assistant. " \
                "Follow the user's instructions and use the list_files tool " \
                "to list the files in a directory concisely."
+
+  def initialize(*)
+    super
+    # MCP tools require approval by default; allow them in this demo.
+    tool_approval_policy { :allow }
+  end
 end
 
 FileExplorerAgent.tools(list_files_tool)

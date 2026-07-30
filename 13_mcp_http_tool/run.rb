@@ -44,6 +44,12 @@ begin
     provider LLMConfig::PROVIDER
     instructions "You are a friendly assistant. Use the greet tool to greet " \
                  "people by name. Pass delay_ms: #{SLOW_MS} to the tool."
+
+    def initialize(*)
+      super
+      # MCP tools require approval by default; allow them in this demo.
+      tool_approval_policy { :allow }
+    end
   end
 
   GreetingAgent.tools(greet_tool)

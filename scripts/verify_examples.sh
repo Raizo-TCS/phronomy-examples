@@ -158,7 +158,7 @@ verify_rails() {
   # 2. Start server ───────────────────────────────────────────────────────────
   free_port "$port"
   local log_file
-  log_file="$(mktemp /tmp/rails-${name}-XXXXXX.log)"
+  log_file="$(mktemp "${TMPDIR:-/tmp}/rails-${name}-XXXXXX.log")"
 
   (cd "$dir" && env PORT=$port RAILS_ENV=development $extra_env bundle exec rails server \
       >> "$log_file" 2>&1) &

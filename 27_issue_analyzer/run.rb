@@ -32,6 +32,7 @@
 
 require_relative "../shared/llm_config"
 require "phronomy"
+require "fileutils"
 require "json"
 require "open3"
 require "csv"
@@ -39,11 +40,11 @@ require "csv"
 # ===========================================================================
 # Configuration — edit these to point at your own repository
 # ===========================================================================
-REPO       = "Raizo-TCS/phronomy"
-OPEN_ONLY  = ARGV.include?("--open-only")
-DRY_RUN    = ARGV.include?("--dry-run")
+REPO = "Raizo-TCS/phronomy"
+OPEN_ONLY = ARGV.include?("--open-only")
+DRY_RUN = ARGV.include?("--dry-run")
 BATCH_SIZE = 15
-CSV_OUT    = File.expand_path("../../docs/issue_analysis.csv", __FILE__)
+CSV_OUT = File.expand_path("../../docs/issue_analysis.csv", __FILE__)
 
 # ===========================================================================
 # Axis 1: ISSUE_TYPES — WHAT kind of issue is it?
@@ -52,32 +53,32 @@ CSV_OUT    = File.expand_path("../../docs/issue_analysis.csv", __FILE__)
 ISSUE_TYPES = {
   "Bug: Correctness / Silent Failure" =>
     "wrong behavior, silent discard, nil return, incorrect logic, ignored result, key collision",
-  "Bug: Concurrency / Thread Safety"  =>
+  "Bug: Concurrency / Thread Safety" =>
     "race condition, mutex, deadlock, reentrancy, lock-order violation, thread-unsafe operation",
-  "Bug: Memory / Resource Leak"       =>
+  "Bug: Memory / Resource Leak" =>
     "memory leak, unbounded growth, zombie process, orphan thread, resource not released",
-  "Bug: Validation / Schema"          =>
+  "Bug: Validation / Schema" =>
     "parameter validation missing, schema error, type coercion bug, invalid JSON Schema output",
-  "Bug: Security Vulnerability"       =>
+  "Bug: Security Vulnerability" =>
     "injection, PII leak, trust boundary violation, data exposure",
-  "Bug: Documentation Mismatch"       =>
+  "Bug: Documentation Mismatch" =>
     "doc or comment says X but code does Y; stale YARD description contradicts actual behavior",
-  "Feature"                           =>
+  "Feature" =>
     "new capability, enhancement, new method/DSL, extended public API, new configurable option",
-  "Architecture Decision"             =>
+  "Architecture Decision" =>
     "design decision, API shape, concurrency model choice, ADR write-up, refactoring driven by design",
-  "Documentation"                     =>
+  "Documentation" =>
     "README, CHANGELOG, YARD docs, ADR — PURELY documentation work, no code change required",
-  "Testing / CI"                      =>
+  "Testing / CI" =>
     "missing spec, coverage gap, CI workflow, mutation testing, integration test, fault injection, stress test",
-  "Security"                          =>
+  "Security" =>
     "security hardening, PII redaction policy, prompt injection defense, tool scope enforcement, approval gate",
-  "Performance / Observability"       =>
+  "Performance / Observability" =>
     "performance improvement, O(n) fix, metrics collection, trace quality improvement, benchmark regression",
-  "Cleanup / Maintenance"             =>
+  "Cleanup / Maintenance" =>
     "refactor, rename, deprecation, remove dead code, lint fix, allowlist cleanup",
-  "MCP (pending PR)"                  =>
-    "issue explicitly blocked waiting for MCP transport PR to merge; cannot close until that PR lands",
+  "MCP (pending PR)" =>
+    "issue explicitly blocked waiting for MCP transport PR to merge; cannot close until that PR lands"
 }.freeze
 
 # ===========================================================================
@@ -85,40 +86,40 @@ ISSUE_TYPES = {
 # (purely structural location; no issue-kind / work-type names here)
 # ===========================================================================
 COMPONENTS = {
-  "Runtime / Scheduler / Task"     =>
+  "Runtime / Scheduler / Task" =>
     "Runtime, Task, Scheduler, FiberScheduler, ImmediateBackend, ThreadBackend, AsyncQueue, TimerQueue, runtime_backend config",
-  "EventLoop / ConcurrencyGate"    =>
+  "EventLoop / ConcurrencyGate" =>
     "EventLoop, ConcurrencyGate, InvocationContext, TaskGroup, structured concurrency primitives",
-  "Cancellation / Deadline"        =>
+  "Cancellation / Deadline" =>
     "CancellationToken, CancellationScope, Deadline, invoke_timeout, timeout propagation through call stack",
-  "BlockingAdapterPool"            =>
+  "BlockingAdapterPool" =>
     "BlockingAdapterPool, blocking I/O isolation, GVL-aware thread pool, future/promise for blocking gems",
-  "Agent / FSM"                    =>
+  "Agent / FSM" =>
     "Agent::Base, AgentFSM, ReactAgent, before_completion hook, agent lifecycle state machine, tool-call loop",
-  "Tool / ToolExecutor"            =>
+  "Tool / ToolExecutor" =>
     "Tool::Base, ToolExecutor, execution_mode routing (blocking_io/cooperative/cpu_bound), tool JSON schema",
-  "Orchestrator / Multi-agent"     =>
+  "Orchestrator / Multi-agent" =>
     "Orchestrator, dispatch_parallel, handoff, multi-agent coordination, TeamCoordinator, sub-agent invocation",
-  "Workflow / Graph"               =>
+  "Workflow / Graph" =>
     "WorkflowContext, WorkflowRunner, Graph DSL, parallel_node, subgraph, state machine node transitions",
-  "Memory / Context Management"    =>
+  "Memory / Context Management" =>
     "ConversationManager, ContextVersionCache, TokenEstimator, BufferedMemory, context budget, message history",
-  "RAG / VectorStore"              =>
+  "RAG / VectorStore" =>
     "VectorStore, Embeddings, KnowledgeSource, pgvector, Redis vector, semantic search, RAG pipeline",
-  "Tracing / Observability"        =>
+  "Tracing / Observability" =>
     "Tracing::Base, LangfuseTracer, OpenTelemetry, trace tree, span recording, trace_pii, metrics",
-  "Security / Guardrails"          =>
+  "Security / Guardrails" =>
     "Guardrail, InputGuardrail, OutputGuardrail, TrustPipeline, PiiPatternDetector, approval gate",
-  "MCP / Transport"                =>
+  "MCP / Transport" =>
     "McpTool, StdioTransport, HttpTransport, JSON-RPC over stdio/HTTP, MCP protocol, startup_timeout",
-  "Chain / Prompt"                 =>
+  "Chain / Prompt" =>
     "Chain::Base, PromptTemplate, LLMChain, OutputParser, streaming chain, prompt variable rendering",
-  "Public API / Configuration"     =>
+  "Public API / Configuration" =>
     "Phronomy.configure, public interface contract, gemspec, version constant, @api tag enforcement",
-  "CI / Testing Infrastructure"    =>
+  "CI / Testing Infrastructure" =>
     "CI workflow .yml files, RSpec configuration, mutant mutation testing, SimpleCov, test support helpers",
   "Cross-cutting / Framework-wide" =>
-    "issues touching multiple components simultaneously, or fundamental design spanning the entire framework",
+    "issues touching multiple components simultaneously, or fundamental design spanning the entire framework"
 }.freeze
 
 TYPE_NAMES = ISSUE_TYPES.keys.freeze
@@ -127,39 +128,39 @@ COMP_NAMES = COMPONENTS.keys.freeze
 # Short abbreviations for the 2D histogram header row
 TYPE_ABBR = {
   "Bug: Correctness / Silent Failure" => "Bug:Correct",
-  "Bug: Concurrency / Thread Safety"  => "Bug:Concurr",
-  "Bug: Memory / Resource Leak"       => "Bug:MemLeak",
-  "Bug: Validation / Schema"          => "Bug:Valid  ",
-  "Bug: Security Vulnerability"       => "Bug:SecVuln",
-  "Bug: Documentation Mismatch"       => "Bug:DocMism",
-  "Feature"                           => "Feature    ",
-  "Architecture Decision"             => "ArchDec    ",
-  "Documentation"                     => "Docs       ",
-  "Testing / CI"                      => "Test/CI    ",
-  "Security"                          => "Security   ",
-  "Performance / Observability"       => "Perf/Obs   ",
-  "Cleanup / Maintenance"             => "Cleanup    ",
-  "MCP (pending PR)"                  => "MCP-PR     ",
+  "Bug: Concurrency / Thread Safety" => "Bug:Concurr",
+  "Bug: Memory / Resource Leak" => "Bug:MemLeak",
+  "Bug: Validation / Schema" => "Bug:Valid  ",
+  "Bug: Security Vulnerability" => "Bug:SecVuln",
+  "Bug: Documentation Mismatch" => "Bug:DocMism",
+  "Feature" => "Feature    ",
+  "Architecture Decision" => "ArchDec    ",
+  "Documentation" => "Docs       ",
+  "Testing / CI" => "Test/CI    ",
+  "Security" => "Security   ",
+  "Performance / Observability" => "Perf/Obs   ",
+  "Cleanup / Maintenance" => "Cleanup    ",
+  "MCP (pending PR)" => "MCP-PR     "
 }.freeze
 
 COMP_ABBR = {
-  "Runtime / Scheduler / Task"     => "RT",
-  "EventLoop / ConcurrencyGate"    => "EL",
-  "Cancellation / Deadline"        => "CL",
-  "BlockingAdapterPool"            => "BP",
-  "Agent / FSM"                    => "AG",
-  "Tool / ToolExecutor"            => "TL",
-  "Orchestrator / Multi-agent"     => "OR",
-  "Workflow / Graph"               => "WF",
-  "Memory / Context Management"    => "MM",
-  "RAG / VectorStore"              => "RG",
-  "Tracing / Observability"        => "TR",
-  "Security / Guardrails"          => "SC",
-  "MCP / Transport"                => "MC",
-  "Chain / Prompt"                 => "CH",
-  "Public API / Configuration"     => "PA",
-  "CI / Testing Infrastructure"    => "CI",
-  "Cross-cutting / Framework-wide" => "XC",
+  "Runtime / Scheduler / Task" => "RT",
+  "EventLoop / ConcurrencyGate" => "EL",
+  "Cancellation / Deadline" => "CL",
+  "BlockingAdapterPool" => "BP",
+  "Agent / FSM" => "AG",
+  "Tool / ToolExecutor" => "TL",
+  "Orchestrator / Multi-agent" => "OR",
+  "Workflow / Graph" => "WF",
+  "Memory / Context Management" => "MM",
+  "RAG / VectorStore" => "RG",
+  "Tracing / Observability" => "TR",
+  "Security / Guardrails" => "SC",
+  "MCP / Transport" => "MC",
+  "Chain / Prompt" => "CH",
+  "Public API / Configuration" => "PA",
+  "CI / Testing Infrastructure" => "CI",
+  "Cross-cutting / Framework-wide" => "XC"
 }.freeze
 
 TYPE_LIST = ISSUE_TYPES.map.with_index(1) do |(name, hint), i|
@@ -174,7 +175,7 @@ end.join("\n")
 # Classification agent
 # ---------------------------------------------------------------------------
 class IssueClassifierAgent < Phronomy::Agent::Base
-  model    LLMConfig::MODEL
+  model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
   instructions <<~PROMPT
@@ -232,8 +233,8 @@ unless status.success?
   exit 1
 end
 
-issues       = JSON.parse(out)
-open_total   = issues.count { |i| i["state"] == "OPEN" }
+issues = JSON.parse(out)
+open_total = issues.count { |i| i["state"] == "OPEN" }
 closed_total = issues.count { |i| i["state"] == "CLOSED" }
 puts "Fetched #{issues.size} issues (open: #{open_total}, closed: #{closed_total})"
 puts
@@ -245,8 +246,8 @@ puts
 # Each pair is a semantically meaningful annotation — NOT the cross-product of
 # types × components.  One issue typically has 1-3 pairs; each pair captures
 # one distinct "aspect" of the issue (a kind-of-work + a place in the code).
-issue_pairs        = {}
-parse_error_count  = 0
+issue_pairs = {}
+parse_error_count = 0
 
 if DRY_RUN
   puts "[dry-run] Skipping LLM — all issues left as unclassified."
@@ -255,13 +256,13 @@ if DRY_RUN
   end
 else
   Phronomy.configure { |c| c.runtime_backend = :thread }
-  agent   = IssueClassifierAgent.new
+  agent = IssueClassifierAgent.new
   batches = issues.each_slice(BATCH_SIZE).to_a
 
   batches.each_with_index do |batch, idx|
     payload = batch.map do |i|
-      { number: i["number"], title: i["title"],
-        labels: i["labels"].map { |l| l["name"] } }
+      {number: i["number"], title: i["title"],
+       labels: i["labels"].map { |l| l["name"] }}
     end
     range_str = "#{batch.first["number"]}..#{batch.last["number"]}"
     print "  Batch #{idx + 1}/#{batches.size} (##{range_str})... "
@@ -269,10 +270,10 @@ else
 
     begin
       result = agent.invoke(payload.to_json)
-      raw    = result[:output].to_s.strip
-                              .gsub(/\A```(?:json)?\n?/, "")
-                              .gsub(/\n?```\z/, "")
-                              .strip
+      raw = result[:output].to_s.strip
+        .gsub(/\A```(?:json)?\n?/, "")
+        .gsub(/\n?```\z/, "")
+        .strip
       parsed = JSON.parse(raw)
       parsed["results"].each do |r|
         pairs = Array(r["pairs"]).filter_map do |p|
@@ -329,6 +330,7 @@ end
 # Write CSV: one row per (issue, type, component) triple
 # ---------------------------------------------------------------------------
 begin
+  FileUtils.mkdir_p(File.dirname(CSV_OUT))
   CSV.open(CSV_OUT, "w") do |csv|
     csv << %w[number state title type component]
     issues.each do |i|
@@ -354,7 +356,7 @@ def pbar(closed, total)
   "#{"█" * fill}#{"░" * (BAR_W - fill)} #{format("%3.0f%%", pct * 100)}"
 end
 
-SEP  = "═" * 92
+SEP = "═" * 92
 THIN = "─" * 92
 
 # ---------------------------------------------------------------------------
@@ -370,10 +372,10 @@ puts "  " + THIN
 
 valid_types = TYPE_NAMES.select { |t| by_type.key?(t) }
 valid_types.each do |t|
-  list   = by_type[t]
-  total  = list.size
+  list = by_type[t]
+  total = list.size
   closed = list.count { |i| i["state"] == "CLOSED" }
-  open   = total - closed
+  open = total - closed
   puts format("  %-38s %3d  open:%-2d  %s", t, total, open, pbar(closed, total))
 end
 
@@ -382,13 +384,13 @@ error_types.each do |t|
   next unless by_type.key?(t)
   list = by_type[t]
   puts format("  %-38s %3d  open:%-2d  (excluded from histogram)", t, list.size,
-              list.count { |i| i["state"] == "OPEN" })
+    list.count { |i| i["state"] == "OPEN" })
 end
 
 puts
 puts format("  %-38s %3d  open:%-2d  %s",
-            "TOTAL (unique issues)", issues.size, open_total,
-            pbar(closed_total, issues.size))
+  "TOTAL (unique issues)", issues.size, open_total,
+  pbar(closed_total, issues.size))
 
 # ---------------------------------------------------------------------------
 # SECTION 2 — 1D Component breakdown
@@ -400,10 +402,10 @@ puts
 
 valid_comps = COMP_NAMES.select { |c| by_comp.key?(c) }
 valid_comps.each do |c|
-  list   = by_comp[c]
-  total  = list.size
+  list = by_comp[c]
+  total = list.size
   closed = list.count { |i| i["state"] == "CLOSED" }
-  open   = total - closed
+  open = total - closed
   puts format("  %-38s %3d  open:%-2d  %s", c, total, open, pbar(closed, total))
 end
 
@@ -427,9 +429,9 @@ puts
 
 # Column header row
 # Row label: 12 chars, each comp cell: 4 chars right-aligned
-col_header = format("  %-12s", "") +
-             COMP_NAMES.map { |c| format(" %3s", COMP_ABBR[c]) }.join +
-             format("  %5s", "Total")
+col_header = "              " +
+  COMP_NAMES.map { |c| format(" %3s", COMP_ABBR[c]) }.join +
+  "  Total"
 puts col_header
 puts "  " + "─" * (col_header.length - 2)
 
@@ -441,16 +443,16 @@ end
 row_totals.each do |t, row_total|
   next if row_total.zero?
   cells = COMP_NAMES.map { |c| format(" %3d", hist[t][c]) }.join
-  abbr  = (TYPE_ABBR[t] || t[0, 11]).strip
+  abbr = (TYPE_ABBR[t] || t[0, 11]).strip
   puts format("  %-12s", abbr) + cells + format("  %5d", row_total)
 end
 
 # Column totals
 col_sums = COMP_NAMES.map { |c| TYPE_NAMES.sum { |t| hist[t][c] } }
 puts "  " + "─" * (col_header.length - 2)
-puts format("  %-12s", "Total") +
-     col_sums.map { |s| format(" %3d", s) }.join +
-     format("  %5d", col_sums.sum)
+puts "  Total       " +
+  col_sums.map { |s| format(" %3d", s) }.join +
+  format("  %5d", col_sums.sum)
 puts
 
 # ---------------------------------------------------------------------------
@@ -463,7 +465,7 @@ if open_issues.any?
   puts
   open_issues.sort_by { |i| i["number"] }.each do |issue|
     labels = issue["labels"].map { |l| l["name"] }.join(", ")
-    pairs  = issue_pairs[issue["number"]] || []
+    pairs = issue_pairs[issue["number"]] || []
     puts "  ##{issue["number"]}  #{issue["title"]}"
     puts "    Labels: #{labels.empty? ? "(none)" : labels}"
     pairs.each { |t, c| puts "    (#{t})  →  #{c}" }
@@ -477,17 +479,17 @@ end
 puts "  SECTION 5 — Issue Volume by Period"
 puts "  " + THIN
 [
-  ["#2-50    Initial features + first bugs",    2..50],
-  ["#51-100  Code quality + docs round 1",      51..100],
-  ["#101-150 Runtime / Workflow / docs",        101..150],
-  ["#151-200 Deep docs audit",                  151..200],
-  ["#201-260 Concurrency arch P0 planning",     201..260],
-  ["#261-320 Cooperative arch implementation",  261..320],
-  ["#321-383 ADR-010 cleanup / lint / CI",      321..383],
+  ["#2-50    Initial features + first bugs", 2..50],
+  ["#51-100  Code quality + docs round 1", 51..100],
+  ["#101-150 Runtime / Workflow / docs", 101..150],
+  ["#151-200 Deep docs audit", 151..200],
+  ["#201-260 Concurrency arch P0 planning", 201..260],
+  ["#261-320 Cooperative arch implementation", 261..320],
+  ["#321-383 ADR-010 cleanup / lint / CI", 321..383]
 ].each do |label, range|
   grp = issues.select { |i| range.cover?(i["number"]) }
   next if grp.empty?
-  o = grp.count { |i| i["state"] == "OPEN" }
+  grp.count { |i| i["state"] == "OPEN" }
   c = grp.count { |i| i["state"] == "CLOSED" }
   puts format("  %-46s %3d issues  %s", label, grp.size, pbar(c, grp.size))
 end

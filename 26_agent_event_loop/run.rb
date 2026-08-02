@@ -9,7 +9,9 @@ require "phronomy"
 #
 # Demonstrates two patterns for running agents through the EventLoop:
 #   Pattern 1 — Agent#invoke  (routes through AgentFSM automatically)
-#   Pattern 2 — invoke_async + Task#map embedded inside a Workflow
+#   Pattern 2 — invoke_async with on_event: listener inside a Workflow
+#               The entry action signals :translation_completed when done;
+#               the transition action copies the result into the context.
 # ============================================================
 
 Phronomy.configure do |c|
@@ -42,22 +44,37 @@ class TranslationContext
   field :status, type: :replace, default: "pending"
 end
 
-TranslationWorkflow = Phronomy::Workflow.define(TranslationContext) do
+# translation_workflow is captured by reference so the on_event lambda can
+# call signal after Workflow.define returns.
+translation_workflow = nil
+translation_workflow = Phronomy::Workflow.define(TranslationContext) do
   initial :translate
 
   state :translate
   entry :translate, ->(ctx) {
-    # invoke_async returns a Task. Task#map transforms the agent result into a
-    # WorkflowContext, which FSMSession picks up via the :action_completed path.
-    TranslationAgent.new.invoke_async(ctx.query).map do |result|
-      ctx.merge(answer: result[:output])
-    end
+    thread_id = ctx.thread_id
+    TranslationAgent.new.invoke_async(
+      ctx.query,
+      on_event: ->(event) {
+        next unless event.type == :done
+        translation_workflow.signal(
+          thread_id: thread_id,
+          event: :translation_completed,
+          payload: {answer: event.payload[:output]}
+        )
+      }
+    )
+    ctx
   }
-  # invoke_async returns a Task; Task#map transforms the agent result into a
-  # WorkflowContext, which FSMSession picks up via the :action_completed path.
-  transition from: :translate, to: :done
 
-  state :done, action: ->(ctx) { ctx.status = "done" }
+  state :done, action: ->(ctx) { ctx.merge(status: "done") }
+
+  transition(
+    from: :translate,
+    on: :translation_completed,
+    to: :done,
+    action: ->(ctx, event) { ctx.merge(answer: event.payload[:answer]) }
+  )
   transition from: :done, to: :__finish__
 end
 
@@ -87,7 +104,7 @@ final = OutputValidator.validate(
   "pattern 2: translation workflow completes via EventLoop",
   check: ->(r) { r.status == "done" }
 ) {
-  TranslationWorkflow.invoke(
+  translation_workflow.invoke(
     { query: 'Translate "hello" to Japanese' },
     config: { thread_id: "26-demo" }
   )

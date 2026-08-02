@@ -30,16 +30,39 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
+app = nil  # declared first so the on_event lambda can capture it by reference
+
 GENERATE_NODE_WITH_TRACE = ->(state) {
+  thread_id = state.thread_id
+  language  = state.language
   CodeGeneratorAgent.new.invoke_async(
-    "Write a Hello World program in #{state.language}. Return code only."
-  ).map { |result| state.merge(output: result[:output]) }
+    "Write a Hello World program in #{language}. Return code only.",
+    on_event: ->(event) {
+      next unless event.type == :done
+      app.signal(
+        thread_id: thread_id,
+        event: :generation_completed,
+        payload: {output: event.payload[:output]}
+      )
+    }
+  )
+  state
 }
 
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
-  state :generate, action: GENERATE_NODE_WITH_TRACE
-  transition from: :generate, to: :__finish__
+  state :generate
+  state :done
+
+  entry :generate, GENERATE_NODE_WITH_TRACE
+
+  transition(
+    from: :generate,
+    on: :generation_completed,
+    to: :done,
+    action: ->(ctx, event) { ctx.merge(output: event.payload[:output]) }
+  )
+  transition from: :done, to: :__finish__
 end
 
 puts "=== Tracing Example ==="

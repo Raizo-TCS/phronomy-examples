@@ -4,7 +4,11 @@
 # 01 Basic Workflow Pipeline
 #
 # Demonstrates a simple single-node pipeline using Phronomy::Workflow:
-#   :generate
+#   :generate → :done → finish
+#
+# The entry action starts an async Agent call and signals the Workflow when
+# the result is ready. The transition action copies the Agent output into the
+# context before the :done entry runs.
 #
 # The same workflow is reused across multiple inputs to show that the
 # pipeline is stateless and reusable.
@@ -26,16 +30,39 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-GENERATE_NODE = ->(state) {
-  CodeGeneratorAgent.new.invoke_async(
-    "Write a Hello World program in #{state.language}. Return code only."
-  ).map { |result| state.merge(output: result[:output]) }
-}
-
+# workflow is assigned after Workflow.define so the closure captures it by
+# reference and can call workflow.signal when the Agent completes.
+app = nil
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
-  state :generate, action: GENERATE_NODE
-  transition from: :generate, to: :__finish__
+
+  state :generate
+  state :done
+
+  entry :generate, ->(state) {
+    thread_id = state.thread_id
+    language  = state.language
+    CodeGeneratorAgent.new.invoke_async(
+      "Write a Hello World program in #{language}. Return code only.",
+      on_event: ->(event) {
+        next unless event.type == :done
+        app.signal(
+          thread_id: thread_id,
+          event: :generation_completed,
+          payload: {output: event.payload[:output]}
+        )
+      }
+    )
+    state
+  }
+
+  transition(
+    from: :generate,
+    on: :generation_completed,
+    to: :done,
+    action: ->(ctx, event) { ctx.merge(output: event.payload[:output]) }
+  )
+  transition from: :done, to: :__finish__
 end
 
 puts "=== Basic Workflow Pipeline Example ==="

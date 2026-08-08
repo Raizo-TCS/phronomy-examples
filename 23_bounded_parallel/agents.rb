@@ -4,6 +4,8 @@
 
 # Classifies the sentiment of a product review as POSITIVE, NEGATIVE, or NEUTRAL.
 class SentimentAgent < Phronomy::Agent::Base
+  agent_definition id: "example-23-sentiment-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~INST
@@ -16,6 +18,8 @@ end
 
 # Extracts the three most important keywords from a short text.
 class KeywordExtractor < Phronomy::Agent::Base
+  agent_definition id: "example-23-keyword-extractor", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~INST
@@ -26,6 +30,8 @@ end
 
 # Orchestrator that coordinates parallel review analysis.
 class ReviewOrchestrator < Phronomy::MultiAgent::Orchestrator
+  agent_definition id: "example-23-review-orchestrator", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "Coordinate product-review analysis tasks."

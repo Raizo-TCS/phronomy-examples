@@ -63,6 +63,8 @@ REVIEWER_MAX_OUTPUT_TOKENS = [512, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.15).
 #                       is well within this limit even for files with many issues.
 #   build_context     — drops the oldest message if unexpected history builds up.
 class SecurityReviewerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-14-security-reviewer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   context_window LLMConfig::CONTEXT_WINDOW
@@ -92,6 +94,8 @@ end
 #
 # Context management: same pattern as SecurityReviewerAgent.
 class PerformanceReviewerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-14-performance-reviewer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   context_window LLMConfig::CONTEXT_WINDOW
@@ -121,6 +125,8 @@ end
 #
 # Context management: same pattern as SecurityReviewerAgent.
 class ReadabilityReviewerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-14-readability-reviewer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   context_window LLMConfig::CONTEXT_WINDOW
@@ -152,6 +158,8 @@ end
 #
 # Context management: same pattern as SecurityReviewerAgent.
 class AbstractionConsistencyReviewerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-14-abstraction-consistency-reviewer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   context_window LLMConfig::CONTEXT_WINDOW

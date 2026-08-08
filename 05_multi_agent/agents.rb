@@ -4,6 +4,8 @@ require_relative "../shared/llm_config"
 require "phronomy"
 
 class ResearcherAgent < Phronomy::Agent::Base
+  agent_definition id: "example-05-researcher-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a technical researcher. " \
@@ -11,6 +13,8 @@ class ResearcherAgent < Phronomy::Agent::Base
 end
 
 class WriterAgent < Phronomy::Agent::Base
+  agent_definition id: "example-05-writer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a technical writer. " \
@@ -42,6 +46,8 @@ class WriteTool < Phronomy::Agent::Context::Capability::Base
 end
 
 class OrchestratorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-05-orchestrator-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   tools ResearchTool, WriteTool

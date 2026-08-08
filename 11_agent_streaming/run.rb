@@ -12,6 +12,8 @@ require_relative "../shared/output_validator"
 require "phronomy"
 
 class StreamingAgent < Phronomy::Agent::Base
+  agent_definition id: "example-11-streaming-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a concise assistant. Answer in 2-3 sentences."

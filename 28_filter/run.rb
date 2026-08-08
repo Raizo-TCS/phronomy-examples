@@ -63,6 +63,8 @@ end
 # ---------------------------------------------------------------------------
 
 class CustomerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-28-customer-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a customer support assistant. Use the customer_lookup tool to find customer details."
@@ -151,6 +153,8 @@ puts "--- Scenario 5: class-level filter DSL ---"
 
 # Filters declared inside the class body apply to every instance.
 class SecureCustomerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-28-secure-customer-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a secure customer support assistant."

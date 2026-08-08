@@ -25,6 +25,8 @@ class CodeState
 end
 
 class CodeGeneratorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-01-code-generator-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a programming expert."

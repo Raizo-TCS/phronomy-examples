@@ -45,6 +45,8 @@ translator_prompt = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
 )
 
 class TranslatorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-12-translator-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 end

@@ -19,6 +19,8 @@ require_relative "tools"
 # defined by the Team below via `coordination` and `member instruction:`.
 # ---------------------------------------------------------------------------
 class StructureAnalyst < Phronomy::Agent::Base
+  agent_definition id: "example-22-structure-analyst", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   tools        ListFilesTool, ReadFileTool
@@ -30,6 +32,8 @@ class StructureAnalyst < Phronomy::Agent::Base
 end
 
 class SecurityAuditor < Phronomy::Agent::Base
+  agent_definition id: "example-22-security-auditor", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   tools        ListFilesTool, ReadFileTool
@@ -41,6 +45,8 @@ class SecurityAuditor < Phronomy::Agent::Base
 end
 
 class QualityReviewer < Phronomy::Agent::Base
+  agent_definition id: "example-22-quality-reviewer", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   tools        ListFilesTool, ReadFileTool

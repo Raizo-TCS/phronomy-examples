@@ -82,4 +82,25 @@ module LLMConfig
     # in their chat templates; force 'system' role when using a custom base URL.
     config.openai_use_system_role = true if BASE_URL
   end
+
+  # When Phronomy is already loaded, ensure a default output reserve is set so
+  # that TokenBudgetResolver can build a valid context budget for models whose
+  # registry max_output_tokens equals their context_window (e.g. LM Studio).
+  # Examples that require "phronomy" after this file can also call
+  # LLMConfig.apply_phronomy_defaults! explicitly.
+  DEFAULT_OUTPUT_RESERVE = (CONTEXT_WINDOW * 0.25).to_i.clamp(256, 4096)
+
+  def self.apply_phronomy_defaults!
+    require "phronomy"
+    Phronomy.configure do |c|
+      c.default_output_reserve ||= DEFAULT_OUTPUT_RESERVE
+    end
+  end
+
+  apply_phronomy_defaults! if defined?(Phronomy)
 end
+
+# Apply defaults now if llm_config.rb is loaded after require "phronomy",
+# and ensure it runs when phronomy is loaded afterwards via the post-require hook.
+require "phronomy"
+LLMConfig.apply_phronomy_defaults!

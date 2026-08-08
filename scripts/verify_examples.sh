@@ -258,7 +258,7 @@ CLI_EXAMPLES=(
   12_prompt_template
   13_mcp_http_tool
   14_code_review
-  16_before_completion_hook
+  16_before_llm_input_hook
   17_multi_agent_handoff
   19_trust_pipeline
   21_team_coordinator

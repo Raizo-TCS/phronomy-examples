@@ -3,6 +3,8 @@
 # Agent that handles post-report follow-up questions and routing decisions.
 # Called once per user message after the initial scan report is generated.
 class CveScanner::FollowupAgent < Phronomy::Agent::Base
+  agent_definition id: "example-20-followup-agent", version: 1
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

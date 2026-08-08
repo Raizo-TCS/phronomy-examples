@@ -3,6 +3,8 @@
 # Agent for post-scan Q&A. Receives full scan context plus the operator's
 # question and returns a plain-text answer.
 class CveScanner::ChatAgent < Phronomy::Agent::Base
+  agent_definition id: "example-20-chat-agent", version: 1
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

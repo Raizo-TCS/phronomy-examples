@@ -3,6 +3,8 @@
 # Agent responsible for proposing check commands and evaluating their results.
 # Called in a loop until it decides "done" or the iteration limit is reached.
 class CveScanner::CveAnalystAgent < Phronomy::Agent::Base
+  agent_definition id: "example-20-cve-analyst-agent", version: 1
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

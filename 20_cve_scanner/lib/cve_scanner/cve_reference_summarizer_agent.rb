@@ -5,6 +5,8 @@
 #
 # Called internally by CveReferenceFetcherTool. Not used directly by other nodes.
 class CveScanner::CveReferenceSummarizerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-20-cve-reference-summarizer-agent", version: 1
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

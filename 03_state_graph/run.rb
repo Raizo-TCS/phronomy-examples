@@ -24,12 +24,16 @@ class MyState
 end
 
 class EvaluatorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-03-evaluator-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a strict text evaluator. Return only an integer score from 0 to 10. No explanation."
 end
 
 class ImproverAgent < Phronomy::Agent::Base
+  agent_definition id: "example-03-improver-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text."

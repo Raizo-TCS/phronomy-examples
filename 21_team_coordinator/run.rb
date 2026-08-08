@@ -17,6 +17,8 @@ require "phronomy"
 # Worker: writes one blog section per invocation, accumulating style context
 # ---------------------------------------------------------------------------
 class BlogSectionWriter < Phronomy::Agent::Base
+  agent_definition id: "example-21-blog-section-writer", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions <<~INST

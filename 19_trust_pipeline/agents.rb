@@ -10,6 +10,8 @@ SHIPPING_POLICY = File.read(File.join(__dir__, "knowledge/shipping_policy.md"))
 # Static knowledge sources are attached with source labels so the agent
 # can produce grounded citations in its JSON output.
 class PolicyDraftAgent < Phronomy::Agent::Base
+  agent_definition id: "example-19-policy-draft-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
@@ -33,6 +35,8 @@ end
 
 # ReviewAgent: evaluates draft answers for accuracy and citation quality.
 class PolicyReviewAgent < Phronomy::Agent::Base
+  agent_definition id: "example-19-policy-review-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

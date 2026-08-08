@@ -51,13 +51,15 @@ end
 # Guardrail instances are registered via add_input_filter / add_output_filter
 # (they implement #call so they participate in the unified filter chain).
 class SecureChatAgent < Phronomy::Agent::Base
+  agent_definition id: "example-15-secure-chat-agent", version: 1
+
   model LLM_MODEL
   provider :openai
 
   instructions "You are a helpful, concise assistant. Answer in the same language as the user."
 
-  def initialize
-    super
+  def initialize(...)
+    super(...)
     # Feature A (input): block PII and prompt-injection attempts before reaching the LLM.
     add_input_filter PromptInjectionGuardrail.new
     add_input_filter PIIInputGuardrail.new

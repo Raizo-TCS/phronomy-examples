@@ -13,6 +13,8 @@ require "phronomy"
 require_relative "tools"
 
 class CityInfoAgent < Phronomy::Agent::Base
+  agent_definition id: "example-02-city-info-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a city information assistant. " \

@@ -25,6 +25,8 @@ end
 # Agent::Base routes LLM calls through phronomy's pipeline, so spans are
 # emitted automatically via the configured tracer — no manual trace block needed.
 class CodeGeneratorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-07-code-generator-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a programming expert."

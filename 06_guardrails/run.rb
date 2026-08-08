@@ -90,6 +90,8 @@ class NoURLOutputFilter < Phronomy::Filter::Base
 end
 
 class SafeQAAgent < Phronomy::Agent::Base
+  agent_definition id: "example-06-safe-qa-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a polite QA assistant. Answer concisely."

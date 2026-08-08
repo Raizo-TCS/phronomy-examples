@@ -22,6 +22,8 @@ end
 # Pattern 1 — simple Q&A agent (no tools)
 # ----------------------------------------------------------
 class QnAAgent < Phronomy::Agent::Base
+  agent_definition id: "example-26-qna-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a helpful assistant. Answer concisely."
@@ -31,6 +33,8 @@ end
 # Pattern 2 — Translation agent + Workflow
 # ----------------------------------------------------------
 class TranslationAgent < Phronomy::Agent::Base
+  agent_definition id: "example-26-translation-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a translation assistant. Translate the given text and reply with only the translation."

@@ -25,6 +25,8 @@ class MailState
 end
 
 class DraftAgent < Phronomy::Agent::Base
+  agent_definition id: "example-04-draft-agent", version: 1
+
   model        LLMConfig::MODEL
   provider     LLMConfig::PROVIDER
   instructions "You are a business email expert. Write a polite email including subject and body."

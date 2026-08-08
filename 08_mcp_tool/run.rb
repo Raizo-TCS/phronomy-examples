@@ -19,14 +19,16 @@ list_files_tool = Phronomy::Tools::Mcp.from_server(
 )
 
 class FileExplorerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-08-file-explorer-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "You are a file system assistant. " \
                "Follow the user's instructions and use the list_files tool " \
                "to list the files in a directory concisely."
 
-  def initialize(*)
-    super
+  def initialize(...)
+    super(...)
     # MCP tools require approval by default; allow them in this demo.
     tool_approval_policy { :allow }
   end

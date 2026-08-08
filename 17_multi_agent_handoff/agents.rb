@@ -8,6 +8,8 @@ require "phronomy"
 # ---------------------------------------------------------------------------
 
 class TriageAgent < Phronomy::Agent::Base
+  agent_definition id: "example-17-triage-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~TEXT
@@ -19,6 +21,8 @@ class TriageAgent < Phronomy::Agent::Base
 end
 
 class BillingAgent < Phronomy::Agent::Base
+  agent_definition id: "example-17-billing-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~TEXT
@@ -28,6 +32,8 @@ class BillingAgent < Phronomy::Agent::Base
 end
 
 class TechSupportAgent < Phronomy::Agent::Base
+  agent_definition id: "example-17-tech-support-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~TEXT

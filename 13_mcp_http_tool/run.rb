@@ -40,13 +40,15 @@ begin
   )
 
   class GreetingAgent < Phronomy::Agent::Base
+    agent_definition id: "example-13-greeting-agent", version: 1
+
     model LLMConfig::MODEL
     provider LLMConfig::PROVIDER
     instructions "You are a friendly assistant. Use the greet tool to greet " \
                  "people by name. Pass delay_ms: #{SLOW_MS} to the tool."
 
-    def initialize(*)
-      super
+    def initialize(...)
+      super(...)
       # MCP tools require approval by default; allow them in this demo.
       tool_approval_policy { :allow }
     end

@@ -3,6 +3,8 @@
 # Agent responsible for proposing and verifying remediation steps.
 # Called in a loop until it confirms the vulnerability is fixed.
 class CveScanner::RemediationAdvisorAgent < Phronomy::Agent::Base
+  agent_definition id: "example-20-remediation-advisor-agent", version: 1
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

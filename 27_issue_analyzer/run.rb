@@ -175,6 +175,8 @@ end.join("\n")
 # Classification agent
 # ---------------------------------------------------------------------------
 class IssueClassifierAgent < Phronomy::Agent::Base
+  agent_definition id: "example-27-issue-classifier-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

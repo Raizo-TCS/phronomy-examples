@@ -61,6 +61,8 @@ IMPROVE_TEMPLATE = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
 #                         * drops oldest message when history exceeds 4 messages
 #                         * compacts messages beyond 2 into a one-line summary
 class ImproverAgent < Phronomy::Agent::Base
+  agent_definition id: "example-14-improver-agent", version: 1
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   context_window LLMConfig::CONTEXT_WINDOW

@@ -32,12 +32,13 @@ class ConversationsController < ApplicationController
 
   # Feature D: clear transcript (Journal is preserved; active generation advances).
   def destroy
-    agent_id = params[:id]
-    if agent_id.present?
-      agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
-      agent.clear_transcript!
-      session.delete(:agent_id)
-    end
+    # Use session as authority — reject requests targeting another session's agent.
+    agent_id = session[:agent_id]
+    return redirect_to root_path unless agent_id.present? && params[:id] == agent_id
+
+    agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    agent.clear_transcript!
+    session.delete(:agent_id)
     redirect_to root_path, notice: "Conversation cleared."
   rescue Phronomy::Persistence::NotFoundError
     session.delete(:agent_id)

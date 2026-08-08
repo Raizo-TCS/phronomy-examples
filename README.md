@@ -57,9 +57,9 @@ bundle exec ruby 01_basic_chain/run.rb
 | 06 | `06_guardrails/` | Input and output blocking filters |
 | 07 | `07_tracing/` | Custom span-based tracer |
 | 08 | `08_mcp_tool/` | MCP server tool integration |
-| 09 | `09_rails_chat/` | Rails web chat app using `Phronomy::Agent` with manually persisted conversation history (DB-backed via `PhronomyMessage`) |
-| 14 | `14_code_review/` | **Comprehensive pipeline** — BlockingFilter, Splitter, Graph, Parallel branches, Interrupt/Resume, PromptTemplate, Agent (streaming), OutputFilter, Eval (LLMJudge), Tracing |
-| 16 | `16_before_completion_hook/` | Global / class / instance `before_completion` hooks — logging, param overrides |
+| 09 | `09_rails_chat/` | Rails web chat app — stateful `Agent.create/load` with `Persistence::InMemory`; `agent.transcript` for message display |
+| 14 | `14_code_review/` | **Comprehensive pipeline** — BlockingFilter, Splitter, Workflow, Parallel branches, Interrupt/Resume, PromptTemplate, Agent (streaming + stateful), OutputFilter, Eval (LLMJudge), Tracing |
+| 16 | `16_before_llm_input_hook/` | Global / class / instance `before_llm_input` hooks — `LLMInputPatch`, `LLMInputBuildContext` |
 | 17 | `17_multi_agent_handoff/` | Hub-and-spoke routing with `Phronomy::Agent::Runner` — triage → specialist handoff |
 | 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
 | 19 | `19_trust_pipeline/` | Trustworthy output via Citation Tracking + Self-Review Loop + Confidence Gate |
@@ -70,12 +70,10 @@ bundle exec ruby 01_basic_chain/run.rb
 
 A full Rails web app that integrates phronomy as the conversation engine.
 
-- `ChatAgent < Phronomy::Agent::Base` with a `CurrentTimeTool < Phronomy::Tool::Base`
-- DB-backed conversation history via `PhronomyMessage` (application-managed persistence)
-- `MessagesController#create` loads history with `PhronomyMessage.load_messages(thread_id)`,
-  calls `ChatAgent.new.invoke(content, messages: messages, thread_id: thread_id)`,
-  then saves the result with `PhronomyMessage.save_messages(thread_id, result[:messages])`
-- Configured in `config/initializers/phronomy.rb`
+- `ChatAgent < Phronomy::Agent::Base` with `agent_definition` and a `CurrentTimeTool`
+- Stateful conversation history via `Persistence::InMemory` (`PhronomyStore`)
+- `ConversationsController` uses `Agent.create` (new chat) and `agent.transcript` (message display)
+- `MessagesController#create` uses `Agent.load(agent_id, persistence:)` + `agent.invoke(content)`
 
 ### Run it
 

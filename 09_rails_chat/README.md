@@ -1,21 +1,21 @@
 # 09 Rails Chat App
 
-A Rails web application demonstrating phronomy's `ConversationManager` for
-persistent, per-session chat history backed by ActiveRecord.
+A Rails web application demonstrating phronomy stateful `Agent::Base` for
+persistent, per-session conversation history stored in `Persistence::InMemory`.
 
 ## Purpose
 
-Show how to integrate phronomy memory into a Rails controller so that each
-browser session maintains its own conversation thread, with history stored
-in a `phronomy_messages` table.
+Show how to integrate phronomy stateful Agent into a Rails controller so that
+each browser session maintains its own conversation using `Agent.create` and `Agent.load`.
 
 ## Phronomy Features
 
-| Feature | Usage |
-|---------|-------|
-| `acts_as_phronomy_message` | ActiveRecord model mixin for message storage |
-| `PhronomyMessage.phronomy_memory` | Builds a `ConversationManager` from the model |
-| `Agent::Base config: { memory:, thread_id: }` | Injects memory into the agent |
+| Feature | Class / API | Usage |
+|---------|-------------|-------|
+| Stateful agent | `Agent::Base` + `agent_definition` | `ChatAgent` retains conversation history across turns |
+| Agent lifecycle | `Agent.create` / `Agent.load` | `ConversationsController` creates; `MessagesController` loads by `agent_id` |
+| Shared persistence | `Persistence::InMemory` | `PhronomyStore.persistence` shared across all sessions (process-local) |
+| Transcript read-back | `agent.transcript` | `ConversationsController#index` renders past messages from the journal |
 
 ## How to Run
 
@@ -32,11 +32,8 @@ Then open `http://localhost:3000` in a browser.
 
 | File | Description |
 |------|-------------|
-| `app/agents/chat_agent.rb` | Phronomy agent with LLM |
-| `app/controllers/messages_controller.rb` | Passes memory and thread_id to the agent |
-| `app/views/conversations/index.html.erb` | Chat UI |
-| `config/initializers/phronomy.rb` | LLM configuration |
-
-* Deployment instructions
-
-* ...
+| `app/agents/chat_agent.rb` | `ChatAgent < Agent::Base` with `agent_definition` |
+| `app/controllers/conversations_controller.rb` | `Agent.create` (new chat) + `agent.transcript` (message display) |
+| `app/controllers/messages_controller.rb` | `Agent.load` + `agent.invoke(content)` |
+| `config/initializers/phronomy_store.rb` | `PhronomyStore` module wrapping `Persistence::InMemory` |
+| `app/views/conversations/index.html.erb` | Chat UI (reads `@agent_id`) |

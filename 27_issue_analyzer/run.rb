@@ -258,7 +258,6 @@ if DRY_RUN
   end
 else
   Phronomy.configure { |c| c.runtime_backend = :thread }
-  agent = IssueClassifierAgent.new
   batches = issues.each_slice(BATCH_SIZE).to_a
 
   batches.each_with_index do |batch, idx|
@@ -271,7 +270,8 @@ else
     $stdout.flush
 
     begin
-      result = agent.invoke(payload.to_json)
+      # run_once creates a fresh agent per batch so history never bleeds across batches.
+      result = Phronomy::Agent.run_once(definition: IssueClassifierAgent, input: payload.to_json)
       raw = result[:output].to_s.strip
         .gsub(/\A```(?:json)?\n?/, "")
         .gsub(/\n?```\z/, "")

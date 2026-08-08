@@ -57,7 +57,6 @@ IMPROVE_TEMPLATE = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
 #
 #   static_knowledge    — IMPROVEMENT_POLICY cached via ContextVersionCache;
 #                         system text is not rebuilt when fingerprint is stable.
-#   build_context       — trims and compacts history to stay within token budget:
 #                         * drops oldest message when history exceeds 4 messages
 #                         * compacts messages beyond 2 into a one-line summary
 class ImproverAgent < Phronomy::Agent::Base
@@ -70,20 +69,4 @@ class ImproverAgent < Phronomy::Agent::Base
   static_knowledge IMPROVEMENT_POLICY
   max_output_tokens IMPROVER_MAX_OUTPUT_TOKENS
   max_iterations 1
-
-  protected
-
-  def build_context(input, messages: [], **opts)
-    msgs = Array(messages)
-    # Drop the oldest message when history exceeds 2 pairs (4 messages).
-    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 4
-    # Compact all but the last 2 messages into a summary.
-    if msgs.size > 2
-      msgs = compact_messages(msgs, keep_tail: 2) do |dropped|
-        lines = dropped.map { |m| "[#{m.role}] #{m.content.to_s[0, 100].tr("\n", " ")}" }
-        "Prior session summary:\n#{lines.join("\n")}"
-      end
-    end
-    super(input, messages: msgs, **opts)
-  end
 end

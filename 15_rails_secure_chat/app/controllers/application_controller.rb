@@ -13,15 +13,4 @@ class ApplicationController < ActionController::Base
     session[:user_id]    ||= SecureRandom.uuid
     session[:session_id] ||= SecureRandom.uuid
   end
-
-
-  # Feature D: purge messages older than PHRONOMY_MEMORY_TTL seconds for a thread.
-  # Called explicitly before each LLM call so stale context is stripped.
-  def purge_stale_messages(thread_id)
-    cutoff = Time.now - PHRONOMY_MEMORY_TTL
-    PhronomyMessage
-      .where(thread_id: thread_id)
-      .where("created_at < ?", cutoff)
-      .delete_all
-  end
 end

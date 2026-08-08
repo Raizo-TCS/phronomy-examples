@@ -61,7 +61,6 @@ REVIEWER_MAX_OUTPUT_TOKENS = [512, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.15).
 #   static_knowledge  — security criteria cached via ContextVersionCache.
 #   max_output_tokens — bounded to REVIEWER_MAX_OUTPUT_TOKENS; one line per finding
 #                       is well within this limit even for files with many issues.
-#   build_context     — drops the oldest message if unexpected history builds up.
 class SecurityReviewerAgent < Phronomy::Agent::Base
   agent_definition id: "example-14-security-reviewer-agent", version: 1
 
@@ -79,14 +78,6 @@ class SecurityReviewerAgent < Phronomy::Agent::Base
   static_knowledge SECURITY_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-
-  protected
-
-  def build_context(input, messages: [], **opts)
-    msgs = Array(messages)
-    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
-    super(input, messages: msgs, **opts)
-  end
 end
 
 # Reviews Ruby source code for performance problems.
@@ -110,14 +101,6 @@ class PerformanceReviewerAgent < Phronomy::Agent::Base
   static_knowledge PERFORMANCE_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-
-  protected
-
-  def build_context(input, messages: [], **opts)
-    msgs = Array(messages)
-    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
-    super(input, messages: msgs, **opts)
-  end
 end
 
 # Reviews Ruby source code for readability and maintainability issues.
@@ -141,14 +124,6 @@ class ReadabilityReviewerAgent < Phronomy::Agent::Base
   static_knowledge READABILITY_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-
-  protected
-
-  def build_context(input, messages: [], **opts)
-    msgs = Array(messages)
-    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
-    super(input, messages: msgs, **opts)
-  end
 end
 
 # Reviews Ruby source code for abstraction-level consistency.
@@ -185,12 +160,4 @@ class AbstractionConsistencyReviewerAgent < Phronomy::Agent::Base
   static_knowledge ABSTRACTION_CRITERIA
   max_output_tokens REVIEWER_MAX_OUTPUT_TOKENS
   max_iterations 1
-
-  protected
-
-  def build_context(input, messages: [], **opts)
-    msgs = Array(messages)
-    msgs = trim_messages(msgs, keep: msgs.size - 1) if msgs.size > 2
-    super(input, messages: msgs, **opts)
-  end
 end

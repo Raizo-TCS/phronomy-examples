@@ -28,10 +28,9 @@ class LocalLlmJudge < Phronomy::Eval::Scorer::LlmJudge
   end
 end
 
-# Per-thread conversation history for ImproverAgent.
-# Keys are thread_id strings; values are Arrays of RubyLLM::Message.
-# Updated from the :done event payload after each stream call.
-REVIEW_SESSIONS = Hash.new { |h, k| h[k] = [] }
+# Per-file stateful ImproverAgent persistence. Each unique file gets its own
+# Agent that retains improvement context across repeated review runs.
+IMPROVER_PERSISTENCE = Phronomy::Persistence::InMemory.new
 
 # OutputGuardrail instance reused across improve nodes.
 CODE_OUTPUT_GUARDRAIL = CodeOutputGuardrail.new
@@ -210,12 +209,14 @@ IMPROVE_NODE = lambda do |state|
 
     thread_id = "review-#{File.basename(state.file_path, ".rb")}"
     improved  = +""
+    agent = begin
+      ImproverAgent.load(thread_id, persistence: IMPROVER_PERSISTENCE)
+    rescue Phronomy::Persistence::NotFoundError
+      ImproverAgent.create(agent_id: thread_id, persistence: IMPROVER_PERSISTENCE)
+    end
 
     print "\n[ImproverAgent] Generating improvements (streaming)...\n"
-    ImproverAgent.new.stream(
-      { message: user_prompt, priority: priority },
-      messages: REVIEW_SESSIONS[thread_id], thread_id: thread_id
-    ) do |event|
+    agent.stream({ message: user_prompt, priority: priority }) do |event|
       case event.type
       when :token
         content = event.payload[:content]
@@ -226,7 +227,6 @@ IMPROVE_NODE = lambda do |state|
         end
       when :done
         puts "\n"
-        REVIEW_SESSIONS[thread_id] = event.payload[:messages]
       end
     end
 

@@ -2,9 +2,9 @@
 
 class MessagesController < ApplicationController
   def create
-    thread_id = session[:thread_id]
+    agent_id = session[:agent_id]
 
-    unless thread_id
+    unless agent_id
       render json: { error: "No active conversation. Start a new chat first." }, status: :unprocessable_entity
       return
     end
@@ -15,9 +15,8 @@ class MessagesController < ApplicationController
       return
     end
 
-    messages = PhronomyMessage.load_messages(thread_id)
-    result = ChatAgent.new.invoke(content, messages: messages, thread_id: thread_id)
-    PhronomyMessage.save_messages(thread_id, result[:messages])
+    agent = ChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    result = agent.invoke(content)
 
     render json: { reply: result[:output] }
   rescue Phronomy::GuardrailError => e

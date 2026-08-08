@@ -2,23 +2,45 @@
 
 class ConversationsController < ApplicationController
   def index
-    @thread_id = session[:thread_id]
-    @user_id   = session[:user_id]
-    @messages  = @thread_id ? PhronomyMessage.where(thread_id: @thread_id).order(:created_at) : []
+    @agent_id = session[:agent_id]
+    @user_id  = session[:user_id]
+    if @agent_id
+      agent = SecureChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
+      @messages = agent.transcript.filter_map do |record|
+        next unless %i[user assistant].include?(record.role)
+        content_raw = PhronomyStore.persistence.contents.fetch_text(record.content_ref)
+        content_text = begin
+          JSON.parse(content_raw)["content"] || content_raw
+        rescue JSON::ParserError
+          content_raw
+        end
+        OpenStruct.new(role: record.role.to_s, content: content_text)
+      end
+    else
+      @messages = []
+    end
+  rescue Phronomy::Persistence::NotFoundError
+    session[:agent_id] = nil
+    @messages = []
   end
 
   def create
-    session[:thread_id] = SecureRandom.uuid
+    agent = SecureChatAgent.create(persistence: PhronomyStore.persistence)
+    session[:agent_id] = agent.agent_id
     redirect_to root_path
   end
 
-  # Feature D: purge — permanently erase all data for the current thread.
+  # Feature D: clear transcript (Journal is preserved; active generation advances).
   def destroy
-    thread_id = params[:id]
-    if thread_id.present?
-      PhronomyMessage.where(thread_id: thread_id).delete_all
-      session.delete(:thread_id)
+    agent_id = params[:id]
+    if agent_id.present?
+      agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+      agent.clear_transcript!
+      session.delete(:agent_id)
     end
-    redirect_to root_path, notice: "Conversation deleted."
+    redirect_to root_path, notice: "Conversation cleared."
+  rescue Phronomy::Persistence::NotFoundError
+    session.delete(:agent_id)
+    redirect_to root_path
   end
 end

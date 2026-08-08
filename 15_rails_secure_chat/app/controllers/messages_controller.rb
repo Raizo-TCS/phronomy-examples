@@ -2,9 +2,9 @@
 
 class MessagesController < ApplicationController
   def create
-    thread_id = session[:thread_id]
+    agent_id = session[:agent_id]
 
-    unless thread_id
+    unless agent_id
       render json: { error: "No active conversation. Start a new chat first." }, status: :unprocessable_entity
       return
     end
@@ -15,26 +15,20 @@ class MessagesController < ApplicationController
       return
     end
 
-    # Feature D: strip messages older than TTL before building context.
-    purge_stale_messages(thread_id)
+    agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
 
-    messages = PhronomyMessage.load_messages(thread_id)
+    # Feature D: clear transcript when idle longer than TTL.
+    last_activity = session[:last_agent_activity_at]
+    if last_activity && (Time.now.to_i - last_activity.to_i) > PHRONOMY_MEMORY_TTL
+      agent.clear_transcript!
+    end
+    session[:last_agent_activity_at] = Time.now.to_i
 
     # Feature B: propagate session user_id to the tracer span.
-    result = SecureChatAgent.new.invoke(
-      content,
-      messages:   messages,
-      thread_id:  thread_id,
-      config: {
-        user_id:    session[:user_id],
-        session_id: session[:session_id]
-      }
-    )
-    PhronomyMessage.save_messages(thread_id, result[:messages])
+    result = agent.invoke(content, config: { user_id: session[:user_id], session_id: session[:session_id] })
 
     render json: { reply: result[:output] }
   rescue Phronomy::GuardrailError => e
-    # Feature A: guardrail blocked the input.
     render json: { error: "Blocked: #{e.message}" }, status: :unprocessable_entity
   rescue => e
     Rails.logger.error("SecureChatAgent error: #{e.class}: #{e.message}")

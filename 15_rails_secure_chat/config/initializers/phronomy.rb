@@ -21,3 +21,12 @@ end
 # 30 seconds for easy demo verification; use 30.days.to_i in production.
 PHRONOMY_MEMORY_TTL = 30
 
+# Shared InMemory persistence for all SecureChatAgent instances.
+# In production, replace with a durable Persistence backend.
+module PhronomyStore
+  class << self
+    attr_reader :persistence
+  end
+
+  @persistence = Phronomy::Persistence::InMemory.new
+end

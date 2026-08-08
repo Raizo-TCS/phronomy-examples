@@ -14,6 +14,8 @@ class SummarizationGraph
   end
 
   class SummarizationAgent < Phronomy::Agent::Base
+    agent_definition id: "example-15-summarization-agent", version: 1
+
     model        LLM_MODEL
     provider     :openai
     instructions "You are a helpful assistant that summarizes conversations concisely."

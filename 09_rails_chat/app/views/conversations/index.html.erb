@@ -5,8 +5,8 @@
   <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
     <h1 class="text-lg font-semibold text-gray-800">Phronomy Chat</h1>
     <div class="flex items-center gap-3">
-      <% if @thread_id %>
-        <span class="text-xs text-gray-400 font-mono"><%= @thread_id.split("-").first %>…</span>
+      <% if @agent_id %>
+        <span class="text-xs text-gray-400 font-mono"><%= @agent_id.split("-").first %>…</span>
       <% end %>
       <%= button_to "New Chat", new_conversation_path, method: :post,
             class: "text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg transition" %>
@@ -17,7 +17,7 @@
   <main id="messages" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
     <% if @messages.empty? %>
       <p class="text-center text-gray-400 mt-20 text-sm">
-        <% if @thread_id %>
+        <% if @agent_id %>
           No messages yet. Say something!
         <% else %>
           Click <strong>New Chat</strong> to start a conversation.
@@ -50,7 +50,7 @@
 
   <%# Input form %>
   <footer class="bg-white border-t border-gray-200 px-4 py-3">
-    <% if @thread_id %>
+    <% if @agent_id %>
       <form id="chat-form" class="flex gap-2">
         <input id="chat-input" type="text" name="content" placeholder="Type a message…" autocomplete="off"
                class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">

@@ -18,9 +18,9 @@
         <% if @user_id %>
           <span class="text-xs text-gray-400 font-mono">user: <%= @user_id.split("-").first %></span>
         <% end %>
-        <% if @thread_id %>
-          <span class="text-xs text-gray-400 font-mono">thread: <%= @thread_id.split("-").first %>…</span>
-          <%= button_to "Delete Chat", conversation_path(@thread_id), method: :delete,
+        <% if @agent_id %>
+          <span class="text-xs text-gray-400 font-mono">thread: <%= @agent_id.split("-").first %>…</span>
+          <%= button_to "Delete Chat", conversation_path(@agent_id), method: :delete,
                 data: { confirm: "Permanently delete this conversation?" },
                 class: "text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg transition" %>
         <% end %>
@@ -34,7 +34,7 @@
   <main id="messages" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
     <% if @messages.empty? %>
       <p class="text-center text-gray-400 mt-20 text-sm">
-        <% if @thread_id %>
+        <% if @agent_id %>
           No messages yet. Say something!
         <% else %>
           Click <strong>New Chat</strong> to start a conversation.
@@ -73,7 +73,7 @@
 
   <%# Input form %>
   <footer class="bg-white border-t border-gray-200 px-4 py-3">
-    <% if @thread_id %>
+    <% if @agent_id %>
       <form id="chat-form" class="flex gap-2 mb-2">
         <input id="chat-input" type="text" name="content" placeholder="Type a message… (PII and injection attempts will be blocked)"
                autocomplete="off"

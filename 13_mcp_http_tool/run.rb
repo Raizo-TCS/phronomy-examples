@@ -3,7 +3,7 @@
 
 # 13 MCP HTTP Tool
 #
-# Demonstrates McpTool::HttpTransport with two new features:
+# Demonstrates Phronomy::Tools::Mcp over HTTP with two features:
 #
 #   headers:        — pass custom HTTP headers (e.g. Authorization, X-Api-Key)
 #                     to every request (tool discovery + tool execution).
@@ -11,18 +11,18 @@
 #                     This keeps the Phronomy EventLoop free even when an MCP
 #                     call takes a long time.
 #
-# Part 2 of this example proves the non-blocking behaviour: two agents each
-# invoke a slow MCP tool (800 ms) via invoke_async.  Because both run
-# concurrently on the EventLoop, total wall-clock time is ~800 ms, not ~1600 ms.
+# Part 2 proves the non-blocking behaviour: two agents each invoke a slow MCP
+# tool via invoke_async. The MCP waits can overlap instead of occupying the
+# Runtime/EventLoop dispatch path.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "mcp_server"
 
-PORT = 19876
+PORT = 19_876
 API_KEY = "demo-key-123"
-SLOW_MS = 800  # simulated MCP response delay in milliseconds
+SLOW_MS = 800
 
 server = McpHttpServer.new(PORT)
 server_thread = Thread.new { server.start }
@@ -40,7 +40,7 @@ begin
   )
 
   class GreetingAgent < Phronomy::Agent::Base
-    agent_definition id: "example-13-greeting-agent", version: 1
+    agent_definition id: "example-13-greeting-agent", version: 2
 
     model LLMConfig::MODEL
     provider LLMConfig::PROVIDER
@@ -54,9 +54,8 @@ begin
     end
   end
 
-  GreetingAgent.tools(greet_tool)
+  GreetingAgent.tools(greet_tool => nil)
 
-  # ── Part 1: baseline single call ─────────────────────────────────────────
   puts "--- Part 1: single synchronous call ---"
   result = OutputValidator.validate(
     "MCP HTTP agent greets Alice",
@@ -65,20 +64,14 @@ begin
   puts result[:output]
   puts
 
-  # ── Part 2: parallel vs sequential comparison ────────────────────────────
-  # Each agent calls the slow MCP tool (SLOW_MS ms).
-  # Sequential: Agent A finishes, then Agent B starts → ~2 × agent_time
-  # Parallel:   Both run concurrently via invoke_async → MCP sleeps overlap
   puts "--- Part 2: parallel vs sequential (#{SLOW_MS} ms MCP delay each) ---"
 
-  # Sequential baseline
   t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   GreetingAgent.new.invoke("Please greet Charlie using the greet tool.")
   GreetingAgent.new.invoke("Please greet Diana using the greet tool.")
   seq_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round
   puts "Sequential: #{seq_ms} ms"
 
-  # Parallel via invoke_async — MCP sleeps run concurrently
   t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   task_a = GreetingAgent.new.invoke_async("Please greet Alice using the greet tool.")
   task_b = GreetingAgent.new.invoke_async("Please greet Bob using the greet tool.")
@@ -90,11 +83,12 @@ begin
   puts "Agent A: #{result_a[:output]}"
   puts "Agent B: #{result_b[:output]}"
   puts
+
   if par_ms < seq_ms
     puts "✓ Parallel was faster (#{seq_ms - par_ms} ms saved)."
-    puts "  The #{SLOW_MS} ms MCP sleeps overlapped — EventLoop was NOT blocked."
+    puts "  The MCP waits overlapped instead of blocking Runtime dispatch."
   else
-    puts "~ No speedup observed (LLM server may be serialising concurrent requests)."
+    puts "~ No speedup observed (the LLM server may serialize concurrent requests)."
   end
 ensure
   server.shutdown

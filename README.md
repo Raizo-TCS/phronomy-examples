@@ -1,111 +1,174 @@
-# phronomy-examples
+# Phronomy Examples
 
-Runnable examples for the [phronomy](https://github.com/Raizo-TCS/phronomy) gem.
+Examples for **Phronomy 0.17.x**.
 
-## Setup
+The repository is organized to show not only what can be built with Phronomy,
+but also the architectural boundaries that distinguish it from a thin LLM
+wrapper.
+
+## The two main architectural axes
+
+### Stateful Agent context
+
+```text
+Agent Journal
+    ↓
+Context candidates
+    ↓
+Context Policy / token budget
+    ↓
+LLMInputManifest
+    ↓
+provider-specific materialization
+```
+
+The Agent Journal is canonical state. The provider message list is a
+**per-invocation projection**, not the authoritative conversation database.
+
+Start with **10_context_management** for this model.
+
+### Runtime and event-driven execution
+
+```text
+Runtime
+  ├─ Tasks / schedulers / blocking pools / metrics
+  └─ EventLoop
+       ├─ Workflow FSM dispatch
+       └─ Agent lifecycle events
+```
+
+Application code composes public APIs such as `invoke_async`,
+`Workflow#signal`, `Task#map` and cancellation tokens; it
+does not need to post internal Event objects.
+
+Start with **25_event_loop** and **26_agent_event_loop**.
+
+## Dependency management
+
+Every Gemfile reads the Phronomy dependency from one file:
+
+```text
+Gemfile.phronomy
+```
+
+Normal released-gem use:
 
 ```bash
 bundle install
+./scripts/update_phronomy.sh
 ```
 
-## LLM Configuration
-
-All examples load LLM settings from `shared/llm_config.rb`, which reads from
-environment variables.  No source file editing is required.
-
-### Environment variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PHRONOMY_MODEL` | `gpt-4o-mini` | Model identifier (e.g. `gpt-4o`, `claude-3-5-sonnet-20241022`) |
-| `PHRONOMY_PROVIDER` | _(auto-inferred)_ | Provider symbol (e.g. `openai`, `anthropic`). Leave unset for standard models. |
-| `PHRONOMY_BASE_URL` | _(provider default)_ | Base URL for local/custom endpoints (LM Studio, Ollama, vLLM, etc.) |
-| `PHRONOMY_API_KEY` | _(from `OPENAI_API_KEY`)_ | API key. Falls back to `OPENAI_API_KEY` for OpenAI. |
-| `PHRONOMY_CONTEXT_WINDOW` | _(auto-detected or 8192)_ | Override context window size in tokens. |
-
-### Quick start — OpenAI
+Test every bundle against a local checkout:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-bundle exec ruby 01_basic_chain/run.rb
+PHRONOMY_PATH=../phronomy ./scripts/update_phronomy.sh
 ```
 
-### Quick start — local LM Studio
+When the target Phronomy version changes, edit **only `Gemfile.phronomy`** and
+run the update script to regenerate each bundle's lockfile.
+
+## Example map
+
+### Fundamentals
+
+| Example | Focus |
+|---|---|
+| `01_basic_chain` | Basic runnable chain |
+| `02_react_agent` | Agent + tools / ReAct |
+| `03_state_graph` | Workflow branching |
+| `06_guardrails` | Filter/guard boundary basics |
+| `07_tracing` | Structured output + tracing |
+| `11_agent_streaming` | Token/tool lifecycle streaming |
+| `12_prompt_template` | Prompt templates |
+| `16_before_llm_input_hook` | Public pre-materialization context hook |
+| `28_filter` | Input/output/tool-result Filters |
+
+### Stateful context and trust
+
+| Example | Focus |
+|---|---|
+| `10_context_management` | Journal → candidates → Policy → Manifest |
+| `19_trust_pipeline` | Persistent Knowledge + Generator/Verifier |
+| `24_vector_store_dimension` | VectorStore + VectorSearch Agent RAG |
+
+### Human-in-the-loop and execution control
+
+| Example | Focus |
+|---|---|
+| `04_interrupt_resume` | Workflow wait-state HITL + Agent tool approval |
+| `25_event_loop` | Runtime-owned EventLoop and async Workflow pattern |
+| `26_agent_event_loop` | Agent async events → Workflow signal; timeout |
+| `23_bounded_parallel` | Bounded parallel fan-out |
+
+### Multi-agent
+
+| Example | Focus |
+|---|---|
+| `05_multi_agent` | Agent-as-tool composition |
+| `17_multi_agent_handoff` | Handoff |
+| `21_team_coordinator` | Stateful worker assignment |
+| `22_shared_state` | Shared Agent state |
+| `23_bounded_parallel` | Parallel Orchestrator pattern |
+
+### MCP and integrations
+
+| Example | Focus |
+|---|---|
+| `08_mcp_tool` | MCP tool |
+| `13_mcp_http_tool` | MCP over HTTP |
+
+### Larger applications
+
+| Example | Focus |
+|---|---|
+| `09_rails_chat` | Rails chat |
+| `14_code_review` | Multi-stage code review pipeline |
+| `15_rails_secure_chat` | Rails security/trust boundaries |
+| `18_rails_agent_job` | ActiveJob + Agent streaming + ActionCable |
+| `20_cve_scanner` | CVE analysis application |
+| `27_issue_analyzer` | GitHub issue analysis |
+
+## Choosing the right multi-agent primitive
+
+These examples intentionally distinguish state from concurrency:
+
+- `21_team_coordinator` — a pool of **stateful worker identities**; queued work
+  is assigned sequentially.
+- `23_bounded_parallel` — **parallel fan-out** with a concurrency bound.
+- `19_trust_pipeline` — **Generator/Verifier** quality-control loop.
+- `17_multi_agent_handoff` — explicit responsibility transfer.
+
+A worker pool should not be assumed to imply parallel execution.
+
+## Verification
+
+Install/update all bundles first:
 
 ```bash
-export PHRONOMY_MODEL="openai/gpt-oss-20b"
-export PHRONOMY_BASE_URL="http://127.0.0.1:1234/v1"
-export PHRONOMY_API_KEY="lm-studio"
-bundle exec ruby 01_basic_chain/run.rb
+./scripts/update_phronomy.sh
 ```
 
-## Running an example
+Then run the repository verification:
 
 ```bash
-bundle exec ruby 01_basic_chain/run.rb
+./scripts/verify_examples.sh
 ```
 
-## Examples
-
-| # | Directory | What it demonstrates |
-|---|-----------|----------------------|
-| 01 | `01_basic_chain/` | Minimal Workflow pipeline using `WorkflowContext` and `Workflow.define` |
-| 02 | `02_react_agent/` | ReAct Agent with custom tools |
-| 03 | `03_state_graph/` | Stateful branching graph |
-| 04 | `04_interrupt_resume/` | Human-in-the-loop with interrupt/resume |
-| 05 | `05_multi_agent/` | Multi-Agent LLM-driven coordination (Agent-as-Tool) |
-| 06 | `06_guardrails/` | Input and output blocking filters |
-| 07 | `07_tracing/` | Custom span-based tracer |
-| 08 | `08_mcp_tool/` | MCP server tool integration |
-| 09 | `09_rails_chat/` | Rails web chat app — stateful `Agent.create/load` with `Persistence::InMemory`; `agent.transcript` for message display |
-| 14 | `14_code_review/` | **Comprehensive pipeline** — BlockingFilter, Splitter, Workflow, Parallel branches, Interrupt/Resume, PromptTemplate, Agent (streaming + stateful), OutputFilter, Eval (LLMJudge), Tracing |
-| 16 | `16_before_llm_input_hook/` | Global / class / instance `before_llm_input` hooks — `LLMInputPatch`, `LLMInputBuildContext` |
-| 17 | `17_multi_agent_handoff/` | Hub-and-spoke routing with `Phronomy::Agent::Runner` — triage → specialist handoff |
-| 18 | `18_rails_agent_job/` | Rails 8 + ActionCable real-time streaming via `Phronomy::Rails::AgentJob` |
-| 19 | `19_trust_pipeline/` | Trustworthy output via Citation Tracking + Self-Review Loop + Confidence Gate |
-| 20 | `20_cve_scanner/` | Rails 8 Web UI — CVE vulnerability scanning + remediation with CHECK LOOP / REMEDIATION LOOP, interrupt/approve gates, ActionCable real-time streaming |
-| 27 | `27_issue_analyzer/` | Batch GitHub Issue classifier — two-axis (WHAT × WHERE) LLM classification, 2D histogram, CSV export; demonstrates `Agent::Base` for structured-output batch processing |
-
-## 09: Rails Chat (`09_rails_chat/`)
-
-A full Rails web app that integrates phronomy as the conversation engine.
-
-- `ChatAgent < Phronomy::Agent::Base` with `agent_definition` and a `CurrentTimeTool`
-- Stateful conversation history via `Persistence::InMemory` (`PhronomyStore`)
-- `ConversationsController` uses `Agent.create` (new chat) and `agent.transcript` (message display)
-- `MessagesController#create` uses `Agent.load(agent_id, persistence:)` + `agent.invoke(content)`
-
-### Run it
+For local Phronomy development:
 
 ```bash
-cd 09_rails_chat
-bundle install
-bin/rails db:prepare
-bin/rails server -p 4567
+PHRONOMY_PATH=../phronomy ./scripts/update_phronomy.sh
+./scripts/verify_examples.sh
 ```
 
-Then open http://localhost:4567/.
-
-## 14: AI Code Review Pipeline (`14_code_review/`)
-
-A comprehensive example that exercises the majority of phronomy's features in a
-single CLI pipeline.  Supply a Ruby source file and the pipeline:
-
-1. **InputFilter** — rejects invalid/missing files before any LLM call
-2. **Splitter** — splits large files into chunks with `RecursiveSplitter`
-3. **Graph + Parallel branches** — runs Security / Performance / Readability / Abstraction agents concurrently via `Runtime` named pools and `BlockingAdapterPool`
-4. **Interrupt/Resume** — pauses after reviews so you can choose which area to fix
-5. **PromptTemplate** — formats the improvement prompt from variables
-6. **Agent (streaming)** — generates improved code with real-time token output
-7. **OutputFilter** — validates that the improved code contains a code block
-8. **Eval (LLMJudge)** — scores review quality and improvement quality out of 10
-9. **Tracing** — measures and prints elapsed time for every pipeline stage
-
-### Run it
+Printing the actually loaded implementation is useful when diagnosing version
+mismatches:
 
 ```bash
-bundle exec ruby 14_code_review/run.rb
-# When prompted, enter: 14_code_review/sample.rb
+bundle exec ruby -e '
+  require "phronomy"
+  spec = Gem.loaded_specs.fetch("phronomy")
+  puts "Phronomy #{Phronomy::VERSION}"
+  puts spec.full_gem_path
+'
 ```
-
-`sample.rb` is a demo file with intentional Security, Performance, and Readability issues.

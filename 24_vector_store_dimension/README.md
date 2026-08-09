@@ -1,68 +1,39 @@
-# 24 VectorStore Dimension Validation
+# 24 — VectorStore + Agent RAG
 
-## Purpose
+This example moves beyond a standalone vector-store correctness test and shows
+the complete Phronomy retrieval boundary:
 
-Demonstrates the embedding dimension guard introduced in phronomy v0.5.4.
-All `VectorStore` implementations now validate that every embedding vector
-matches the store's expected dimension on both `add` and `search`.
-When a mismatch is detected, `ArgumentError` is raised immediately instead of
-silently truncating the vector (which would corrupt cosine similarity scores).
-
-No LLM or embedding model is required — all embeddings are hand-crafted
-4-dimensional (or 2-dimensional) float arrays.
-
-## Phronomy Features
-
-| Feature | Class / API |
-|---|---|
-| In-memory vector store | `Phronomy::VectorStore::InMemory` |
-| Explicit dimension on construction | `InMemory.new(dimension: 4)` |
-| Dimension inferred from first insert | `InMemory.new` (no `dimension:`) |
-| Document insertion | `store.add(id:, embedding:, metadata:)` |
-| Nearest-neighbour search | `store.search(query_embedding:, k:)` |
-| Store reset | `store.clear` |
-
-## How to Run
-
-```bash
-cd /path/to/phronomy-examples
-export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-bundle exec ruby 24_vector_store_dimension/run.rb
+```text
+documents
+  → Embeddings adapter
+    → VectorStore
+      → Phronomy::Tools::VectorSearch
+        → Agent tool call
+          → grounded answer
 ```
 
-No running LLM server is needed.
+## Part 1: storage guarantees
 
-## Expected Output (approximate)
+`VectorStore::InMemory` demonstrates:
 
-```
-=== 24 VectorStore Dimension Validation ===
+- explicit vector dimensions;
+- dimension inference from the first inserted embedding;
+- rejection of mismatched vectors;
+- metadata stored with each vector.
 
-[1] Creating store with explicit dimension: 4
-    Adding 3 documents with matching 4-dimensional embeddings...
-    OK
+## Part 2: retrieval as an Agent capability
 
-[2] Attempting to add a 3-dimensional embedding (mismatch)
-    ArgumentError: embedding dimension mismatch: expected 4, got 3
+`Phronomy::Tools::VectorSearch.from_store` creates a configured Tool class from:
 
-[3] Attempting to search with a 3-dimensional query (mismatch)
-    ArgumentError: embedding dimension mismatch: expected 4, got 3
+- a `VectorStore`;
+- an `Embeddings::Base` implementation;
+- retrieval parameters such as `k`;
+- a tool name and description.
 
-[4] Valid search — top 2 nearest neighbours
+The example uses a deterministic local embedding adapter so the retrieval layer
+does not require a separate embedding service. The final Agent answer uses the
+normal configured LLM.
 
-    1. [doc1] Ruby threads and concurrency (score: 1.0)
-    2. [doc3] Ruby on Rails web development (score: ~0.9999)
-
-[5] Dimension inferred from first add (no explicit dimension:)
-
-    Inferred dimension: 2
-    ArgumentError on second add: embedding dimension mismatch: expected 2, got 3
-
-[6] clear retains established dimension
-
-    Added 4-dimensional embedding after clear: OK
-
-Done.
-```
-
-Scores for the nearest-neighbour results will be exact cosine similarity
-values and may differ slightly from the values shown above.
+Production applications can replace the in-memory store/embedding adapter with
+the supported persistent vector backends and real embedding adapters without
+changing the Agent/tool boundary.

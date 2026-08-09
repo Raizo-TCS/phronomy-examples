@@ -2,7 +2,8 @@
 
 source "https://rubygems.org"
 
-gem "phronomy", "~> 0.17.0"
+eval_gemfile File.expand_path("Gemfile.phronomy", __dir__)
+
 gem "webrick", "~> 1.8"
 gem "simplecov", require: false
 gem "simplecov-lcov", require: false

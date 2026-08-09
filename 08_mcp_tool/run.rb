@@ -19,7 +19,7 @@ list_files_tool = Phronomy::Tools::Mcp.from_server(
 )
 
 class FileExplorerAgent < Phronomy::Agent::Base
-  agent_definition id: "example-08-file-explorer-agent", version: 1
+  agent_definition id: "example-08-file-explorer-agent", version: 2
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
@@ -34,7 +34,8 @@ class FileExplorerAgent < Phronomy::Agent::Base
   end
 end
 
-FileExplorerAgent.tools(list_files_tool)
+# Phronomy 0.17 uses ToolClass => alias_or_nil registration.
+FileExplorerAgent.tools(list_files_tool => nil)
 
 puts "=== MCP Tool Example ==="
 puts "Starting MCP server..."

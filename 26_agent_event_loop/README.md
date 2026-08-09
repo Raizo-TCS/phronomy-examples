@@ -1,61 +1,43 @@
-# 26 — Agent EventLoop Mode
+# 26 — Agent async events + Workflow coordination
 
-## Purpose
+This example shows how Agent execution participates in Phronomy's Runtime
+without exposing the internal EventLoop as an application API.
 
-Demonstrates two patterns for running agents through Phronomy's cooperative `EventLoop`.
-Both patterns use `c.event_loop = true` so every agent invocation is dispatched and
-scheduled by the framework's event loop rather than blocking the calling thread directly.
+## Agent async contract
 
-**Pattern 1 — `Agent#invoke` via EventLoop**  
-A plain `QnAAgent` (no tools) answers a simple arithmetic question.
-Calling `invoke` on the agent routes the FSM through `AgentFSM` automatically;
-the event loop drives execution to completion before returning.
+`Agent#invoke_async` returns a `Phronomy::Task`.
 
-**Pattern 2 — `invoke_async` + `Task#map` inside a Workflow**  
-A `TranslationAgent` is embedded as a child FSM inside a `TranslationWorkflow`.
-The `:translate` entry action calls `invoke_async`, which returns a `Task`.
-`Task#map` transforms the agent result into an updated `WorkflowContext`; the
-`FSMSession` picks this up via the `:action_completed` transition and proceeds
-to the `:done` state.
+Its `on_event` callback receives structured lifecycle events. For a normal
+non-streaming invocation the terminal event is `:done`; errors, timeout and
+explicit cancellation have distinct terminal event types.
 
-## Phronomy Features
+The callback itself is delivered through the Runtime/EventLoop machinery.
 
-| Feature | Class / API |
-|---|---|
-| EventLoop configuration | `Phronomy.configure { c.event_loop = true }` |
-| Agent base class | `Phronomy::Agent::Base` |
-| Async agent invocation | `Agent#invoke_async` → `Phronomy::Task` |
-| Task transformation | `Task#map` |
-| Workflow definition | `Phronomy::Workflow.define` |
-| Workflow context | `Phronomy::WorkflowContext` (fields: `:replace`) |
-| Output validation helper | `OutputValidator.validate` |
+## Agent → Workflow bridge
 
-## How to Run
+The important application pattern is:
 
-LM Studio (or another OpenAI-compatible server) must be running and configured
-in `shared/llm_config.rb`.
+```text
+Workflow entry
+  → Agent#invoke_async
+  → return immediately
+  → Agent :done event
+  → Workflow#signal(thread_id:, event:, payload:)
+  → Workflow transition
+```
+
+The Agent and Workflow therefore remain independently modelled:
+
+- Agent owns model/tool execution, persisted execution state, and context assembly.
+- Workflow owns business-process state.
+- the event payload is the explicit hand-off.
+
+The final section shows `CancellationToken.timeout_after` and demonstrates that
+timeout is classified as `Phronomy::TimeoutError` / `:timeout`, not as a generic
+failure.
+
+Run:
 
 ```bash
-cd /home/raizo-tcs/ruby_ai_agent_framework/phronomy-examples
-export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
 bundle exec ruby 26_agent_event_loop/run.rb
 ```
-
-## Expected Output (approximate)
-
-```
-=== 26 Agent EventLoop Mode ===
-
---- Pattern 1: Agent#invoke via EventLoop ---
-Q: What is 2 + 2? Reply with just the number.
-A: 4
-Elapsed: 843ms
-
---- Pattern 2: Agent as child FSM inside a Workflow ---
-Query:  Translate "hello" to Japanese
-Answer: konnichiwa (or equivalent Japanese greeting)
-Status: done
-```
-
-Elapsed time varies by network and model; the exact translation may differ slightly
-depending on the model's output.

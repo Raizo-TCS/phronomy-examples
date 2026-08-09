@@ -1,40 +1,46 @@
-# 10 Context Management
+# 10 — Stateful Agent Context: Journal → Policy → Manifest
 
-Demonstrates phronomy stateful Agent context management features.
-Sections 1-8 run with a live LLM. Section 9 requires no LLM.
+This is the primary example for Phronomy's state/context architecture.
 
-## Purpose
+A Phronomy Agent does **not** treat the provider's mutable message array as the
+canonical state. Conceptually, each invocation follows:
 
-Explore how the stateful Agent manages conversation history internally
-and how the application can inspect, import, clear, and reset it.
+```text
+Agent Journal
+    ↓
+Context candidates
+    ↓
+Context Policy + token budget
+    ↓
+LLMInputManifest
+    ↓
+provider-specific materialization
+```
 
-## Phronomy Features
+## What the example demonstrates
 
-| Section | Feature | API |
-|---------|---------|-----|
-| 1 | Create a stateful agent | `Agent.create(agent_id:, persistence:)` |
-| 2 | Multi-turn conversation | same agent instance retains history |
-| 3 | Reload a persisted agent | `Agent.load(agent_id, persistence:)` |
-| 4 | Read transcript | `agent.transcript` |
-| 5 | `result[:messages]` projection | returned slice, not the storage |
-| 6 | Import existing history | `Agent.create(context:)` |
-| 7 | Clear LLM transcript | `agent.clear_transcript!` |
-| 8 | Full context reset | `agent.reset_context!` |
-| 9 | Output / context window DSL | `max_output_tokens`, `context_window` |
+- `Agent.create` creates a persistent logical Agent.
+- imported conversation history is recorded as Agent context.
+- `knowledge:` and `add_knowledge` create persistent Knowledge candidates.
+- `#transcript` is the current logical transcript projection.
+- a deliberately constrained `context_window` causes a single model call to use
+  fewer messages than the Agent retains canonically.
+- `result[:messages]` exposes the model-call projection without making the
+  provider message array canonical state.
+- `Agent.load` reopens the same logical Agent from the Persistence backend.
+- `clear_transcript!` and `clear_knowledge!` have independent logical lifetimes.
+- `reset_context!` resets current context without treating provider messages as
+  the source of truth.
 
-> **Note**: `Phronomy::LlmContextWindow::TokenBudget` and `TokenEstimator`
-> are `@api private` internal utilities. They appear in the run.rb demo for
-> illustration only and are not part of the public API.
+The point is **not** merely "chat memory." The point is that persisted Agent
+state and per-call model context are separate concepts.
 
-## How to Run
+Run:
 
 ```bash
 bundle exec ruby 10_context_management/run.rb
 ```
 
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `run.rb` | All demonstration sections |
-| `../shared/llm_config.rb` | LLM configuration + `apply_phronomy_defaults!` |
+The example uses `Persistence::InMemory` so it is self-contained. Production
+applications should provide a durable Persistence backend when process restart
+durability is required.

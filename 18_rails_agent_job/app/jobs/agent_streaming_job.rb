@@ -1,20 +1,56 @@
 # frozen_string_literal: true
 
-# Thin wrapper around Phronomy::Rails::AgentJob.
-# Exists so we can set a custom queue name without subclassing the library job.
+# Application-owned ActiveJob adapter for Phronomy streaming.
+#
+# Phronomy 0.17 exposes Agent#stream; Rails integration should compose that
+# public API with the application's own queue and ActionCable conventions,
+# rather than depending on a framework-specific Rails adapter.
 class AgentStreamingJob < ApplicationJob
   queue_as :default
 
-  # Delegates entirely to the phronomy job.
-  # @param agent_class_name [String]
-  # @param input            [String]
-  # @param stream           [String] ActionCable stream identifier
+  AGENTS = {
+    "DemoAgent" => DemoAgent
+  }.freeze
+
   def perform(agent_class_name, input, stream:)
-    Phronomy::Rails::AgentJob.new.perform(
-      agent_class_name,
-      input,
-      channel: "AgentChannel",
-      stream: stream
-    )
+    agent_class = AGENTS.fetch(agent_class_name) do
+      raise ArgumentError, "unsupported agent_class_name: #{agent_class_name}"
+    end
+
+    error_broadcast = false
+
+    agent_class.new.stream(input.to_s) do |event|
+      message = case event.type
+      when :token
+        {type: "token", content: event.payload[:content].to_s}
+      when :tool_call
+        {
+          type: "tool_call",
+          tool: event.payload[:tool_call]&.name.to_s
+        }
+      when :tool_result
+        {type: "tool_result"}
+      when :done
+        {
+          type: "done",
+          output: event.payload[:output].to_s
+        }
+      when :error
+        error_broadcast = true
+        {
+          type: "error",
+          message: event.payload[:error]&.message.to_s
+        }
+      end
+
+      ActionCable.server.broadcast(stream, message) if message
+    end
+  rescue => e
+    ActionCable.server.broadcast(
+      stream,
+      {type: "error", message: e.message}
+    ) unless error_broadcast
+
+    raise
   end
 end

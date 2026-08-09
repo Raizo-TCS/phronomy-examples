@@ -3,34 +3,33 @@
 require_relative "../shared/llm_config"
 require "phronomy"
 
-REFUND_POLICY  = File.read(File.join(__dir__, "knowledge/refund_policy.md"))
+REFUND_POLICY = File.read(File.join(__dir__, "knowledge/refund_policy.md"))
 SHIPPING_POLICY = File.read(File.join(__dir__, "knowledge/shipping_policy.md"))
 
-# DraftAgent: answers customer questions using the policy knowledge base.
-# Static knowledge sources are attached with source labels so the agent
-# can produce grounded citations in its JSON output.
+# DraftAgent: answers customer questions using Journal-backed persistent
+# Knowledge. Knowledge is a context candidate; it is not injected as a mutable
+# provider message array and it does not appear in #transcript.
 class PolicyDraftAgent < Phronomy::Agent::Base
-  agent_definition id: "example-19-policy-draft-agent", version: 1
+  agent_definition id: "example-19-policy-draft-agent", version: 2
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
-  instructions "You are a helpful customer support assistant for Acme Corp. " \
-    "Answer questions using only the knowledge provided in the <context> tags. " \
-    "If the knowledge does not cover the question, say so honestly."
+  instructions <<~PROMPT
+    You are a helpful customer support assistant for Acme Corp.
+    Answer only from the policy knowledge supplied in context.
+    Cite the source label in your answer.
+    If the policy does not cover the question, say so.
+  PROMPT
 
-  static_knowledge(
-    Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
-      REFUND_POLICY,
-      type: :policy,
-      source: "refund_policy.md"
-    ),
-    Phronomy::Agent::Context::Knowledge::StaticKnowledge.new(
-      SHIPPING_POLICY,
-      type: :policy,
-      source: "shipping_policy.md"
-    )
-  )
+  def initialize(knowledge: [], **kwargs)
+    policy_knowledge = [
+      "Source: refund_policy.md\n#{REFUND_POLICY}",
+      "Source: shipping_policy.md\n#{SHIPPING_POLICY}"
+    ]
+
+    super(knowledge: policy_knowledge + Array(knowledge), **kwargs)
+  end
 end
 
 # ReviewAgent: evaluates draft answers for accuracy and citation quality.
@@ -40,6 +39,5 @@ class PolicyReviewAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
-  instructions "You are a rigorous quality reviewer for customer support answers. " \
-    "Your job is to verify that answers are accurate, complete, and properly cited."
+  instructions "Verify customer-support answers for accuracy, completeness, and source citations."
 end

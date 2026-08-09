@@ -1,0 +1,20 @@
+# frozen_string_literal: true
+
+# Single source of truth for the Phronomy dependency used by every bundle in
+# this repository.
+#
+# Normal use:
+#   bundle install
+#
+# Test all examples against a local Phronomy checkout:
+#   PHRONOMY_PATH=../phronomy bundle install
+#
+# PHRONOMY_PATH is resolved relative to this file, not to the individual
+# Rails application's Gemfile.
+phronomy_path = ENV["PHRONOMY_PATH"]
+
+if phronomy_path && !phronomy_path.empty?
+  gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
+else
+  gem "phronomy", "~> 0.17.0"
+end

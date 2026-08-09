@@ -1,86 +1,138 @@
+#!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 24 VectorStore Dimension Validation
+# 24 VectorStore + Agent RAG
 #
-# Demonstrates the embedding dimension guard added to all VectorStore
-# implementations in v0.5.4. When an embedding's size does not match the
-# expected dimension, ArgumentError is raised immediately rather than silently
-# truncating the vector (which would corrupt cosine similarity scores).
+# Part 1 demonstrates VectorStore dimension guarantees.
+# Part 2 wires the store into Phronomy::Tools::VectorSearch and exposes semantic
+# retrieval to an Agent as a normal capability.
 #
-# No LLM or embedding model is required — this example uses hand-crafted
-# 4-dimensional float vectors.
+# A deterministic local embedding adapter keeps the retrieval layer
+# self-contained; only the final Agent call requires the configured LLM.
 
 require_relative "../shared/llm_config"
+require_relative "../shared/output_validator"
 require "phronomy"
 
-puts "=== 24 VectorStore Dimension Validation ===\n\n"
-
-# ── [1] Explicit dimension ───────────────────────────────────────────────────
-puts "[1] Creating store with explicit dimension: 4"
-puts "    Adding 3 documents with matching 4-dimensional embeddings..."
-
-store = Phronomy::VectorStore::InMemory.new(dimension: 4)
-
-store.add(id: "doc1", embedding: [0.90, 0.10, 0.00, 0.00],
-          metadata: {text: "Ruby threads and concurrency"})
-store.add(id: "doc2", embedding: [0.00, 0.00, 0.90, 0.10],
-          metadata: {text: "Machine learning in Ruby"})
-store.add(id: "doc3", embedding: [0.50, 0.50, 0.00, 0.00],
-          metadata: {text: "Ruby on Rails web development"})
-
-puts "    OK\n\n"
-
-# ── [2] Mismatch on add ──────────────────────────────────────────────────────
-puts "[2] Attempting to add a 3-dimensional embedding (mismatch)"
-
-begin
-  store.add(id: "bad", embedding: [0.1, 0.2, 0.3],
-            metadata: {text: "wrong dimension"})
-rescue ArgumentError => e
-  puts "    ArgumentError: #{e.message}\n\n"
-end
-
-# ── [3] Mismatch on search ───────────────────────────────────────────────────
-puts "[3] Attempting to search with a 3-dimensional query (mismatch)"
-
-begin
-  store.search(query_embedding: [0.9, 0.1, 0.0], k: 2)
-rescue ArgumentError => e
-  puts "    ArgumentError: #{e.message}\n\n"
-end
-
-# ── [4] Valid search ─────────────────────────────────────────────────────────
-puts "[4] Valid search — top 2 nearest neighbours\n\n"
-
-results = store.search(query_embedding: [0.90, 0.10, 0.00, 0.00], k: 2)
-
-results.each_with_index do |r, i|
-  puts "    #{i + 1}. [#{r[:id]}] #{r[:metadata][:text]} (score: #{r[:score].round(4)})"
-end
-
+puts "=== 24 VectorStore + Agent RAG ==="
 puts
 
-# ── [5] Inferred dimension ───────────────────────────────────────────────────
-puts "[5] Dimension inferred from first add (no explicit dimension:)\n\n"
+puts "--- Part 1: dimension validation ---"
 
-store2 = Phronomy::VectorStore::InMemory.new
-store2.add(id: "a", embedding: [0.7, 0.7], metadata: {text: "two-dim doc"})
+store = Phronomy::VectorStore::InMemory.new(dimension: 4)
+store.add(
+  id: "dimension-demo",
+  embedding: [1.0, 0.0, 0.0, 0.0],
+  metadata: {content: "dimension demo"}
+)
 
-puts "    Inferred dimension: 2"
+puts "Explicit dimension configured: 4"
+puts "Size:               #{store.size}"
 
 begin
-  store2.add(id: "b", embedding: [0.1, 0.2, 0.3], metadata: {text: "wrong"})
+  store.add(
+    id: "bad",
+    embedding: [1.0, 0.0, 0.0],
+    metadata: {content: "wrong dimension"}
+  )
 rescue ArgumentError => e
-  puts "    ArgumentError on second add: #{e.message}\n\n"
+  puts "Mismatched add rejected: #{e.message}"
 end
 
-# ── [6] clear retains dimension ──────────────────────────────────────────────
-puts "[6] clear retains established dimension\n\n"
+inferred = Phronomy::VectorStore::InMemory.new
+inferred.add(
+  id: "first",
+  embedding: [0.0, 1.0, 0.0, 0.0],
+  metadata: {content: "first document"}
+)
+puts "Inferred dimension from first add: 4"
+puts
 
-store.clear
-store.add(id: "after_clear", embedding: [0.1, 0.2, 0.3, 0.4],
-          metadata: {text: "added after clear"})
+puts "--- Part 2: VectorSearch tool → Agent ---"
 
-puts "    Added 4-dimensional embedding after clear: OK\n\n"
+class KeywordEmbeddings < Phronomy::VectorStore::Embeddings::Base
+  TERMS = %w[refund shipping support security].freeze
 
-puts "Done."
+  def embed(text, cancellation_token = nil)
+    cancellation_token&.raise_if_cancelled!
+
+    normalized = text.to_s.downcase
+    vector = TERMS.map { |term| normalized.scan(term).length.to_f }
+
+    # Give otherwise-empty queries a stable non-zero vector.
+    vector[3] = 0.1 if vector.all?(&:zero?)
+
+    magnitude = Math.sqrt(vector.sum { |value| value * value })
+    vector.map { |value| value / magnitude }
+  end
+end
+
+embeddings = KeywordEmbeddings.new
+knowledge_store = Phronomy::VectorStore::InMemory.new(dimension: 4)
+
+documents = {
+  "refund" => "Refund policy: unopened products can be returned within 30 days.",
+  "shipping" => "Shipping policy: standard delivery normally takes 3-5 business days.",
+  "support" => "Support contact: support@example.test.",
+  "security" => "Security incidents must be escalated to the on-call security engineer."
+}
+
+documents.each do |id, content|
+  knowledge_store.add(
+    id: id,
+    embedding: embeddings.embed(content),
+    metadata: {content: content, source: "#{id}.md"}
+  )
+end
+
+search_tool = Phronomy::Tools::VectorSearch.from_store(
+  knowledge_store,
+  embeddings: embeddings,
+  k: 2,
+  tool_name: "search_knowledge",
+  description: "Search the company knowledge base before answering policy questions."
+)
+
+Object.const_set(:Example24SearchKnowledgeTool, search_tool)
+
+class RagAgent < Phronomy::Agent::Base
+  agent_definition id: "example-24-rag-agent", version: 1
+
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions <<~PROMPT
+    Answer company policy questions only after calling search_knowledge.
+    Ground the answer in the retrieved text and do not invent policy.
+  PROMPT
+
+  tools(Example24SearchKnowledgeTool => nil)
+end
+
+question = "How long does standard shipping take?"
+events = []
+
+result = OutputValidator.validate(
+  "RAG agent returns the shipping policy",
+  check: ->(r) {
+    r[:output].to_s.include?("3") &&
+      events.any? { |event|
+        event.type == :tool_call &&
+          event.payload[:tool_call]&.name == "search_knowledge"
+      }
+  }
+) do
+  RagAgent.new.invoke(
+    question,
+    on_event: ->(event) { events << event }
+  )
+end
+
+retrieval_calls = events.count do |event|
+  event.type == :tool_call &&
+    event.payload[:tool_call]&.name == "search_knowledge"
+end
+
+puts "Question: #{question}"
+puts "Answer:   #{result[:output]}"
+puts "Retrieved through #{retrieval_calls} VectorSearch call(s)."
+puts "Execution: #{result[:execution_id]}"

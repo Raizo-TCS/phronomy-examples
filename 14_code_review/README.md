@@ -1,77 +1,66 @@
 # 14 AI Code Review Pipeline
 
-A comprehensive example covering many phronomy features in a single pipeline.
+A larger example that composes Phronomy Workflow, stateful Agents, Journal-backed
+Knowledge, streaming, Filters, evaluation, and tracing into one application flow.
 
-## Purpose
+## Current Phronomy features
 
-Accept a Ruby source file, run Security / Performance / Readability /
-Abstraction Consistency reviews in parallel, let the user choose the priority
-dimension, then generate and evaluate improved code.
+| Feature | API | Usage |
+|---|---|---|
+| Input/output boundary | `Phronomy::Filter::Base` | Validates source input and improved-code output |
+| Source splitting | `Phronomy::VectorStore::Splitter::RecursiveSplitter` | Splits large Ruby files for reviewer calls |
+| Workflow | `Phronomy::Workflow.define` | Models the full review lifecycle |
+| Typed state | `Phronomy::WorkflowContext` | Carries source, chunks, findings, selection and result |
+| Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
+| Event-driven completion | `Workflow#signal` | Async work returns to the FSM as later events |
+| Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
+| Persistent Knowledge | `knowledge:` | Reviewer criteria / improvement policy become Journal context candidates |
+| Prompt template | `Agent::Context::Instruction::PromptTemplate` | Builds the improvement request |
+| Streaming | `Agent#stream` | Streams the improved source |
+| Eval | `Phronomy::Eval::Runner` | Scores review/improvement output |
+| Tracing | `Phronomy::Tracing::Base` | Captures major pipeline stages |
 
-## Phronomy Features
+The important context distinction is that the review policies are not injected
+through the removed `StaticKnowledge` API. They are ordinary application data
+registered as Agent `knowledge:` and therefore participate in the same
+Journal/candidate/context-policy pipeline as other persistent Agent context.
 
-| Feature | Class / API | Usage |
-|---------|-------------|-------|
-| Input / output validation | `Phronomy::Filter::Base` | `FileInputGuardrail` rejects empty or non-Ruby; `CodeOutputGuardrail` validates code-block fence |
-| Source chunking | `Phronomy::Splitter::RecursiveSplitter` | Splits large files into token-budget-aware chunks |
-| Workflow | `Phronomy::Workflow.define` | Full pipeline as a state machine over `ReviewState` |
-| State context | `Phronomy::WorkflowContext` | `ReviewState` fields: `file_path`, `source_code`, `chunks`, `reviews`, `priority`, `improved_code`, `eval_scores` |
-| Interrupt / Resume | `wait_state` + `transition on:` | Pauses at `:awaiting_priority` for user input |
-| Application-level parallelism | `Phronomy::Runtime.instance.pool` + `BlockingAdapterPool` | `BRANCH_POOL` runs four reviewer branches concurrently |
-| Stateful improvement agent | `Persistence::InMemory` + `Agent.load/create` | `ImproverAgent` retains context per reviewed file via `IMPROVER_PERSISTENCE` |
-| Reviewer agents | `Phronomy::Agent::Base` | `SecurityReviewerAgent`, `PerformanceReviewerAgent`, `ReadabilityReviewerAgent`, `AbstractionConsistencyReviewerAgent` |
-| Static knowledge | `StaticKnowledge` | Review criteria cached in each reviewer |
-| Prompt template | `Phronomy::Agent::Context::Instruction::PromptTemplate` | `IMPROVE_TEMPLATE` builds the improvement message |
-| File-reading tool | `Phronomy::Agent::Context::Capability::Base` | `FileReadTool` reads Ruby source files |
-| Eval | `Phronomy::Eval::Runner` + `LlmJudge` | Scores review and improvement quality 0-10 |
-| Tracing | `Phronomy::Tracing::Base` | `ConsoleTracer` prints span name and elapsed time |
-
-## How to Run
+## Run
 
 ```bash
 bundle exec ruby 14_code_review/run.rb path/to/your_file.rb
 ```
 
-Pass an optional second argument to skip the interactive priority prompt:
+To bypass the interactive priority prompt:
 
 ```bash
 bundle exec ruby 14_code_review/run.rb path/to/your_file.rb security
 ```
 
-## Pipeline Flow
+## Flow
 
+```text
+source file
+   ↓
+Filter
+   ↓
+VectorStore::Splitter::RecursiveSplitter
+   ↓
+Workflow :parallel_review
+   ├─ SecurityReviewerAgent       + Journal-backed Knowledge
+   ├─ PerformanceReviewerAgent    + Journal-backed Knowledge
+   ├─ ReadabilityReviewerAgent    + Journal-backed Knowledge
+   └─ AbstractionReviewerAgent    + Journal-backed Knowledge
+   ↓
+wait_state :awaiting_priority
+   ↓ user event
+ImproverAgent (persistent Agent + knowledge: + streaming)
+   ↓
+output Filter
+   ↓
+Eval + tracing
 ```
-[Input file path]
-    -> FileInputGuardrail
-    -> :load_and_split
-         RecursiveSplitter
-    -> :parallel_review
-         BRANCH_POOL --> SecurityReviewerAgent    (blocking_io pool)
-                     --> PerformanceReviewerAgent  (blocking_io pool)
-                     --> ReadabilityReviewerAgent  (blocking_io pool)
-                     --> AbstractionConsistencyReviewerAgent
-    -> wait_state :awaiting_priority
-         [User selects dimension]
-         transition on: :proceed
-    -> :improve
-         IMPROVE_TEMPLATE (PromptTemplate)
-         ImproverAgent (streaming, stateful via IMPROVER_PERSISTENCE)
-         CodeOutputGuardrail
-    -> :evaluate
-         Eval::Runner + LocalLlmJudge
-    -> __finish__
-```
 
-## File Structure
-
-| File | Responsibility |
-|------|----------------|
-| `run.rb` | Entry point |
-| `pipeline.rb` | `Phronomy::Workflow.define` assembly |
-| `state.rb` | `ReviewState` (`Phronomy::WorkflowContext`) |
-| `reviewers.rb` | Four reviewer agents |
-| `improver.rb` | `ImproverAgent`; `IMPROVE_TEMPLATE`; `IMPROVER_PERSISTENCE` |
-| `guardrails.rb` | `FileInputGuardrail` and `CodeOutputGuardrail` |
-| `tools.rb` | `FileReadTool` |
-| `tracer.rb` | `ConsoleTracer` |
-| `sample.rb` | Sample Ruby file with intentional issues |
+The reviewer branches are application-level concurrent work. The Workflow
+itself remains an event-driven state machine: long-running work completes by
+calling `Workflow#signal`, rather than blocking an EventLoop action.

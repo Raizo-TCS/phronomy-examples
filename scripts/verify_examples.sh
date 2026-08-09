@@ -2,6 +2,7 @@
 # verify_examples.sh
 #
 # Smoke-tests all phronomy-examples:
+#   - dependency preflight: every bundle must load the same Phronomy version/path
 #   - CLI samples: actual LLM run with 240s timeout  (default)
 #                  OR Ruby syntax check only           (--syntax-only)
 #   - Rails apps:  db:migrate, server boot, health check, Playwright GUI smoke test
@@ -10,6 +11,9 @@
 #   cd phronomy-examples
 #   bash scripts/verify_examples.sh               # full run via LLM (LM Studio must be up)
 #   bash scripts/verify_examples.sh --syntax-only # syntax-only, no LLM required
+#
+# Before verification, install/update all bundles with:
+#   ./scripts/update_phronomy.sh
 #
 # The Rails GUI tests require the 'playwright' npm package (auto-installed into
 # scripts/browser_tests/node_modules on first run) and a Chromium browser
@@ -46,12 +50,12 @@ export PHRONOMY_PROVIDER="${PHRONOMY_PROVIDER:-openai}"
 # ── Per-example LLM timeout overrides (seconds; default: 240) ────────────────
 # Add entries here for examples that require more than 240 seconds to run.
 declare -A EXAMPLE_TIMEOUTS
-EXAMPLE_TIMEOUTS["10_context_management"]=480   # 9 LLM calls ~270s typical
-EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900       # 25 batches × up to ~10s each
+EXAMPLE_TIMEOUTS["10_context_management"]=480
+EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900
 
 # ── Per-example extra CLI arguments ──────────────────────────────────────────
 declare -A EXAMPLE_ARGS
-EXAMPLE_ARGS["27_issue_analyzer"]="--dry-run"   # gh auth not available in CI
+EXAMPLE_ARGS["27_issue_analyzer"]="--dry-run"
 
 # ── Counters & failure list ───────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
@@ -78,6 +82,130 @@ cleanup() {
   wait 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+
+# ── Phronomy dependency preflight ─────────────────────────────────────────────
+# This check prevents the exact failure mode where the examples are verified
+# against one checkout/version, then Gemfiles are changed without re-running the
+# suite. Every independent bundle must resolve to the same Phronomy version and
+# implementation path when PHRONOMY_PATH is used. Released gems may be
+# installed under different bundle paths, so version is the stable comparison.
+verify_phronomy_dependency() {
+  header "Phronomy dependency preflight"
+
+  local gemfiles=(
+    "$BASE_DIR/Gemfile"
+    "$BASE_DIR/09_rails_chat/Gemfile"
+    "$BASE_DIR/15_rails_secure_chat/Gemfile"
+    "$BASE_DIR/18_rails_agent_job/Gemfile"
+    "$BASE_DIR/20_cve_scanner/Gemfile"
+  )
+
+  local expected_version=""
+  local expected_local_path=""
+  local gemfile bundle_dir display resolved version path
+  local preflight_failed=false
+
+  if [[ -n "${PHRONOMY_PATH:-}" ]]; then
+    expected_local_path="$(cd "$BASE_DIR" && cd "$PHRONOMY_PATH" && pwd -P)"
+  fi
+
+  for gemfile in "${gemfiles[@]}"; do
+    bundle_dir="$(dirname "$gemfile")"
+    display="${gemfile#"$BASE_DIR"/}"
+
+    if ! resolved=$(
+      cd "$bundle_dir" &&
+        BUNDLE_GEMFILE="$gemfile" bundle exec ruby -e '
+          require "phronomy"
+          spec = Gem.loaded_specs.fetch("phronomy")
+          puts "#{Phronomy::VERSION}\t#{File.realpath(spec.full_gem_path)}"
+        '
+    ); then
+      fail "$display cannot load Phronomy; run ./scripts/update_phronomy.sh"
+      preflight_failed=true
+      continue
+    fi
+
+    version="${resolved%%$'\t'*}"
+    path="${resolved#*$'\t'}"
+
+    echo "  $display"
+    echo "    version: $version"
+    echo "    path:    $path"
+
+    if [[ -z "$expected_version" ]]; then
+      expected_version="$version"
+      pass "$display establishes Phronomy baseline"
+    elif [[ "$version" != "$expected_version" ]]; then
+      fail "$display loads Phronomy $version; expected $expected_version"
+      preflight_failed=true
+    else
+      pass "$display matches Phronomy $expected_version"
+    fi
+
+    if [[ -n "$expected_local_path" && "$path" != "$expected_local_path" ]]; then
+      fail "$display loads Phronomy from $path; expected local checkout $expected_local_path"
+      preflight_failed=true
+    fi
+
+    if [[ -n "$expected_local_path" && "$path" == "$expected_local_path" ]]; then
+      echo "    local checkout: OK"
+    fi
+
+  done
+
+  if $preflight_failed; then
+    echo
+    echo -e "${RED}Dependency preflight failed.${NC}"
+    echo "Run ./scripts/update_phronomy.sh and verify again."
+    return 1
+  fi
+
+  echo
+  echo "All bundles load the same Phronomy version and the expected local checkout when configured."
+}
+
+# ── Removed-API source preflight ──────────────────────────────────────────────
+# These are high-signal migration mistakes that Ruby syntax checking cannot
+# detect. Check executable Ruby source only; documentation may intentionally
+# mention removed names when explaining a migration.
+verify_removed_api_contract() {
+  header "Phronomy 0.17 source API preflight"
+
+  local failed=false
+  local matches i
+  local -a patterns=(
+    'Phronomy::Guardrail::'
+    'Phronomy::Agent::Context::Knowledge::StaticKnowledge'
+    '^[[:space:]]*static_knowledge([[:space:](]|$)'
+    'Phronomy::Rails::AgentJob'
+    'send\(:prepare_tool_class'
+    '^[[:space:]]*tools[[:space:]]+[A-Z][A-Za-z0-9_:]*(,[[:space:]]*[A-Z][A-Za-z0-9_:]*)*([[:space:]]*(#.*)?)$'
+    '\.tools\([[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\)'
+  )
+  local -a labels=(
+    'removed Guardrail namespace'
+    'removed StaticKnowledge constant'
+    'removed static_knowledge DSL'
+    'removed Rails AgentJob adapter'
+    'private prepare_tool_class usage'
+    'pre-0.17 tools splat DSL'
+    'pre-0.17 dynamic tools single-argument registration'
+  )
+
+  for i in "${!patterns[@]}"; do
+    matches=$(grep -RInE --include='*.rb' --exclude-dir=vendor "${patterns[$i]}" "$BASE_DIR" 2>/dev/null || true)
+    if [[ -n "$matches" ]]; then
+      fail "${labels[$i]}"
+      echo "$matches" | sed 's/^/    /'
+      failed=true
+    else
+      pass "${labels[$i]} not found"
+    fi
+  done
+
+  ! $failed
+}
 
 # ── CLI example verification ──────────────────────────────────────────────────
 # Checks: Ruby syntax (ruby -c).
@@ -127,7 +255,7 @@ verify_cli_run() {
   local llm_timeout=${EXAMPLE_TIMEOUTS[$name]:-240}
   local extra_args=${EXAMPLE_ARGS[$name]:-}
   local run_out run_rc=0
-  run_out=$(cd "$BASE_DIR" && timeout $llm_timeout bundle exec ruby "$name/run.rb" $extra_args < /dev/null 2>&1) || run_rc=$?
+  run_out=$(cd "$BASE_DIR" && timeout "$llm_timeout" bundle exec ruby "$name/run.rb" $extra_args < /dev/null 2>&1) || run_rc=$?
   if [[ $run_rc -eq 0 ]]; then
     pass "run OK (exit 0)"
   elif [[ $run_rc -eq 124 ]]; then
@@ -142,7 +270,7 @@ verify_cli_run() {
 verify_rails() {
   local name="$1"
   local port="$2"
-  local extra_env="${3:-}"   # optional extra env vars (e.g. "CVE_SCANNER_MOCK_LLM=1")
+  local extra_env="${3:-}"
   local dir="$BASE_DIR/$name"
   header "$name [Rails, port $port]"
 
@@ -151,7 +279,7 @@ verify_rails() {
     return
   fi
 
-  # 1. DB migrate ─────────────────────────────────────────────────────────────
+  # 1. DB migrate
   local migrate_out
   if migrate_out=$(cd "$dir" && RAILS_ENV=development bundle exec rails db:create db:migrate 2>&1); then
     pass "db:create db:migrate"
@@ -160,19 +288,19 @@ verify_rails() {
     return
   fi
 
-  # 2. Start server ───────────────────────────────────────────────────────────
+  # 2. Start server
   free_port "$port"
   local log_file
   log_file="$(mktemp "${TMPDIR:-/tmp}/rails-${name}-XXXXXX.log")"
 
-  (cd "$dir" && env PORT=$port RAILS_ENV=development $extra_env bundle exec rails server \
+  (cd "$dir" && env PORT="$port" RAILS_ENV=development $extra_env bundle exec rails server \
       >> "$log_file" 2>&1) &
   local server_pid=$!
   SERVER_PIDS+=("$server_pid")
 
   # Wait up to 40 s for the health endpoint.
   local up=false
-  for i in $(seq 1 40); do
+  for _ in $(seq 1 40); do
     if curl -sf "http://localhost:$port/up" > /dev/null 2>&1; then
       up=true
       break
@@ -187,7 +315,7 @@ verify_rails() {
   fi
   pass "server started (PID $server_pid)"
 
-  # 3. Health check ───────────────────────────────────────────────────────────
+  # 3. Health check
   local http_code
   http_code=$(curl -so /dev/null -w "%{http_code}" "http://localhost:$port/up")
   if [[ "$http_code" == "200" ]]; then
@@ -196,10 +324,10 @@ verify_rails() {
     fail "GET /up → $http_code"
   fi
 
-  # 4. Playwright GUI smoke test ───────────────────────────────────────────────
+  # 4. Playwright GUI smoke test
   run_playwright_test "$name" "$port" "$extra_env"
 
-  # 5. Stop server ─────────────────────────────────────────────────────────────
+  # 5. Stop server
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
   SERVER_PIDS=("${SERVER_PIDS[@]/$server_pid}")
@@ -221,13 +349,13 @@ run_playwright_test() {
     fi
   fi
 
-  # Ensure Chromium browser binary is present.
+  # Ensure Chromium module is loadable.
   if ! (cd "$BROWSER_TESTS_DIR" && node -e "require('playwright')" > /dev/null 2>&1); then
     skip "playwright module not loadable — GUI tests skipped"
     return
   fi
 
-  # Verify the chromium headless shell binary actually exists; install if missing.
+  # Verify the Chromium binary exists; install if missing.
   local chrome_exe
   chrome_exe=$(cd "$BROWSER_TESTS_DIR" && \
     node -e "const {chromium}=require('playwright'); console.log(chromium.executablePath())" 2>/dev/null || true)
@@ -279,6 +407,14 @@ CLI_EXAMPLES=(
 echo -e "${BOLD}======================================================${NC}"
 echo -e "${BOLD}  phronomy-examples verification${NC}"
 echo -e "${BOLD}======================================================${NC}"
+
+if ! verify_phronomy_dependency; then
+  exit 1
+fi
+
+if ! verify_removed_api_contract; then
+  exit 1
+fi
 
 for example in "${CLI_EXAMPLES[@]}"; do
   if $WITH_LLM; then

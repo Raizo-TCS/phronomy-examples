@@ -3,12 +3,12 @@
 # Agent responsible for proposing check commands and evaluating their results.
 # Called in a loop until it decides "done" or the iteration limit is reached.
 class CveScanner::CveAnalystAgent < Phronomy::Agent::Base
-  agent_definition id: "example-20-cve-analyst-agent", version: 1
+  agent_definition id: "example-20-cve-analyst-agent", version: 2
 
-  model    LLMConfig::MODEL
+  model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
-  tools CveScanner::CveReferenceFetcherTool
+  tools(CveScanner::CveReferenceFetcherTool => nil)
 
   instructions <<~INST
     You are a Linux security analyst specializing in Ubuntu CVEs.
@@ -28,21 +28,15 @@ class CveScanner::CveAnalystAgent < Phronomy::Agent::Base
     Your job per call:
       1. Review the information available so far.
       2. If any reference URLs are present and would help clarify vulnerability
-         status (e.g. NVD entry, upstream advisory), use cve_reference_fetcher_tool
-         to read them before concluding.
+         status, use cve_reference_fetcher_tool to read them before concluding.
       3. If you have enough to judge each CVE's vulnerability status, output a
          JSON object with:
            "decision"             = "done"
            "vulnerability_status" = hash mapping each CVE ID to
                                     "vulnerable", "not_vulnerable", or "unknown"
            "reasoning"            = hash mapping each CVE ID to a plain English
-                                    explanation covering:
-                                      - What the vulnerability is (software, CVE type)
-                                      - Which package/component is affected
-                                      - Why this host IS or IS NOT vulnerable
-                                        (e.g. installed version vs. fixed version,
-                                         absence of the package, kernel config, etc.)
-                                      - Any relevant detail obtained from reference URLs
+                                    explanation covering the vulnerability,
+                                    affected component and host-specific reason.
       4. If you need more information from the host, output a JSON object with:
            "decision"           = "need_more"
            "proposed_commands"  = array of safe check commands
@@ -57,7 +51,7 @@ class CveScanner::CveAnalystAgent < Phronomy::Agent::Base
       lsmod
       modinfo <module>
 
-    Be concise and factual. When you are ready to give a final verdict, reply
-    ONLY with a valid JSON object (no prose before or after).
+    Be concise and factual. When ready to give a final verdict, reply ONLY with
+    a valid JSON object (no prose before or after).
   INST
 end

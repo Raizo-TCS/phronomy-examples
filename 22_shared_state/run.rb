@@ -2,28 +2,23 @@
 
 # 22 Shared State -- Collaborative Code Review Team
 #
-# Three specialist agents -- StructureAnalyst, SecurityAuditor, QualityReviewer --
-# collaborate via a shared KnowledgeStore to produce a multi-perspective code review.
-# Each agent reads what peers have already found before writing its own findings.
-#
-# Demonstrates: member (with per-agent instruction), coordination, max_cycles,
-#               aggregate, custom tools (list_files + read_file), human-in-the-loop.
+# Three specialist agents collaborate via Phronomy::Agent::SharedState to
+# produce a multi-perspective review. Each member has its own Agent identity,
+# while the team exposes shared-store tools for explicit coordination.
 
 require_relative "../shared/llm_config"
 require "phronomy"
 require_relative "tools"
 
-# ---------------------------------------------------------------------------
-# Member agents -- each has a different code-review lens
-# Agent instructions cover domain expertise only; coordination protocol is
-# defined by the Team below via `coordination` and `member instruction:`.
-# ---------------------------------------------------------------------------
 class StructureAnalyst < Phronomy::Agent::Base
-  agent_definition id: "example-22-structure-analyst", version: 1
+  agent_definition id: "example-22-structure-analyst", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  tools        ListFilesTool, ReadFileTool
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  tools(
+    ListFilesTool => nil,
+    ReadFileTool => nil
+  )
   instructions <<~INST
     You are a software architect reviewing a Ruby codebase.
     Use list_files to discover all available files, then use read_file to read each one.
@@ -32,11 +27,14 @@ class StructureAnalyst < Phronomy::Agent::Base
 end
 
 class SecurityAuditor < Phronomy::Agent::Base
-  agent_definition id: "example-22-security-auditor", version: 1
+  agent_definition id: "example-22-security-auditor", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  tools        ListFilesTool, ReadFileTool
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  tools(
+    ListFilesTool => nil,
+    ReadFileTool => nil
+  )
   instructions <<~INST
     You are a security engineer auditing a Ruby codebase.
     Use list_files, then use read_file to inspect each file carefully.
@@ -45,11 +43,14 @@ class SecurityAuditor < Phronomy::Agent::Base
 end
 
 class QualityReviewer < Phronomy::Agent::Base
-  agent_definition id: "example-22-quality-reviewer", version: 1
+  agent_definition id: "example-22-quality-reviewer", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  tools        ListFilesTool, ReadFileTool
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  tools(
+    ListFilesTool => nil,
+    ReadFileTool => nil
+  )
   instructions <<~INST
     You are a code quality reviewer analyzing a Ruby codebase.
     Use list_files, then use read_file for each file.
@@ -57,12 +58,7 @@ class QualityReviewer < Phronomy::Agent::Base
   INST
 end
 
-# ---------------------------------------------------------------------------
-# Review team -- coordination protocol and per-agent focus defined here
-# ---------------------------------------------------------------------------
 class CodeReviewTeam < Phronomy::Agent::SharedState
-  # Team-level coordination protocol: all members receive this instead of the
-  # built-in default guide.
   coordination <<~COORD
     You are part of a collaborative code review team sharing a knowledge store.
     Two tools coordinate your work:
@@ -75,35 +71,36 @@ class CodeReviewTeam < Phronomy::Agent::SharedState
     Do not output plain text -- every insight must be submitted via write_finding.
   COORD
 
-  # Per-agent instruction narrows each member's focus without changing their
-  # core expertise instructions defined in the agent class above.
   member StructureAnalyst
-  member SecurityAuditor,  instruction: "If a file has no security issues, skip it and move to the next file."
-  member QualityReviewer,  instruction: "Flag each issue in its own finding; do not bundle multiple issues."
+  member SecurityAuditor,
+    instruction: "If a file has no security issues, skip it and move to the next file."
+  member QualityReviewer,
+    instruction: "Flag each issue in its own finding; do not bundle multiple issues."
 
   max_cycles 3
 
   aggregate do |store|
     report = store.read_all
-      .group_by { |f| f[:agent] }
+      .group_by { |finding| finding[:agent] }
       .map do |agent, findings|
-        items = findings.map { |f| "  (cycle #{f[:cycle]}) #{f[:content]}" }.join("\n")
+        items = findings.map { |finding|
+          "  (cycle #{finding[:cycle]}) #{finding[:content]}"
+        }.join("\n")
         "[ #{agent} ]\n#{items}"
       end
       .join("\n\n")
-    { report: report, count: store.size }
+
+    {report: report, count: store.size}
   end
 end
 
-# ---------------------------------------------------------------------------
-# Run
-# ---------------------------------------------------------------------------
 target_dir = ARGV[0] || File.expand_path("./data", __dir__)
 
 puts "=== Shared State Code Review Example ==="
 puts "Target : #{target_dir}"
 
-# Human-in-the-loop: ask once before any LLM call
+# This prompt is application-owned HITL. For framework-owned Agent tool
+# approval/suspension, see 04_interrupt_resume.
 DirectoryAccess.ask_user!(target_dir)
 
 result = CodeReviewTeam.new.invoke("Review the Ruby source files in: #{target_dir}")

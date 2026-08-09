@@ -77,8 +77,13 @@ volumes:
 asset_path: /rails/public/assets
 
 # Configure the image builder.
+# The application Gemfile evaluates ../Gemfile.phronomy, so the Docker build
+# context must include the repository root. Kamal supports an explicit context
+# and Dockerfile for monorepo-style layouts.
 builder:
   arch: amd64
+  context: ..
+  dockerfile: Dockerfile
 
   # # Build image via remote server (useful for faster amd64 builds on arm64 computers)
   # remote: ssh://docker@docker-builder-server

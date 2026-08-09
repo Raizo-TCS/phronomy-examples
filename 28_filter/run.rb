@@ -1,188 +1,146 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 28 Filter — input, output, and tool result filtering
+# 28 Filters
 #
-# Demonstrates Phronomy::Filter::Base for transforming or blocking values at
-# three agent boundaries:
+# Demonstrates current public Filter boundaries:
+# - input
+# - output
+# - tool result
+# - class DSL and per-instance registration
 #
-#   - input_filter   — applied to user input before the LLM is called
-#   - output_filter  — applied to the final LLM output before it is returned
-#   - add_tool_result_filter — applied to a specific tool's return value
-#
-# The same filter class can be reused at any combination of sites.
-# Guardrail subclasses (Phronomy::Guardrail::InputGuardrail etc.) can be passed
-# directly to add_input_filter / add_output_filter since they implement #call.
+# No private Agent preparation APIs are used.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 
-# ---------------------------------------------------------------------------
-# Filters
-# ---------------------------------------------------------------------------
-
-# Masks common PII patterns in any string value.
 class PiiMaskFilter < Phronomy::Filter::Base
-  PHONE_RE  = /\b\d{2,4}-\d{2,4}-\d{4}\b/
-  CARD_RE   = /\b(?:\d{4}[- ]?){3}\d{4}\b/
-  EMAIL_RE  = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/
+  EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
 
-  def call(value, **_context)
-    value.to_s
-         .gsub(CARD_RE,  "[CARD]")
-         .gsub(PHONE_RE, "[PHONE]")
-         .gsub(EMAIL_RE, "[EMAIL]")
+  def call(value, **)
+    value.to_s.gsub(EMAIL, "[EMAIL REDACTED]")
   end
 end
 
-# Blocks values that contain the word "secret".
-class NoSecretFilter < Phronomy::Filter::Base
-  def call(value, **_context)
-    block!("Value contains forbidden word 'secret'") if value.to_s.include?("secret")
+class SecretBlockingFilter < Phronomy::Filter::Base
+  def call(value, **)
+    block!("secret marker detected") if value.to_s.include?("TOP-SECRET")
     value
   end
 end
 
-# ---------------------------------------------------------------------------
-# Tool that returns raw customer data (simulated)
-# ---------------------------------------------------------------------------
-
 class CustomerLookupTool < Phronomy::Agent::Context::Capability::Base
-  description "Look up a customer record by ID and return their contact details."
-  param :customer_id, type: :string, desc: "The customer identifier."
+  description "Look up the example customer record."
+  param :customer_id, type: :string, desc: "Customer id"
 
   def execute(customer_id:)
-    # Simulated database response — contains PII.
-    "Customer #{customer_id}: email=alice@example.com phone=090-1234-5678 card=4111-1111-1111-1111"
+    "customer=#{customer_id}; email=alice@example.test; tier=gold"
   end
 end
 
-# ---------------------------------------------------------------------------
-# Agent
-# ---------------------------------------------------------------------------
-
 class CustomerAgent < Phronomy::Agent::Base
-  agent_definition id: "example-28-customer-agent", version: 1
+  agent_definition id: "example-28-customer-agent", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  instructions "You are a customer support assistant. Use the customer_lookup tool to find customer details."
-  tools        CustomerLookupTool
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions <<~PROMPT
+    You are a customer-support assistant.
+    When asked about a customer record, MUST call customer_lookup.
+    Report only the information returned by the tool.
+  PROMPT
+
+  tools(CustomerLookupTool => "customer_lookup")
 end
 
-# ---------------------------------------------------------------------------
-# Run
-# ---------------------------------------------------------------------------
-
-puts "=== 28 Filter Example ===\n\n"
-
-# ── Scenario 1: input filter masks PII — shown without a real LLM call ─────
-puts "--- Scenario 1: input filter (PII masking in user input) ---"
-
-# Show the filter transforming the raw input directly.
-raw_input = "My card is 4111-1111-1111-1111 and phone is 090-1234-5678, please help."
-masked_input = PiiMaskFilter.new.call(raw_input)
-puts "Original input: #{raw_input}"
-puts "After filter:   #{masked_input}"
-
-OutputValidator.validate(
-  "PiiMaskFilter masks card and phone in input",
-  check: ->(_) {
-    !masked_input.include?("4111") &&
-      !masked_input.include?("090-1234") &&
-      masked_input.include?("[CARD]") &&
-      masked_input.include?("[PHONE]")
-  }
-) { [1] }
+puts "=== 28 Filters ==="
 puts
 
-# ── Scenario 2: tool result filter masks PII from tool output ──────────────
-puts "--- Scenario 2: tool result filter (PII masking in tool return value) ---"
-
-agent2 = CustomerAgent.new
-agent2.add_tool_result_filter(CustomerLookupTool, PiiMaskFilter.new)
-
-# Verify the filter is applied by inspecting the wrapped call directly.
-wrapped = agent2.send(:prepare_tool_class, CustomerLookupTool)
-raw_result = CustomerLookupTool.new.call({customer_id: "C001"})
-filtered_result = wrapped.new.call({customer_id: "C001"})
-
-puts "Raw tool output:      #{raw_result}"
-puts "Filtered tool output: #{filtered_result}"
-
-OutputValidator.validate(
-  "tool result has PII masked",
-  check: ->(_) {
-    !filtered_result.include?("alice@example.com") &&
-      !filtered_result.include?("090-1234-5678") &&
-      !filtered_result.include?("4111-1111-1111-1111") &&
-      filtered_result.include?("[EMAIL]")
-  }
-) { [1] }
+puts "--- 1. A Filter is independently testable ---"
+mask = PiiMaskFilter.new
+puts mask.call("Contact alice@example.test for help.")
 puts
 
-# ── Scenario 3: blocking filter rejects forbidden content ──────────────────
-puts "--- Scenario 3: blocking filter (NoSecretFilter) ---"
-
-agent3 = CustomerAgent.new
-agent3.add_input_filter(NoSecretFilter.new)
+puts "--- 2. Per-instance input Filter can block before the LLM ---"
+blocked_agent = CustomerAgent.new
+blocked_agent.add_input_filter(SecretBlockingFilter.new)
 
 begin
-  agent3.invoke("Tell me the secret password.")
-  puts "ERROR: expected FilterBlockError was not raised"
+  blocked_agent.invoke("TOP-SECRET: look up customer 42")
 rescue Phronomy::FilterBlockError => e
-  puts "Blocked as expected: #{e.message}"
+  puts "Blocked: #{e.message}"
 end
 puts
 
-# ── Scenario 4: same filter instance reused on input and output ───────────
-puts "--- Scenario 4: same PiiMaskFilter on input and output ---"
+puts "--- 3. Tool-result Filter transforms data at the capability boundary ---"
+tool_filtered_agent = CustomerAgent.new
+tool_filtered_agent.add_tool_result_filter(
+  CustomerLookupTool,
+  PiiMaskFilter.new
+)
 
-agent4 = CustomerAgent.new
-f = PiiMaskFilter.new
-agent4.add_input_filter(f)
-agent4.add_output_filter(f)
-
-puts "PiiMaskFilter registered at both input and output boundaries."
-puts "Any PII in user input or in the LLM's final answer will be masked."
-puts
-
-# ── Scenario 5: class-level DSL ────────────────────────────────────────────
-puts "--- Scenario 5: class-level filter DSL ---"
-
-# Filters declared inside the class body apply to every instance.
-class SecureCustomerAgent < Phronomy::Agent::Base
-  agent_definition id: "example-28-secure-customer-agent", version: 1
-
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  instructions "You are a secure customer support assistant."
-  tools        CustomerLookupTool
-
-  # Pass the class — phronomy calls .new automatically at registration time.
-  # Each registration site gets an independent instance.
-  input_filter       PiiMaskFilter
-  output_filter      PiiMaskFilter
-  tool_result_filter PiiMaskFilter
-end
-
-# Verify: the class-level tool_result_filter is applied without any
-# instance-level registration.
-wrapped_class = SecureCustomerAgent.new.send(:prepare_tool_class, CustomerLookupTool)
-class_filtered = wrapped_class.new.call({customer_id: "C002"})
-
-puts "SecureCustomerAgent tool result: #{class_filtered}"
-
-OutputValidator.validate(
-  "class-level tool_result_filter masks PII automatically",
-  check: ->(_) {
-    !class_filtered.include?("alice@example.com") &&
-      class_filtered.include?("[EMAIL]")
+tool_events = []
+tool_result = OutputValidator.validate(
+  "tool result passes through the scoped Filter",
+  check: lambda { |_r|
+    tool_events.any? { |event|
+      event.type == :tool_result &&
+        event.payload[:tool_name] == "customer_lookup" &&
+        event.payload[:tool_result].to_s.include?("[EMAIL REDACTED]")
+    }
   }
-) { [1] }
+) do
+  tool_filtered_agent.invoke(
+    "Look up customer 42. You MUST use customer_lookup and report the result.",
+    on_event: ->(event) { tool_events << event }
+  )
+end
 
-puts "Class-level input_filter and output_filter will mask PII on every invoke."
+filtered_event = tool_events.find do |event|
+  event.type == :tool_result &&
+    event.payload[:tool_name] == "customer_lookup"
+end
+
+puts "Filtered tool result: #{filtered_event.payload[:tool_result]}"
+puts "Final Agent output:   #{tool_result[:output]}"
 puts
 
-puts "Done."
+puts "--- 4. Class-level Filters define a reusable policy ---"
+
+class SafeCustomerAgent < Phronomy::Agent::Base
+  agent_definition id: "example-28-safe-customer-agent", version: 1
+
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions <<~PROMPT
+    When asked about a customer record, MUST call customer_lookup.
+    Report only the tool result.
+  PROMPT
+
+  tools(CustomerLookupTool => "customer_lookup")
+  input_filter SecretBlockingFilter.new
+  output_filter PiiMaskFilter.new
+  tool_result_filter PiiMaskFilter.new
+end
+
+safe_events = []
+safe_result = OutputValidator.validate(
+  "class-level Filters protect tool and output boundaries",
+  check: lambda { |r|
+    r[:output].to_s.include?("[EMAIL REDACTED]") &&
+      safe_events.any? { |event|
+        event.type == :tool_result &&
+          event.payload[:tool_result].to_s.include?("[EMAIL REDACTED]")
+      }
+  }
+) do
+  SafeCustomerAgent.new.invoke(
+    "Look up customer 99. You MUST use customer_lookup.",
+    on_event: ->(event) { safe_events << event }
+  )
+end
+
+safe_tool_event = safe_events.find { |event| event.type == :tool_result }
+
+puts "Tool result: #{safe_tool_event.payload[:tool_result]}"
+puts "Output:      #{safe_result[:output]}"

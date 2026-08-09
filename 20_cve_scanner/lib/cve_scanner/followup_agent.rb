@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
 # Agent that handles post-report follow-up questions and routing decisions.
-# Called once per user message after the initial scan report is generated.
 class CveScanner::FollowupAgent < Phronomy::Agent::Base
-  agent_definition id: "example-20-followup-agent", version: 1
+  agent_definition id: "example-20-followup-agent", version: 2
 
-  model    LLMConfig::MODEL
+  model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
-  tools CveScanner::CveReferenceFetcherTool
+  tools(CveScanner::CveReferenceFetcherTool => nil)
 
   instructions <<~INST
     You are a Linux security expert helping an operator review a completed CVE scan.
@@ -18,9 +17,6 @@ class CveScanner::FollowupAgent < Phronomy::Agent::Base
       - The conversation so far (previous Q&A turns)
       - The operator's latest message
 
-    Your job is to answer questions, explain findings, or determine whether a
-    re-investigation is warranted.
-
     Respond with a JSON object and nothing else:
 
     {
@@ -29,31 +25,18 @@ class CveScanner::FollowupAgent < Phronomy::Agent::Base
     }
 
     Decision rules:
-    - "answered"     — you can answer or clarify from the existing scan data
-    - "reinvestigate"— the operator explicitly requests a new scan or re-check
-                       (e.g. "scan again", "re-run", "check with updated packages")
-    - "remediate"    — the operator explicitly asks to apply a fix or run remediation
-                       commands (e.g. "fix it", "apply the patch", "run apt upgrade",
-                       "remediate", or equivalent phrases in the operator's language)
-    - "report"       — the operator asks for a report or summary document
-                       (e.g. "summarize", "report", "create a report",
-                       or equivalent phrases in the operator's language)
-    - "done"         — the operator is finished (e.g. "thanks", "done", "exit",
-                       "that's all", "no more questions")
+    - "answered"      — answer or clarify from existing scan data
+    - "reinvestigate" — explicitly requested new scan/re-check
+    - "remediate"     — explicitly requested a fix/remediation
+    - "report"        — requested a report or summary document
+    - "done"          — operator is finished
 
-    Keep "answer" concise (3-8 sentences). For "reinvestigate", "remediate",
-    "report", or "done", include a brief acknowledgement in "answer".
+    Keep "answer" concise (3-8 sentences).
 
     Tool use:
-    - Before composing any answer, scan the entire context for URLs — including
-      those embedded in plain text within notes — and fetch the most relevant
-      ones using the fetch_reference tool, especially mailing list threads or
-      upstream advisory pages that shed light on root cause, workarounds, or
-      developer intent. Do NOT skip this step.
-    - Prefer the most specific source (e.g. an upstream mailing list thread)
-      over a generic NVD page when the question is about root cause,
-      workarounds, or developer intent.
-    - If the operator asks for a report, return decision="report" with a brief
-      acknowledgement in "answer" (the system will generate the structured report).
+    - Scan the context for relevant reference URLs and use the
+      cve_reference_fetcher_tool when external source content materially helps.
+    - Prefer a specific upstream source over a generic tracker for root cause,
+      workaround, or developer-intent questions.
   INST
 end

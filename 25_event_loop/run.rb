@@ -1,154 +1,132 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 25 EventLoop Opt-In Execution Mode
+# 25 Runtime + EventLoop execution model
 #
-# Demonstrates Phronomy::EventLoop — the event-driven execution mode that
-# separates FSM dispatch (single EventLoop thread) from IO work (IO threads).
-#
-# Three patterns are shown without requiring a running LLM:
-#   Pattern 1 — Synchronous actions under EventLoop (same API as sync mode)
-#   Pattern 2 — Async IO pattern: entry action spawns a Thread; completion
-#               fires a named event back to EventLoop via #post
-#   Pattern 3 — Concurrent workflows: three invoke calls share one EventLoop
-#               and finish in ~150 ms total (not 3 x 150 ms)
+# The EventLoop is Runtime-owned infrastructure. Application code should use
+# public APIs such as Runtime#spawn, Task#map, Workflow#invoke_async and
+# Workflow#signal rather than posting internal Event objects directly.
 
-require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 
-# Note: EventLoop is always active in Phronomy (no configuration needed).
-
-puts "=== 25 EventLoop Opt-In Execution Mode ==="
+puts "=== 25 Runtime + EventLoop execution model ==="
 puts
 
-# ── Pattern 1: Synchronous workflow under EventLoop ──────────────────────────
-
-puts "--- Pattern 1: Synchronous workflow under EventLoop ---"
+puts "--- Pattern 1: run-to-completion Workflow actions ---"
 
 class PipelineState
   include Phronomy::WorkflowContext
 
-  field :input,  type: :replace, default: ""
+  field :input, type: :replace, default: ""
   field :result, type: :replace, default: ""
-  field :log,    type: :append,  default: -> { [] }
 end
 
-NORMALIZE = ->(s) {
-  s.log << "[normalize] start"
-  s.result = s.input.strip.downcase
-  s.log << "[normalize] done"
-}
-
-SCORE = ->(s) {
-  s.log << "[score] start"
-  s.result = "#{s.result} (score=#{s.result.length})"
-  s.log << "[score] done"
-}
-
-FORMAT = ->(s) {
-  s.log << "[format] start"
-  s.result = ">> #{s.result} <<"
-  s.log << "[format] done"
-}
-
-sync_app = Phronomy::Workflow.define(PipelineState) do
+pipeline = Phronomy::Workflow.define(PipelineState) do
   initial :normalize
-  state :normalize, action: NORMALIZE
-  state :score,     action: SCORE
-  state :format,    action: FORMAT
-  transition from: :normalize, to: :score
-  transition from: :score,     to: :format
-  transition from: :format,    to: :__finish__
+
+  state :normalize, action: lambda { |ctx|
+    ctx.merge(result: ctx.input.strip.downcase)
+  }
+
+  state :format, action: lambda { |ctx|
+    ctx.merge(result: ">> #{ctx.result} <<")
+  }
+
+  transition from: :normalize, to: :format
+  transition from: :format, to: :__finish__
 end
 
-result = sync_app.invoke({input: "  Hello World  "})
-puts "Input:  '  Hello World  '"
-puts "Output: #{result.result}"
-puts "Log:    #{result.log.inspect}"
+pipeline_result = pipeline.invoke({input: "  Hello Runtime  "})
+puts pipeline_result.result
 puts
 
-# ── Pattern 2: Async IO pattern ──────────────────────────────────────────────
+puts "--- Pattern 2: async work completes by public Workflow#signal ---"
 
-puts "--- Pattern 2: Async IO pattern (on: event) ---"
-
-class AsyncState
+class FetchState
   include Phronomy::WorkflowContext
 
-  field :url,      type: :replace, default: ""
+  field :url, type: :replace, default: ""
   field :response, type: :replace, default: ""
-  field :summary,  type: :replace, default: ""
+  field :summary, type: :replace, default: ""
 end
 
-# Shared store for IO results, keyed by workflow thread_id.
-# Written by IO threads BEFORE posting :fetch_done;
-# read and deleted by SUMMARIZE_ACTION on the EventLoop dispatch thread.
-# The EventLoop queue provides the happens-before guarantee — no Mutex needed.
-#
-# Context safety: the IO thread must not mutate WorkflowContext fields directly
-# when EventLoop mode is active (raises WorkflowContextOwnershipError).
-# Passing data through an external Hash and using the EventLoop queue as the
-# synchronization barrier is the correct pattern for async IO in EventLoop mode.
-FETCH_RESULTS = {}
-
-# Entry action for :fetching. Returns immediately after spawning an IO thread.
-# The IO thread simulates a 150 ms HTTP round-trip, stores the result in
-# FETCH_RESULTS, then posts :fetch_done so the EventLoop can advance the FSM.
-FETCH_ACTION = ->(s) {
-  url       = s.url
-  thread_id = s.thread_id
-  Thread.new do
-    sleep 0.15                                               # simulate IO
-    FETCH_RESULTS[thread_id] = "Content for #{url}: Lorem ipsum dolor sit amet."
-    Phronomy::Runtime.instance.event_loop.post(
-      Phronomy::Event.new(type: :fetch_done, target_id: thread_id, payload: nil)
-    )
-  end
-  # Returns immediately — EventLoop keeps this FSM registered until :fetch_done
-}
-
-SUMMARIZE_ACTION = ->(s) {
-  response = FETCH_RESULTS.delete(s.thread_id) || ""
-  s.summary = "SUMMARY: #{response[0, 40]}..."
-}
-
-async_app = Phronomy::Workflow.define(AsyncState) do
+fetch_workflow = nil
+fetch_workflow = Phronomy::Workflow.define(FetchState) do
   initial :fetching
-  state :fetching             # async IO state — no auto-transition
-  state :summarize, action: SUMMARIZE_ACTION
-  entry :fetching, FETCH_ACTION
-  transition from: :fetching,  on: :fetch_done, to: :summarize
+
+  state :fetching
+  entry :fetching, lambda { |ctx|
+    thread_id = ctx.thread_id
+    url = ctx.url
+
+    # Runtime owns scheduling. The entry callback itself returns immediately.
+    # Task#map is the public completion-composition API.
+    Phronomy::Runtime.instance.spawn(name: "example-25-fetch") do
+      # Simulate several cooperative work chunks. Real blocking external I/O
+      # belongs behind Phronomy's blocking/adaptor boundary, not as a direct
+      # blocking call inside a cooperative Runtime task.
+      3.times { Phronomy::Runtime.instance.yield }
+      "Content for #{url}: Runtime work completed outside the FSM dispatch."
+    end.map do |response|
+      fetch_workflow.signal(
+        thread_id: thread_id,
+        event: :fetch_done,
+        payload: {response: response}
+      )
+      response
+    end
+
+    nil
+  }
+
+  state :summarize, action: lambda { |ctx|
+    ctx.merge(summary: "SUMMARY: #{ctx.response[0, 55]}...")
+  }
+
+  transition(
+    from: :fetching,
+    on: :fetch_done,
+    to: :summarize,
+    action: ->(ctx, event) { ctx.merge(response: event.payload[:response]) }
+  )
   transition from: :summarize, to: :__finish__
 end
 
-t0      = Time.now
-result  = OutputValidator.validate(
-  "event loop async workflow produces SUMMARY",
-  check: ->(r) { r.summary.to_s.start_with?("SUMMARY:") }
-) { async_app.invoke({url: "https://example.com/doc"}) }
-elapsed = ((Time.now - t0) * 1000).round
+single_result = OutputValidator.validate(
+  "async Workflow completes through Workflow#signal",
+  check: ->(r) { r.summary.start_with?("SUMMARY:") }
+) { fetch_workflow.invoke({url: "https://example.test/document"}) }
 
-puts "URL:     #{result.url}"
-puts "Summary: #{result.summary}"
-puts "Elapsed: #{elapsed}ms  (IO simulated with 150ms sleep)"
+puts single_result.summary
 puts
 
-# ── Pattern 3: Concurrent workflows sharing one EventLoop ────────────────────
+puts "--- Pattern 3: several Workflow invocations as Phronomy Tasks ---"
 
-puts "--- Pattern 3: Three concurrent async workflows ---"
-
-t0 = Time.now
-
-# Each Thread blocks on its own completion_queue.pop.
-# The EventLoop thread dispatches all three FSMs; their IO threads sleep
-# concurrently, so total wall-clock time is ~150 ms instead of 3 x 150 ms.
-threads = 3.times.map do |i|
-  Thread.new { async_app.invoke({url: "https://example.com/item/#{i}"}) }
+tasks = 3.times.map do |i|
+  fetch_workflow.invoke_async(
+    {url: "https://example.test/item/#{i}"},
+    config: {thread_id: "example-25-#{i}"}
+  )
 end
 
-results = threads.map(&:value)
-elapsed = ((Time.now - t0) * 1000).round
+results = tasks.map(&:wait_result)
 
-results.each { |r| puts "  #{r.url}: #{r.summary}" }
-puts "Total elapsed: #{elapsed}ms for 3 concurrent fetches"
-puts "(Each fetch takes ~150ms; sharing one EventLoop keeps total near 150ms)"
+results.each do |result|
+  puts "  #{result.url} -> #{result.summary}"
+end
+puts "Completed 3 async Workflow invocations."
+puts
+
+puts "--- Runtime diagnostics ---"
+diagnostics = Phronomy::Diagnostics.snapshot
+
+%i[
+  blocking_pool_size
+  blocking_pool_active
+  blocking_pool_queue_length
+  event_loop_lag_last_ms
+  event_loop_lag_max_ms
+].each do |key|
+  puts "#{key}: #{diagnostics[key]}"
+end

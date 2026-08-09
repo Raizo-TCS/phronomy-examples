@@ -1,118 +1,141 @@
+#!/usr/bin/env ruby
 # frozen_string_literal: true
+
+# 26 Agent async events + Workflow coordination
+#
+# Shows the public bridge between Agent execution and Workflow state:
+#
+#   Agent#invoke_async
+#       -> structured lifecycle event on Runtime EventLoop
+#       -> Workflow#signal
+#       -> FSM transition
+#
+# Also demonstrates explicit thread correlation and timeout classification.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 
-# ============================================================
-# 26 — Agent EventLoop Mode
-#
-# Demonstrates two patterns for running agents through the EventLoop:
-#   Pattern 1 — Agent#invoke  (routes through AgentFSM automatically)
-#   Pattern 2 — invoke_async with on_event: listener inside a Workflow
-#               The entry action signals :translation_completed when done;
-#               the transition action copies the result into the context.
-# ============================================================
-
-Phronomy.configure do |c|
-  c.default_model = LLMConfig::MODEL
-end
-
-# ----------------------------------------------------------
-# Pattern 1 — simple Q&A agent (no tools)
-# ----------------------------------------------------------
-class QnAAgent < Phronomy::Agent::Base
-  agent_definition id: "example-26-qna-agent", version: 1
-
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  instructions "You are a helpful assistant. Answer concisely."
-end
-
-# ----------------------------------------------------------
-# Pattern 2 — Translation agent + Workflow
-# ----------------------------------------------------------
 class TranslationAgent < Phronomy::Agent::Base
-  agent_definition id: "example-26-translation-agent", version: 1
+  agent_definition id: "example-26-translation-agent", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  instructions "You are a translation assistant. Translate the given text and reply with only the translation."
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions "Translate the user's text to Japanese. Return only the translation."
 end
 
-class TranslationContext
+puts "=== 26 Agent async events + Workflow coordination ==="
+puts
+
+puts "--- Pattern 1: invoke_async lifecycle event + Task result ---"
+
+events = []
+task = TranslationAgent.new.invoke_async(
+  "Good morning.",
+  thread_id: "example-26-direct",
+  on_event: lambda { |event|
+    events << event.type
+    puts "Agent event: #{event.type}"
+  }
+)
+
+direct_result = OutputValidator.validate(
+  "invoke_async returns a translated answer",
+  check: ->(r) { r[:output].to_s.length >= 2 }
+) { task.wait_result }
+
+puts "Output:       #{direct_result[:output]}"
+puts "Execution id: #{direct_result[:execution_id]}"
+puts "Journal pos.:  #{direct_result[:journal_position]}"
+puts "Events:       #{events.inspect}"
+puts
+
+puts "--- Pattern 2: Agent completion signals a Workflow ---"
+
+class TranslationState
   include Phronomy::WorkflowContext
 
-  field :query,  type: :replace, default: ""
-  field :answer, type: :replace, default: nil
-  field :status, type: :replace, default: "pending"
+  field :query, type: :replace, default: ""
+  field :answer, type: :replace, default: ""
+  field :execution_id, type: :replace, default: ""
+  field :journal_position, type: :replace, default: 0
 end
 
-# translation_workflow is captured by reference so the on_event lambda can
-# call signal after Workflow.define returns.
 translation_workflow = nil
-translation_workflow = Phronomy::Workflow.define(TranslationContext) do
-  initial :translate
+translation_workflow = Phronomy::Workflow.define(TranslationState) do
+  initial :translating
 
-  state :translate
-  entry :translate, ->(ctx) {
+  state :translating
+  entry :translating, lambda { |ctx|
     thread_id = ctx.thread_id
+
     TranslationAgent.new.invoke_async(
       ctx.query,
-      on_event: ->(event) {
+      thread_id: "#{thread_id}:agent",
+      on_event: lambda { |event|
         next unless event.type == :done
+
         translation_workflow.signal(
           thread_id: thread_id,
           event: :translation_completed,
-          payload: {answer: event.payload[:output]}
+          payload: {
+            answer: event.payload[:output],
+            execution_id: event.payload[:execution_id].to_s,
+            journal_position: event.payload[:journal_position]
+          }
         )
       }
     )
-    ctx
+
+    nil
   }
 
-  state :done, action: ->(ctx) { ctx.merge(status: "done") }
+  state :complete
 
   transition(
-    from: :translate,
+    from: :translating,
     on: :translation_completed,
-    to: :done,
-    action: ->(ctx, event) { ctx.merge(answer: event.payload[:answer]) }
+    to: :complete,
+    action: lambda { |ctx, event|
+      ctx.merge(
+        answer: event.payload[:answer],
+        execution_id: event.payload[:execution_id],
+        journal_position: event.payload[:journal_position]
+      )
+    }
   )
-  transition from: :done, to: :__finish__
+  transition from: :complete, to: :__finish__
 end
 
-# ----------------------------------------------------------
-# Run
-# ----------------------------------------------------------
-puts "=== 26 Agent EventLoop Mode ==="
-puts
-
-# Pattern 1
-puts "--- Pattern 1: Agent#invoke via EventLoop ---"
-question = "What is 2 + 2? Reply with just the number."
-t0     = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
-result = OutputValidator.validate(
-  "pattern 1: QnA agent answers arithmetic",
-  check: ->(r) { r[:output].match?(/\d/) }
-) { QnAAgent.new.invoke(question) }
-elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - t0
-puts "Q: #{question}"
-puts "A: #{result[:output]}"
-puts "Elapsed: #{elapsed}ms"
-puts
-
-# Pattern 2
-puts "--- Pattern 2: Agent as child FSM inside a Workflow ---"
-final = OutputValidator.validate(
-  "pattern 2: translation workflow completes via EventLoop",
-  check: ->(r) { r.status == "done" }
-) {
+workflow_result = OutputValidator.validate(
+  "Agent event advances Workflow",
+  check: ->(r) { r.answer.to_s.length >= 2 }
+) do
   translation_workflow.invoke(
-    { query: 'Translate "hello" to Japanese' },
-    config: { thread_id: "26-demo" }
+    {query: "This architecture keeps execution and state separate."},
+    config: {thread_id: "example-26-workflow"}
   )
-}
-puts "Query:  #{final.query}"
-puts "Answer: #{final.answer}"
-puts "Status: #{final.status}"
+end
+
+puts "Workflow answer:      #{workflow_result.answer}"
+puts "Agent execution id:   #{workflow_result.execution_id}"
+puts "Agent journal pos.:    #{workflow_result.journal_position}"
+puts
+
+puts "--- Pattern 3: timeout is distinct from explicit cancellation ---"
+
+timeout_events = []
+timeout_token = Phronomy::Concurrency::CancellationToken.timeout_after(-1)
+
+timeout_task = TranslationAgent.new.invoke_async(
+  "This call should never reach the model.",
+  config: {cancellation_token: timeout_token},
+  on_event: ->(event) { timeout_events << event.type }
+)
+
+begin
+  timeout_task.wait_result
+rescue Phronomy::TimeoutError => e
+  puts "Caught:  #{e.class}"
+  puts "Events:  #{timeout_events.inspect}"
+end

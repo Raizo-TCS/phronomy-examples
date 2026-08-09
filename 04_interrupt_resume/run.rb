@@ -1,16 +1,16 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 04 Interrupt / Resume
+# 04 Human-in-the-loop
 #
-# Demonstrates the human-in-the-loop pattern: the workflow generates an email
-# draft, then waits at :awaiting_approval so a human can approve.
-# On approval the workflow is resumed and completes; on rejection nothing is
-# sent.
+# Demonstrates two distinct Phronomy HITL mechanisms:
 #
-# The entry action starts the async Agent call and returns immediately. When
-# the Agent finishes it signals :draft_completed; the transition action copies
-# the draft into the context before the workflow halts at :awaiting_approval.
+# 1. Workflow wait_state + send_event:
+#    business-process approval controlled by the Workflow FSM.
+#
+# 2. Agent tool approval:
+#    a capability declares requires_approval; Agent execution is suspended
+#    before the side effect and resumed by Agent#approve.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -19,46 +19,47 @@ require "phronomy"
 class MailState
   include Phronomy::WorkflowContext
 
-  field :topic,    type: :replace, default: ""
-  field :draft,    type: :replace, default: ""
+  field :topic, type: :replace, default: ""
+  field :draft, type: :replace, default: ""
   field :approved, type: :replace, default: false
 end
 
 class DraftAgent < Phronomy::Agent::Base
-  agent_definition id: "example-04-draft-agent", version: 1
+  agent_definition id: "example-04-draft-agent", version: 2
 
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
-  instructions "You are a business email expert. Write a polite email including subject and body."
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions "Write a polite business email including a subject and body."
 end
 
-SEND_NODE = ->(state) {
+SEND_NODE = lambda do |state|
   puts
-  puts "[SENT] Email sent successfully."
+  puts "[WORKFLOW] Email sent."
   state.merge(approved: true)
-}
+end
 
-workflow = nil
-workflow = Phronomy::Workflow.define(MailState) do
+mail_workflow = nil
+mail_workflow = Phronomy::Workflow.define(MailState) do
   initial :draft
 
-  # :draft — active state: entry starts the Agent call and returns immediately.
   state :draft
-  entry :draft, ->(state) {
+  entry :draft, lambda { |state|
     thread_id = state.thread_id
-    topic     = state.topic
+
     DraftAgent.new.invoke_async(
-      "Topic: #{topic}",
-      on_event: ->(event) {
+      "Topic: #{state.topic}",
+      on_event: lambda { |event|
         next unless event.type == :done
-        workflow.signal(
+
+        mail_workflow.signal(
           thread_id: thread_id,
           event: :draft_completed,
           payload: {draft: event.payload[:output].strip}
         )
       }
     )
-    state
+
+    nil
   }
 
   wait_state :awaiting_approval
@@ -70,29 +71,106 @@ workflow = Phronomy::Workflow.define(MailState) do
     to: :awaiting_approval,
     action: ->(ctx, event) { ctx.merge(draft: event.payload[:draft]) }
   )
-  transition from: :send,  to: :__finish__
   transition from: :awaiting_approval, on: :approve, to: :send
+  transition from: :send, to: :__finish__
 end
 
-puts "=== Interrupt / Resume Example ==="
-topic = "Project completion report"
-puts "Topic: #{topic}"
-
-state = OutputValidator.validate(
-  "email draft generated for topic",
-  check: ->(r) { r.draft.length >= 100 }
-) { workflow.invoke({topic: topic}) }
-
+puts "=== 04 Human-in-the-loop ==="
 puts
-puts "[DRAFT GENERATED]"
+puts "--- Part 1: Workflow wait_state / send_event ---"
+
+topic = "Project completion report"
+state = OutputValidator.validate(
+  "email draft generated",
+  check: ->(r) { r.draft.length >= 100 }
+) { mail_workflow.invoke({topic: topic}) }
+
 puts state.draft
 puts
 
-print "Approve and send? [yes/no]: "
-answer = (ARGV.shift&.strip&.downcase) || ($stdin.gets&.strip&.downcase)
-if answer == "yes"
-  workflow.send_event(state: state, event: :approve)
+workflow_answer = ARGV.shift
+unless workflow_answer
+  print "Approve the Workflow draft? [yes/no]: "
+  workflow_answer = $stdin.gets&.strip&.downcase
+end
+
+if workflow_answer == "yes"
+  state = mail_workflow.send_event(state: state, event: :approve)
+  puts "Workflow approved=#{state.approved}"
 else
-  puts
-  puts "[CANCELLED] Draft was not sent."
+  puts "[WORKFLOW] Draft was not sent."
+end
+
+puts
+puts "--- Part 2: Agent tool approval / execution suspension ---"
+
+class PublishReleaseTool < Phronomy::Agent::Context::Capability::Base
+  description "Publish a software release to an environment."
+  param :version, type: :string, desc: "Release version"
+  param :environment, type: :string, desc: "Target environment"
+
+  requires_approval true
+
+  approval_facts do |arguments, _context|
+    {
+      "operation" => "publish_release",
+      "version" => arguments[:version] || arguments["version"],
+      "environment" => arguments[:environment] || arguments["environment"]
+    }
+  end
+
+  def execute(version:, environment:)
+    "Published #{version} to #{environment}."
+  end
+end
+
+class ReleaseAgent < Phronomy::Agent::Base
+  agent_definition id: "example-04-release-agent", version: 1
+
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
+  instructions <<~PROMPT
+    You operate the release system.
+    When the user asks to publish a release, you MUST call publish_release.
+    Do not claim that a release was published without using the tool.
+  PROMPT
+
+  tools(PublishReleaseTool => "publish_release")
+end
+
+release_agent = ReleaseAgent.new
+pending = release_agent.invoke("Publish version 2.4.0 to production.")
+
+unless pending[:suspended]
+  raise "Expected the approval-required tool call to suspend the Agent execution."
+end
+
+request = pending.fetch(:approval_request)
+item = request.items.first
+
+puts "Execution status: #{pending[:status]}"
+puts "Execution id:     #{pending[:execution_id]}"
+puts "Approval id:      #{request.id}"
+puts "Tool:             #{item.tool_name}"
+puts "Safe arguments:   #{item.arguments.inspect}"
+puts "Approval facts:   #{item.facts.inspect}"
+
+agent_answer = ARGV.shift || workflow_answer
+unless agent_answer
+  print "Approve the Agent tool execution? [yes/no]: "
+  agent_answer = $stdin.gets&.strip&.downcase
+end
+
+resumed = release_agent.approve(
+  pending[:execution_id],
+  approval_request_id: request.id,
+  approved: agent_answer == "yes"
+)
+
+if agent_answer == "yes"
+  puts "Resumed status:   #{resumed[:status]}"
+  puts "Agent output:     #{resumed[:output]}"
+else
+  puts "Resumed status:   #{resumed[:status]}"
+  puts "Agent output:     #{resumed[:output]}"
 end

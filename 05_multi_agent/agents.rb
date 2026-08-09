@@ -24,7 +24,6 @@ end
 
 # Agent-as-Tool wrappers: expose sub-agents as callable tools so the
 # orchestrator LLM can invoke them on demand rather than in a fixed order.
-
 class ResearchTool < Phronomy::Agent::Context::Capability::Base
   description "Research a topic and return key findings as bullet points."
   param :topic, type: :string, desc: "The topic to research"
@@ -46,11 +45,14 @@ class WriteTool < Phronomy::Agent::Context::Capability::Base
 end
 
 class OrchestratorAgent < Phronomy::Agent::Base
-  agent_definition id: "example-05-orchestrator-agent", version: 1
+  agent_definition id: "example-05-orchestrator-agent", version: 2
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  tools ResearchTool, WriteTool
+  tools(
+    ResearchTool => nil,
+    WriteTool => nil
+  )
   instructions "You are an orchestrator responsible for producing a high-quality technical blog post. " \
                "Use the research tool to gather information, then use the write tool to produce the article. " \
                "Return the final article text."

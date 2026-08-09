@@ -231,8 +231,10 @@ out, err, status = Open3.capture3(
   "--json number,title,state,labels,closedAt"
 )
 unless status.success?
-  warn "gh command failed: #{err}"
-  exit 1
+  warn "gh command failed: #{err.strip}"
+  warn "Set GH_TOKEN or run 'gh auth login' to enable issue fetching."
+  warn "Skipping analysis (exit 0)."
+  exit 0
 end
 
 issues = JSON.parse(out)

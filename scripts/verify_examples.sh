@@ -49,6 +49,10 @@ declare -A EXAMPLE_TIMEOUTS
 EXAMPLE_TIMEOUTS["10_context_management"]=480   # 9 LLM calls ~270s typical
 EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900       # 25 batches × up to ~10s each
 
+# ── Per-example extra CLI arguments ──────────────────────────────────────────
+declare -A EXAMPLE_ARGS
+EXAMPLE_ARGS["27_issue_analyzer"]="--dry-run"   # gh auth not available in CI
+
 # ── Counters & failure list ───────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
 FAILURES=()
@@ -121,8 +125,9 @@ verify_cli_run() {
   # stdin is redirected from /dev/null so interactive prompts receive EOF and
   # the example can exit gracefully without blocking.
   local llm_timeout=${EXAMPLE_TIMEOUTS[$name]:-240}
+  local extra_args=${EXAMPLE_ARGS[$name]:-}
   local run_out run_rc=0
-  run_out=$(cd "$BASE_DIR" && timeout $llm_timeout bundle exec ruby "$name/run.rb" < /dev/null 2>&1) || run_rc=$?
+  run_out=$(cd "$BASE_DIR" && timeout $llm_timeout bundle exec ruby "$name/run.rb" $extra_args < /dev/null 2>&1) || run_rc=$?
   if [[ $run_rc -eq 0 ]]; then
     pass "run OK (exit 0)"
   elif [[ $run_rc -eq 124 ]]; then

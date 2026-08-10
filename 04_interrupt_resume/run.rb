@@ -148,29 +148,29 @@ end
 request = pending.fetch(:approval_request)
 item = request.items.first
 
-puts "Execution status: #{pending[:status]}"
-puts "Execution id:     #{pending[:execution_id]}"
-puts "Approval id:      #{request.id}"
-puts "Tool:             #{item.tool_name}"
-puts "Safe arguments:   #{item.arguments.inspect}"
-puts "Approval facts:   #{item.facts.inspect}"
+puts "Execution suspended: #{pending[:suspended]}"
+puts "Execution id:        #{pending[:execution_id]}"
+puts "Approval id:         #{request.id}"
+puts "Tool:                #{item.tool_name}"
+puts "Safe arguments:      #{item.arguments.inspect}"
+puts "Approval facts:      #{item.facts.inspect}"
+puts
 
-agent_answer = ARGV.shift || workflow_answer
+# This is intentionally a second, independent decision. Workflow approval above
+# must never implicitly authorize a tool side effect.
+agent_answer = ARGV.shift
 unless agent_answer
   print "Approve the Agent tool execution? [yes/no]: "
   agent_answer = $stdin.gets&.strip&.downcase
 end
 
+approved = agent_answer == "yes"
 resumed = release_agent.approve(
   pending[:execution_id],
   approval_request_id: request.id,
-  approved: agent_answer == "yes"
+  approved: approved
 )
 
-if agent_answer == "yes"
-  puts "Resumed status:   #{resumed[:status]}"
-  puts "Agent output:     #{resumed[:output]}"
-else
-  puts "Resumed status:   #{resumed[:status]}"
-  puts "Agent output:     #{resumed[:output]}"
-end
+puts "Tool approved:       #{approved}"
+puts "Execution rejected:  #{!!resumed[:rejected]}"
+puts "Agent output:        #{resumed[:output]}"

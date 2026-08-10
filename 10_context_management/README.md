@@ -23,10 +23,11 @@ provider-specific materialization
 - imported conversation history is recorded as Agent context.
 - `knowledge:` and `add_knowledge` create persistent Knowledge candidates.
 - `#transcript` is the current logical transcript projection.
-- a deliberately constrained `context_window` causes a single model call to use
-  fewer messages than the Agent retains canonically.
-- `result[:messages]` exposes the model-call projection without making the
-  provider message array canonical state.
+- a deliberately constrained `context_window` exercises Context Policy under a
+  bounded token budget while the canonical Agent state remains intact.
+- `result[:messages]` is the current logical transcript materialization returned
+  for application convenience; it is **not** the exact per-call
+  `LLMInputManifest` or provider input.
 - `Agent.load` reopens the same logical Agent from the Persistence backend.
 - `clear_transcript!` and `clear_knowledge!` have independent logical lifetimes.
 - `reset_context!` resets current context without treating provider messages as
@@ -34,6 +35,12 @@ provider-specific materialization
 
 The point is **not** merely "chat memory." The point is that persisted Agent
 state and per-call model context are separate concepts.
+
+Phronomy 0.17 keeps the exact per-call `LLMInputManifest` as framework-owned
+execution state; `Agent#invoke` does not expose that manifest through
+`result[:messages]`. This example therefore demonstrates the public state
+boundaries without pretending that the returned logical transcript is the
+provider projection.
 
 Run:
 

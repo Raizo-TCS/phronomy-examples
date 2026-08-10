@@ -13,6 +13,10 @@
 #
 # The Journal remains the canonical history. A particular LLM call may receive
 # only a selected projection of that history.
+#
+# Important public-API detail for Phronomy 0.17:
+# result[:messages] is the current logical transcript materialization. It is not
+# the exact per-call LLMInputManifest/provider input.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -25,7 +29,8 @@ class ContextDemoAgent < Phronomy::Agent::Base
   provider LLMConfig::PROVIDER
 
   # Deliberately small enough that the imported history cannot all fit into one
-  # model call. This makes the Journal-vs-projection distinction visible.
+  # model call. This exercises Context Policy under a bounded token budget while
+  # the canonical Agent state remains intact.
   context_window 4096
   max_output_tokens 512
 
@@ -39,10 +44,10 @@ end
 def imported_history
   messages = []
 
-  # Put deliberately verbose historical turns first so the per-call context
-  # policy has something meaningful to omit. Keep the fact validated by this
-  # example near the recent edge; the example should demonstrate projection,
-  # not depend on a particular pruning heuristic retaining an ancient fact.
+  # Put deliberately verbose historical turns first so Context Policy has a
+  # meaningful bounded-context problem to solve. Keep the fact validated by this
+  # example near the recent edge; the example should not depend on a particular
+  # pruning heuristic retaining an ancient fact.
   14.times do |i|
     filler = ("archived planning note #{i + 1}; " * 45).strip
     messages << {
@@ -85,7 +90,7 @@ agent = ContextDemoAgent.create(
   metadata: {"example" => "10_context_management"}
 )
 
-puts "--- Canonical state vs one LLM call ---"
+puts "--- Canonical state and invocation result ---"
 puts "Agent id:                    #{agent.agent_id}"
 puts "Transcript records before:   #{agent.transcript.size}"
 
@@ -96,13 +101,14 @@ result = OutputValidator.validate(
 
 puts "Answer:                      #{result[:output]}"
 puts "Transcript records after:    #{agent.transcript.size}"
-puts "Messages sent in this call:   #{result[:messages].size}"
+puts "Result messages (transcript): #{result[:messages].size}"
 puts "Execution id:                 #{result[:execution_id]}"
 puts "Journal position:              #{result[:journal_position]}"
 puts
-puts "The transcript count is canonical Agent history."
-puts "The messages count is the projection selected for this specific model call."
-puts "Context omission for a call does not delete Journal history."
+puts "The transcript is the current logical conversation projection."
+puts "result[:messages] materializes that logical transcript for the application."
+puts "It is NOT the exact per-call LLMInputManifest/provider input."
+puts "Context Policy may omit canonical history from a call without deleting it."
 puts
 
 puts "--- Persistent Knowledge is separate from transcript ---"

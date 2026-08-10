@@ -37,4 +37,12 @@ for gemfile in "${GEMFILES[@]}"; do
 done
 
 echo "All bundle lockfiles were updated."
-echo "Next: ./scripts/verify_examples.sh"
+echo
+
+if [[ -n "${PHRONOMY_PATH:-}" ]]; then
+  echo "Keep PHRONOMY_PATH set for verification so the preflight can assert the local checkout path:"
+  printf '  export PHRONOMY_PATH=%q\n' "$PHRONOMY_PATH"
+  echo "  ./scripts/verify_examples.sh"
+else
+  echo "Next: ./scripts/verify_examples.sh"
+fi

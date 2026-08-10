@@ -58,10 +58,13 @@ bundle install
 ./scripts/update_phronomy.sh
 ```
 
-Test every bundle against a local checkout:
+Test every bundle against a local checkout. Export `PHRONOMY_PATH` so the same
+value is available to both dependency update and verification:
 
 ```bash
-PHRONOMY_PATH=../phronomy ./scripts/update_phronomy.sh
+export PHRONOMY_PATH=../phronomy
+./scripts/update_phronomy.sh
+./scripts/verify_examples.sh
 ```
 
 When the target Phronomy version changes, edit **only `Gemfile.phronomy`** and
@@ -154,10 +157,12 @@ Then run the repository verification:
 ./scripts/verify_examples.sh
 ```
 
-For local Phronomy development:
+For local Phronomy development, keep `PHRONOMY_PATH` exported while running both
+commands so the verification preflight can also assert the actual checkout path:
 
 ```bash
-PHRONOMY_PATH=../phronomy ./scripts/update_phronomy.sh
+export PHRONOMY_PATH=../phronomy
+./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
 

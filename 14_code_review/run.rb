@@ -51,10 +51,10 @@ def ask_priority
   end
 end
 
-def display_eval_scores(scores)
+def display_quality_scores(scores)
   puts
   puts "=" * 50
-  puts "Eval Scores (LLMJudge, scale 0–10)"
+  puts "Application Quality Scores (LLM judge, scale 0–10)"
   puts "=" * 50
   puts "  Review quality:      #{scores[:review_quality]} / 10"
   puts "  Improvement quality: #{scores[:improvement_quality]} / 10"
@@ -77,7 +77,7 @@ def run_review(app, path, priority_override = nil)
   priority = priority_override || ask_priority
   puts "\n[Pipeline] Proceeding with priority: #{priority}"
   state = app.send_event(state: state, event: :proceed, input: {priority: priority})
-  display_eval_scores(state.eval_scores)
+  display_quality_scores(state.quality_scores)
 end
 
 app = build_pipeline

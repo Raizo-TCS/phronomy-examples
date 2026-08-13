@@ -3,28 +3,21 @@
 #
 # Smoke-tests all phronomy-examples:
 #   - dependency preflight: every bundle must load the same Phronomy version/path
-#   - CLI samples: actual LLM run with 240s timeout  (default)
-#                  OR Ruby syntax check only           (--syntax-only)
-#   - Rails apps:  db:migrate, server boot, health check, Playwright GUI smoke test
+#   - removed-API / architecture preflight
+#   - CLI samples: actual LLM run with timeout (default)
+#                  OR Ruby syntax check only (--syntax-only)
+#   - Rails apps: db:migrate, server boot, health check, Playwright GUI smoke test
 #
 # Usage:
 #   cd phronomy-examples
-#   bash scripts/verify_examples.sh               # full run via LLM (LM Studio must be up)
-#   bash scripts/verify_examples.sh --syntax-only # syntax-only, no LLM required
+#   bash scripts/verify_examples.sh
+#   bash scripts/verify_examples.sh --syntax-only
 #
-# Before verification, install/update all bundles with:
+# Before verification:
 #   ./scripts/update_phronomy.sh
-#
-# The Rails GUI tests require the 'playwright' npm package (auto-installed into
-# scripts/browser_tests/node_modules on first run) and a Chromium browser
-# (installed via `npx playwright install chromium` automatically if missing).
-#
-# Rails server is started in development mode on dedicated ports to avoid
-# conflicts with any existing service.
 
 set -euo pipefail
 
-# ── Flag parsing ──────────────────────────────────────────────────────────────
 WITH_LLM=true
 for arg in "$@"; do
   [[ "$arg" == "--syntax-only" ]] && WITH_LLM=false
@@ -36,45 +29,34 @@ BROWSER_TESTS_DIR="$SCRIPT_DIR/browser_tests"
 
 export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
 
-# ── Terminal colours ─────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BOLD='\033[1m'; NC='\033[0m'
 
-# ── LM Studio / LLM configuration ────────────────────────────────────────────
-# These variables are inherited from the caller's environment if already set.
-# Defaults point to a local LM Studio instance used for CI/verification.
 export PHRONOMY_MODEL="${PHRONOMY_MODEL:-openai/gpt-oss-20b}"
 export PHRONOMY_BASE_URL="${PHRONOMY_BASE_URL:-http://192.168.122.1:1234/v1}"
 export PHRONOMY_API_KEY="${PHRONOMY_API_KEY:-lm-studio}"
 export PHRONOMY_PROVIDER="${PHRONOMY_PROVIDER:-openai}"
 
-# ── Per-example LLM timeout overrides (seconds; default: 240) ────────────────
-# Add entries here for examples that require more than 240 seconds to run.
 declare -A EXAMPLE_TIMEOUTS
 EXAMPLE_TIMEOUTS["10_context_management"]=480
 EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900
 
-# ── Per-example extra CLI arguments ──────────────────────────────────────────
 declare -A EXAMPLE_ARGS
 EXAMPLE_ARGS["27_issue_analyzer"]="--dry-run"
 
-# ── Counters & failure list ───────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
 FAILURES=()
 SERVER_PIDS=()
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 pass()  { echo -e "  ${GREEN}[PASS]${NC} $1"; PASS=$((PASS + 1)); }
 fail()  { echo -e "  ${RED}[FAIL]${NC} $1"; FAIL=$((FAIL + 1)); FAILURES+=("$1"); }
 skip()  { echo -e "  ${YELLOW}[SKIP]${NC} $1"; SKIP=$((SKIP + 1)); }
 header(){ echo -e "\n${BOLD}=== $1 ===${NC}"; }
 
-# Kill any process listening on a given port (best-effort, no error if empty).
 free_port() {
   local port="$1"
   lsof -ti :"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
 }
 
-# Cleanup all background Rails servers on exit.
 cleanup() {
   for pid in "${SERVER_PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
@@ -83,12 +65,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# ── Phronomy dependency preflight ─────────────────────────────────────────────
-# This check prevents the exact failure mode where the examples are verified
-# against one checkout/version, then Gemfiles are changed without re-running the
-# suite. Every independent bundle must resolve to the same Phronomy version and
-# implementation path when PHRONOMY_PATH is used. Released gems may be
-# installed under different bundle paths, so version is the stable comparison.
 verify_phronomy_dependency() {
   header "Phronomy dependency preflight"
 
@@ -151,7 +127,6 @@ verify_phronomy_dependency() {
     if [[ -n "$expected_local_path" && "$path" == "$expected_local_path" ]]; then
       echo "    local checkout: OK"
     fi
-
   done
 
   if $preflight_failed; then
@@ -165,12 +140,11 @@ verify_phronomy_dependency() {
   echo "All bundles load the same Phronomy version and the expected local checkout when configured."
 }
 
-# ── Removed-API source preflight ──────────────────────────────────────────────
-# These are high-signal migration mistakes that Ruby syntax checking cannot
-# detect. Check executable Ruby source only; documentation may intentionally
-# mention removed names when explaining a migration.
+# High-signal migration mistakes that Ruby syntax checking cannot detect.
+# Executable Ruby is checked; documentation may mention historical names while
+# explaining migrations.
 verify_removed_api_contract() {
-  header "Phronomy 0.17 source API preflight"
+  header "Current Phronomy source API preflight"
 
   local failed=false
   local matches i
@@ -182,6 +156,19 @@ verify_removed_api_contract() {
     'send\(:prepare_tool_class'
     '^[[:space:]]*tools[[:space:]]+[A-Z][A-Za-z0-9_:]*(,[[:space:]]*[A-Z][A-Za-z0-9_:]*)*([[:space:]]*(#.*)?)$'
     '\.tools\([[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\)'
+    'Phronomy::Runtime\.instance\.spawn'
+    'Phronomy::Runtime\.instance\.yield([[:space:](]|$)'
+    'Runtime#spawn'
+    'Runtime#yield'
+    'runtime_backend'
+    'Phronomy::Eval::'
+    '(^|[^A-Za-z0-9_:])TaskGroup([^A-Za-z0-9_]|$)'
+    'ThreadBackend'
+    'FiberBackend'
+    'ImmediateBackend'
+    'DeterministicScheduler'
+    'ThreadScheduler'
+    'FakeScheduler'
   )
   local -a labels=(
     'removed Guardrail namespace'
@@ -191,6 +178,19 @@ verify_removed_api_contract() {
     'private prepare_tool_class usage'
     'pre-0.17 tools splat DSL'
     'pre-0.17 dynamic tools single-argument registration'
+    'removed Runtime.instance.spawn API'
+    'removed Runtime.instance.yield API'
+    'removed Runtime#spawn source guidance'
+    'removed Runtime#yield source guidance'
+    'removed runtime_backend configuration'
+    'product-facing Phronomy::Eval namespace'
+    'removed TaskGroup runtime primitive'
+    'removed ThreadBackend runtime primitive'
+    'removed FiberBackend runtime primitive'
+    'removed ImmediateBackend runtime primitive'
+    'removed DeterministicScheduler runtime primitive'
+    'removed ThreadScheduler runtime primitive'
+    'removed FakeScheduler runtime primitive'
   )
 
   for i in "${!patterns[@]}"; do
@@ -207,9 +207,30 @@ verify_removed_api_contract() {
   ! $failed
 }
 
-# ── CLI example verification ──────────────────────────────────────────────────
-# Checks: Ruby syntax (ruby -c).
-# LLM is not called — syntax is the only deterministic check without a server.
+# Examples 14 and 20 are specifically intended to demonstrate Phronomy's
+# EventLoop/FSMSession control plane. Raw application Threads in these paths are
+# therefore an architecture regression. Example 13 may still use a background
+# Thread for its demo HTTP server; that is infrastructure, not Phronomy control.
+verify_event_loop_example_contract() {
+  header "EventLoop example architecture preflight"
+
+  local matches
+  matches=$(
+    grep -RInE --include='*.rb' 'Thread\.(new|start)' \
+      "$BASE_DIR/14_code_review" \
+      "$BASE_DIR/20_cve_scanner/lib/cve_scanner/scan_graph.rb" \
+      2>/dev/null || true
+  )
+
+  if [[ -n "$matches" ]]; then
+    fail "raw application Threads found in EventLoop-oriented examples"
+    echo "$matches" | sed 's/^/    /'
+    return 1
+  fi
+
+  pass "no raw application Threads in examples 14/20 orchestration"
+}
+
 verify_cli() {
   local name="$1"
   local dir="$BASE_DIR/$name"
@@ -229,8 +250,6 @@ verify_cli() {
   fi
 }
 
-# ── CLI example verification with LLM ────────────────────────────────────────
-# Checks: Ruby syntax, then actual run via LLM with a 240-second timeout.
 verify_cli_run() {
   local name="$1"
   local dir="$BASE_DIR/$name"
@@ -241,7 +260,6 @@ verify_cli_run() {
     return
   fi
 
-  # Syntax check first.
   if ! (cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" > /dev/null 2>&1); then
     local err
     err=$(cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" 2>&1 || true)
@@ -249,9 +267,6 @@ verify_cli_run() {
     return
   fi
 
-  # Actual run via LLM (240-second default timeout, overridable per example).
-  # stdin is redirected from /dev/null so interactive prompts receive EOF and
-  # the example can exit gracefully without blocking.
   local llm_timeout=${EXAMPLE_TIMEOUTS[$name]:-240}
   local extra_args=${EXAMPLE_ARGS[$name]:-}
   local run_out run_rc=0
@@ -265,8 +280,6 @@ verify_cli_run() {
   fi
 }
 
-# ── Rails app verification ────────────────────────────────────────────────────
-# Checks: db:migrate, server boot, GET /up → 200, Playwright page load & UI.
 verify_rails() {
   local name="$1"
   local port="$2"
@@ -279,7 +292,6 @@ verify_rails() {
     return
   fi
 
-  # 1. DB migrate
   local migrate_out
   if migrate_out=$(cd "$dir" && RAILS_ENV=development bundle exec rails db:create db:migrate 2>&1); then
     pass "db:create db:migrate"
@@ -288,7 +300,6 @@ verify_rails() {
     return
   fi
 
-  # 2. Start server
   free_port "$port"
   local log_file
   log_file="$(mktemp "${TMPDIR:-/tmp}/rails-${name}-XXXXXX.log")"
@@ -298,7 +309,6 @@ verify_rails() {
   local server_pid=$!
   SERVER_PIDS+=("$server_pid")
 
-  # Wait up to 40 s for the health endpoint.
   local up=false
   for _ in $(seq 1 40); do
     if curl -sf "http://localhost:$port/up" > /dev/null 2>&1; then
@@ -315,7 +325,6 @@ verify_rails() {
   fi
   pass "server started (PID $server_pid)"
 
-  # 3. Health check
   local http_code
   http_code=$(curl -so /dev/null -w "%{http_code}" "http://localhost:$port/up")
   if [[ "$http_code" == "200" ]]; then
@@ -324,23 +333,19 @@ verify_rails() {
     fail "GET /up → $http_code"
   fi
 
-  # 4. Playwright GUI smoke test
   run_playwright_test "$name" "$port" "$extra_env"
 
-  # 5. Stop server
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
   SERVER_PIDS=("${SERVER_PIDS[@]/$server_pid}")
   pass "server stopped"
 }
 
-# ── Playwright runner ─────────────────────────────────────────────────────────
 run_playwright_test() {
   local name="$1"
   local port="$2"
   local extra_env="${3:-}"
 
-  # Ensure npm dependencies are installed.
   if [[ ! -d "$BROWSER_TESTS_DIR/node_modules/playwright" ]]; then
     echo "  Installing Playwright npm package…"
     if ! (cd "$BROWSER_TESTS_DIR" && npm install --silent 2>&1); then
@@ -349,13 +354,11 @@ run_playwright_test() {
     fi
   fi
 
-  # Ensure Chromium module is loadable.
   if ! (cd "$BROWSER_TESTS_DIR" && node -e "require('playwright')" > /dev/null 2>&1); then
     skip "playwright module not loadable — GUI tests skipped"
     return
   fi
 
-  # Verify the Chromium binary exists; install if missing.
   local chrome_exe
   chrome_exe=$(cd "$BROWSER_TESTS_DIR" && \
     node -e "const {chromium}=require('playwright'); console.log(chromium.executablePath())" 2>/dev/null || true)
@@ -364,7 +367,6 @@ run_playwright_test() {
     (cd "$BROWSER_TESTS_DIR" && node_modules/.bin/playwright install chromium 2>&1 | tail -5) || true
   fi
 
-  # Run the smoke test.
   local pw_out
   if pw_out=$(cd "$BROWSER_TESTS_DIR" && env APP_NAME="$name" VERIFY_PORT="$port" $extra_env \
               node smoke_test.js 2>&1); then
@@ -376,7 +378,6 @@ run_playwright_test() {
   fi
 }
 
-# ── CLI examples ─────────────────────────────────────────────────────────────
 CLI_EXAMPLES=(
   01_basic_chain
   02_react_agent
@@ -416,6 +417,10 @@ if ! verify_removed_api_contract; then
   exit 1
 fi
 
+if ! verify_event_loop_example_contract; then
+  exit 1
+fi
+
 for example in "${CLI_EXAMPLES[@]}"; do
   if $WITH_LLM; then
     verify_cli_run "$example"
@@ -424,13 +429,11 @@ for example in "${CLI_EXAMPLES[@]}"; do
   fi
 done
 
-# ── Rails apps (each on a dedicated port) ────────────────────────────────────
 verify_rails "09_rails_chat"        3009
 verify_rails "15_rails_secure_chat" 3015
 verify_rails "18_rails_agent_job"   3018
 verify_rails "20_cve_scanner"       3020 "CVE_SCANNER_MOCK_LLM=1"
 
-# ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}======================================================"
 echo -e "  RESULTS"

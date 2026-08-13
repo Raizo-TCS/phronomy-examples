@@ -31,15 +31,24 @@ Start with **10_context_management** for this model.
 
 ```text
 Runtime
-  ├─ Tasks / schedulers / blocking pools / metrics
-  └─ EventLoop
-       ├─ Workflow FSM dispatch
-       └─ Agent lifecycle events
+  ├─ EventLoop
+  │    └─ FSMSession lifecycle coordination
+  │         ├─ Agent
+  │         ├─ Workflow
+  │         ├─ ToolInvocation
+  │         └─ MultiAgent fan-out
+  ├─ BlockingAdapterPool
+  │    └─ unavoidable blocking I/O only
+  ├─ EventLoop-driven timers
+  └─ metrics / shutdown lifecycle
+
+Task = completion handle, not an execution backend
 ```
 
-Application code composes public APIs such as `invoke_async`,
-`Workflow#signal`, `Task#map` and cancellation tokens; it
-does not need to post internal Event objects.
+Application code composes public APIs such as `invoke_async`, `stream_async`,
+`Workflow#signal`, `Task#on_complete`, `Task#map`, and cancellation tokens. It
+does not schedule arbitrary Runtime tasks, select a scheduler/backend, or post
+internal Event objects directly.
 
 Start with **25_event_loop** and **26_agent_event_loop**.
 
@@ -99,9 +108,9 @@ run the update script to regenerate each bundle's lockfile.
 | Example | Focus |
 |---|---|
 | `04_interrupt_resume` | Workflow wait-state HITL + Agent tool approval |
-| `25_event_loop` | Runtime-owned EventLoop and async Workflow pattern |
+| `25_event_loop` | EventLoop/FSMSession + blocking-I/O completion events |
 | `26_agent_event_loop` | Agent async events → Workflow signal; timeout |
-| `23_bounded_parallel` | Bounded parallel fan-out |
+| `23_bounded_parallel` | Bounded child-Agent fan-out |
 
 ### Multi-agent
 
@@ -111,7 +120,7 @@ run the update script to regenerate each bundle's lockfile.
 | `17_multi_agent_handoff` | Handoff |
 | `21_team_coordinator` | Stateful worker assignment |
 | `22_shared_state` | Shared Agent state |
-| `23_bounded_parallel` | Parallel Orchestrator pattern |
+| `23_bounded_parallel` | FanOut FSMSession / parallel Orchestrator pattern |
 
 ### MCP and integrations
 
@@ -125,11 +134,11 @@ run the update script to regenerate each bundle's lockfile.
 | Example | Focus |
 |---|---|
 | `09_rails_chat` | Rails chat |
-| `14_code_review` | Multi-stage code review pipeline |
+| `14_code_review` | Event-driven multi-stage code review pipeline |
 | `15_rails_secure_chat` | Rails security/trust boundaries |
 | `18_rails_agent_job` | ActiveJob + Agent streaming + ActionCable |
-| `20_cve_scanner` | CVE analysis application |
-| `27_issue_analyzer` | GitHub issue analysis |
+| `20_cve_scanner` | Workflow + Agent async lifecycle + blocking-adapter boundary |
+| `27_issue_analyzer` | GitHub issue analysis against current Phronomy components |
 
 ## Choosing the right multi-agent primitive
 
@@ -137,7 +146,9 @@ These examples intentionally distinguish state from concurrency:
 
 - `21_team_coordinator` — a pool of **stateful worker identities**; queued work
   is assigned sequentially.
-- `23_bounded_parallel` — **parallel fan-out** with a concurrency bound.
+- `23_bounded_parallel` — **parallel child-Agent fan-out** with a concurrency
+  bound. `max_concurrency` limits active child invocations; it is not a worker
+  thread count.
 - `19_trust_pipeline` — **Generator/Verifier** quality-control loop.
 - `17_multi_agent_handoff` — explicit responsibility transfer.
 

@@ -1,39 +1,46 @@
-# 25 — Runtime + EventLoop execution model
+# 25 — EventLoop / FSMSession execution model
 
-The current Phronomy model is **not an opt-in EventLoop mode**.
-
-The Runtime owns scheduling and its EventLoop. Application code should stay on
-the public boundary:
+The current Phronomy model is **EventLoop-first**. Application code does not
+select a scheduler backend and does not use `Runtime#spawn` for logical async
+control flow.
 
 ```text
 Runtime
-  ├─ Task scheduling
-  ├─ blocking pools / timers / metrics
-  └─ EventLoop
-       └─ Workflow FSM dispatch
+  ├─ EventLoop
+  │    └─ FSMSession / Workflow FSM dispatch
+  ├─ BlockingAdapterPool
+  │    └─ unavoidable blocking file / DB / network / external-library I/O
+  └─ EventLoop-driven timers
+
+Task / PendingOperation = completion handles
 ```
 
 ## Correct async Workflow pattern
 
-A Workflow entry/transition callback is run-to-completion. If it needs
-asynchronous work:
+A Workflow entry/transition callback is run-to-completion. If it needs work that
+cannot complete immediately:
 
-1. start the work;
-2. return `nil` (or a context), **not a Task to be awaited by the action**;
-3. when the work completes, call `Workflow#signal`;
-4. carry the result in the event payload;
-5. let the EventLoop perform the next FSM transition.
+1. start an asynchronous Phronomy lifecycle (`Agent#invoke_async`,
+   `Agent#stream_async`, another Workflow, MultiAgent fan-out), **or** submit a
+   genuinely blocking external operation to `Runtime#blocking_io`;
+2. return the Workflow context immediately;
+3. attach `on_complete` to the returned completion handle;
+4. call `Workflow#signal` when the operation settles;
+5. carry the result/error in the event payload;
+6. let the EventLoop perform the next FSM transition.
 
-The example uses:
+This example demonstrates:
 
-- `Runtime#spawn`
-- public `Task#map`
+- `Runtime#blocking_io.submit`
+- completion callbacks via `on_complete`
 - `Workflow#invoke_async`
 - `Workflow#signal`
+- external `Task#wait_result`
 - `Diagnostics.snapshot`
 
-It intentionally does **not** call `Runtime#event_loop.post` or construct
-internal `Phronomy::Event` objects.
+It intentionally does **not** use removed scheduler/runtime-task APIs and does
+not call `Runtime#event_loop.post` or construct internal `Phronomy::Event`
+objects.
 
 Run:
 

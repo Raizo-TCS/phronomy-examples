@@ -8,16 +8,36 @@ require_relative "improver"
 require_relative "tracer"
 require_relative "guardrails"
 
-class LocalLlmJudge < Phronomy::Eval::Scorer::LlmJudge
+# Application-level LLM quality judge. Phronomy::Testing::Eval is intentionally
+# not used in this production-style example.
+class LocalLlmJudge
+  DEFAULT_PROMPT = <<~PROMPT
+    You are an impartial judge evaluating the quality of an AI assistant response.
+    Rate the response on a scale from 0.0 (completely wrong or unhelpful) to 1.0 (perfect).
+    Respond with ONLY a single decimal number between 0.0 and 1.0 — no other text.
+
+    Question: %<input>s
+    Expected answer: %<expected>s
+    Actual response: %<actual>s
+
+    Score:
+  PROMPT
+
+  def initialize(model: LLMConfig::MODEL)
+    @model = model
+  end
+
+  # This method performs blocking third-party I/O and must therefore only be
+  # called from the Runtime BlockingAdapterPool in this example.
   def score(actual:, expected:, input: nil)
     prompt = format(
-      Phronomy::Eval::Scorer::LlmJudge::DEFAULT_PROMPT,
+      DEFAULT_PROMPT,
       input: input.to_s,
       expected: expected.to_s,
       actual: actual.to_s
     )
     chat = RubyLLM.chat(
-      model: LLMConfig::MODEL,
+      model: @model,
       **(LLMConfig::PROVIDER ? {provider: LLMConfig::PROVIDER, assume_model_exists: true} : {})
     )
     chat.ask(prompt).content.to_s.strip.scan(/-?\d+\.?\d*/).first.to_f.clamp(0.0, 1.0)
@@ -30,6 +50,13 @@ end
 IMPROVER_PERSISTENCE = Phronomy::Persistence::InMemory.new
 CODE_OUTPUT_GUARDRAIL = CodeOutputGuardrail.new
 REVIEW_OVERHEAD_TOKENS = 200 + REVIEWER_MAX_OUTPUT_TOKENS
+
+REVIEWERS = {
+  security: SecurityReviewerAgent,
+  performance: PerformanceReviewerAgent,
+  readability: ReadabilityReviewerAgent,
+  abstraction: AbstractionConsistencyReviewerAgent
+}.freeze
 
 LOAD_AND_SPLIT_NODE = lambda do |state|
   Phronomy.configuration.tracer.trace("load_and_split", input: state.file_path) do |_span|
@@ -47,61 +74,151 @@ LOAD_AND_SPLIT_NODE = lambda do |state|
   end
 end
 
-def review_chunk(agent_class, chunk_text)
-  agent = agent_class.new(knowledge: [agent_class.review_knowledge])
-  agent.invoke(chunk_text)[:output].to_s.strip
+def review_texts(state)
+  texts = state.chunks.map { |chunk| chunk[:text] }
+  texts.empty? ? [state.source_code] : texts
 end
 
-def review_all_chunks(agent_class, chunks, source_code)
-  texts = chunks.map { |chunk| chunk[:text] }
-  texts = [source_code] if texts.empty?
-  texts.each_with_index.filter_map do |chunk_text, index|
+# Starts every reviewer/chunk Agent invocation without creating application
+# Threads. The returned Task is only a completion handle; child Agent execution
+# is coordinated by Phronomy's EventLoop/FSMSession runtime.
+def start_parallel_reviews(state)
+  texts = review_texts(state)
+  jobs = REVIEWERS.flat_map do |key, agent_class|
+    texts.each_with_index.map { |text, index| [key, agent_class, text, index] }
+  end
+
+  result_task = Phronomy::Task.deferred(name: "example-14-parallel-reviews")
+  outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
+  mutex = Mutex.new
+  remaining = jobs.length
+
+  if remaining.zero?
+    result_task.complete(REVIEWERS.to_h { |key, _| [key, ""] })
+    return result_task
+  end
+
+  settle_one = lambda do |key, index, output, error|
+    warn "[#{REVIEWERS.fetch(key).name}] chunk #{index + 1}/#{texts.size}: #{error.class}: #{error.message}" if error
+
+    completed = false
+    reviews = nil
+    mutex.synchronize do
+      outputs[key][index] = output.to_s unless error
+      remaining -= 1
+      if remaining.zero?
+        completed = true
+        reviews = outputs.transform_values { |values| values.compact.reject(&:empty?).join("\n") }
+      end
+    end
+    result_task.complete(reviews) if completed
+  end
+
+  jobs.each do |key, agent_class, chunk_text, index|
     puts "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}"
-    output = review_chunk(agent_class, chunk_text)
-    output unless output.empty?
-  rescue => e
-    warn "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}: #{e.class}: #{e.message}"
-    nil
-  end.join("\n")
-end
-
-def run_parallel_reviews(state)
-  reviewers = {
-    security: SecurityReviewerAgent,
-    performance: PerformanceReviewerAgent,
-    readability: ReadabilityReviewerAgent,
-    abstraction: AbstractionConsistencyReviewerAgent
-  }
-  threads = reviewers.map do |key, agent_class|
-    Thread.new do
-      [key, review_all_chunks(agent_class, state.chunks, state.source_code)]
+    begin
+      agent = agent_class.new(knowledge: [agent_class.review_knowledge])
+      operation = agent.invoke_async(chunk_text)
+      operation.on_complete do |result, error|
+        output = error ? nil : result[:output].to_s.strip
+        settle_one.call(key, index, output, error)
+      end
+    rescue => error
+      settle_one.call(key, index, nil, error)
     end
   end
-  threads.map(&:value).to_h
+
+  result_task
 end
 
-def build_eval_scores(state)
+def build_improvement_prompt(snapshot)
+  priority = snapshot.priority || "security"
+  review_text = snapshot.reviews[priority.to_sym].to_s
+  max_improve_chars = [(LLMConfig::EFFECTIVE_CONTEXT_WINDOW - IMPROVE_OVERHEAD_TOKENS) * 4, 1].max
+  raw_source = snapshot.chunks.first&.dig(:text) || snapshot.source_code
+  source_excerpt = raw_source[0, max_improve_chars]
+
+  IMPROVE_TEMPLATE.format(
+    priority: priority,
+    source_excerpt: source_excerpt,
+    char_count: source_excerpt.length,
+    review_text: review_text
+  )
+end
+
+def load_or_create_improver(snapshot)
+  agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
+  ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
+rescue Phronomy::Persistence::NotFoundError
+  ImproverAgent.create(
+    agent_id: agent_id,
+    knowledge: [IMPROVEMENT_POLICY],
+    persistence: IMPROVER_PERSISTENCE
+  )
+end
+
+def start_improvement(snapshot)
+  agent = load_or_create_improver(snapshot)
+  user_prompt = build_improvement_prompt(snapshot)
+  result_task = Phronomy::Task.deferred(name: "example-14-improvement")
+  improved = +""
+  mutex = Mutex.new
+
+  puts "\n[ImproverAgent] Generating improvements (streaming)..."
+  operation = agent.stream_async({message: user_prompt, priority: snapshot.priority || "security"}) do |event|
+    next unless event.type == :token
+
+    token = event.payload[:content].to_s
+    print token
+    $stdout.flush
+    mutex.synchronize { improved << token }
+  end
+
+  operation.on_complete do |result, error|
+    if error
+      result_task.fail(error)
+      next
+    end
+
+    final_output = result&.dig(:output).to_s
+    value = mutex.synchronize do
+      improved << final_output if improved.empty? && !final_output.empty?
+      improved.dup
+    end
+    puts
+
+    begin
+      CODE_OUTPUT_GUARDRAIL.call(value)
+      puts "[OutputFilter] Output validation passed."
+    rescue Phronomy::FilterBlockError => e
+      puts "[OutputFilter] Warning: #{e.message}"
+    end
+
+    result_task.complete(value)
+  end
+
+  result_task
+rescue => error
+  result_task ||= Phronomy::Task.deferred(name: "example-14-improvement")
+  result_task.fail(error)
+  result_task
+end
+
+def build_quality_scores(state)
   judge = LocalLlmJudge.new(model: LLMConfig::MODEL)
-  runner = Phronomy::Eval::Runner.new(scorer: judge)
   priority = state.priority || "security"
 
-  review_dataset = Phronomy::Eval::Dataset.from_array([{
+  review_score = judge.score(
     input: "Ruby code review for #{priority}:\n#{state.source_code[0, 400]}",
-    expected: "specific code issues with severity levels and line references"
-  }])
-  review_score = runner.run(
-    review_dataset,
-    ->(_input) { state.reviews[priority.to_sym].to_s }
-  ).first.score
+    expected: "specific code issues with severity levels and line references",
+    actual: state.reviews[priority.to_sym].to_s
+  )
 
-  improve_dataset = Phronomy::Eval::Dataset.from_array([{
+  improve_score = judge.score(
     input: state.reviews[priority.to_sym].to_s,
-    expected: "improved Ruby code in a ```ruby``` block addressing the identified issues"
-  }])
-  improve_score = runner.run(
-    improve_dataset,
-    ->(_input) { state.improved_code.to_s }
-  ).first.score
+    expected: "improved Ruby code in a ```ruby``` block addressing the identified issues",
+    actual: state.improved_code.to_s
+  )
 
   {
     review_quality: (review_score * 10).round(1),
@@ -115,6 +232,16 @@ def event_payload!(event)
   payload
 end
 
+def signal_completion(workflow, thread_id:, event:, operation:, key:)
+  operation.on_complete do |value, error|
+    workflow.signal(
+      thread_id: thread_id,
+      event: event,
+      payload: error ? {error: error} : {key => value}
+    )
+  end
+end
+
 def build_pipeline
   workflow = nil
 
@@ -126,25 +253,14 @@ def build_pipeline
     state :parallel_review
     entry :parallel_review, lambda { |state|
       snapshot = state.merge({})
-      thread_id = state.thread_id
-      Thread.new do
-        begin
-          reviews = Phronomy.configuration.tracer.trace("parallel_review", input: snapshot.file_path) do |_span|
-            [run_parallel_reviews(snapshot), nil]
-          end
-          workflow.signal(
-            thread_id: thread_id,
-            event: :reviews_completed,
-            payload: {reviews: reviews}
-          )
-        rescue => e
-          workflow.signal(
-            thread_id: thread_id,
-            event: :reviews_completed,
-            payload: {error: e}
-          )
-        end
-      end
+      operation = start_parallel_reviews(snapshot)
+      signal_completion(
+        workflow,
+        thread_id: state.thread_id,
+        event: :reviews_completed,
+        operation: operation,
+        key: :reviews
+      )
       state
     }
 
@@ -152,92 +268,32 @@ def build_pipeline
 
     state :improve
     entry :improve, lambda { |state|
-      snapshot = state.merge({})
-      thread_id = state.thread_id
-      Thread.new do
-        begin
-          priority = snapshot.priority || "security"
-          review_text = snapshot.reviews[priority.to_sym].to_s
-          max_improve_chars = [(LLMConfig::EFFECTIVE_CONTEXT_WINDOW - IMPROVE_OVERHEAD_TOKENS) * 4, 1].max
-          raw_source = snapshot.chunks.first&.dig(:text) || snapshot.source_code
-          source_excerpt = raw_source[0, max_improve_chars]
-          user_prompt = IMPROVE_TEMPLATE.format(
-            priority: priority,
-            source_excerpt: source_excerpt,
-            char_count: source_excerpt.length,
-            review_text: review_text
-          )
-
-          agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
-          agent = begin
-            ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
-          rescue Phronomy::Persistence::NotFoundError
-            ImproverAgent.create(
-              agent_id: agent_id,
-              knowledge: [IMPROVEMENT_POLICY],
-              persistence: IMPROVER_PERSISTENCE
-            )
-          end
-
-          improved = +""
-          puts "\n[ImproverAgent] Generating improvements (streaming)..."
-          result = agent.stream({message: user_prompt, priority: priority}) do |event|
-            if event.type == :token
-              token = event.payload[:content].to_s
-              print token
-              $stdout.flush
-              improved << token
-            end
-          end
-          final_output = (result.is_a?(Array) ? result.first : result)&.dig(:output).to_s
-          improved << final_output if improved.empty? && !final_output.empty?
-          puts
-
-          begin
-            CODE_OUTPUT_GUARDRAIL.call(improved)
-            puts "[OutputFilter] Output validation passed."
-          rescue Phronomy::FilterBlockError => e
-            puts "[OutputFilter] Warning: #{e.message}"
-          end
-
-          workflow.signal(
-            thread_id: thread_id,
-            event: :improvement_completed,
-            payload: {improved_code: improved}
-          )
-        rescue => e
-          workflow.signal(
-            thread_id: thread_id,
-            event: :improvement_completed,
-            payload: {error: e}
-          )
-        end
-      end
+      operation = start_improvement(state.merge({}))
+      signal_completion(
+        workflow,
+        thread_id: state.thread_id,
+        event: :improvement_completed,
+        operation: operation,
+        key: :improved_code
+      )
       state
     }
 
     state :evaluate
     entry :evaluate, lambda { |state|
       snapshot = state.merge({})
-      thread_id = state.thread_id
-      Thread.new do
-        begin
-          scores = Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
-            [build_eval_scores(snapshot), nil]
-          end
-          workflow.signal(
-            thread_id: thread_id,
-            event: :evaluation_completed,
-            payload: {eval_scores: scores}
-          )
-        rescue => e
-          workflow.signal(
-            thread_id: thread_id,
-            event: :evaluation_completed,
-            payload: {error: e}
-          )
+      operation = Phronomy::Runtime.instance.blocking_io.submit do
+        Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
+          [build_quality_scores(snapshot), nil]
         end
       end
+      signal_completion(
+        workflow,
+        thread_id: state.thread_id,
+        event: :evaluation_completed,
+        operation: operation,
+        key: :quality_scores
+      )
       state
     }
 
@@ -248,7 +304,7 @@ def build_pipeline
     transition from: :improve, on: :improvement_completed, to: :evaluate,
       action: ->(state, event) { state.merge(improved_code: event_payload!(event).fetch(:improved_code)) }
     transition from: :evaluate, on: :evaluation_completed, to: :__finish__,
-      action: ->(state, event) { state.merge(eval_scores: event_payload!(event).fetch(:eval_scores)) }
+      action: ->(state, event) { state.merge(quality_scores: event_payload!(event).fetch(:quality_scores)) }
   end
 
   workflow

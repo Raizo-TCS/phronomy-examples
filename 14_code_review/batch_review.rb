@@ -3,9 +3,9 @@
 
 # 14_code_review/batch_review.rb
 #
-# Runs Security / Performance / Readability review on every phronomy source
-# file with more than MIN_LINES lines.  Improvement and Eval are skipped so
-# the run stays fast enough to cover the full codebase.
+# Runs Security / Performance / Readability / Abstraction review on every
+# phronomy source file with more than MIN_LINES lines. Improvement and quality
+# scoring are skipped so the run stays fast enough to cover the full codebase.
 #
 # Usage:
 #   bundle exec ruby 14_code_review/batch_review.rb
@@ -15,15 +15,7 @@ require "phronomy"
 require_relative "reviewers"
 require_relative "tracer"
 
-# Suppress the default per-thread backtrace printing; exceptions are
-# caught via Thread#value in the rescue block below.
-Thread.report_on_exception = false
-
 MIN_LINES = 20
-# Chunk size derived from the model's actual context window (LLMConfig::CONTEXT_WINDOW).
-# Overhead: system prompt + static knowledge ≈ 500 tokens, plus max_output_tokens reserved
-# by the LLM server so it must not count against the prompt budget.
-# Ruby is symbol-heavy: use 1.5 chars/token with a 0.75 safety factor.
 BATCH_OVERHEAD_TOKENS = 500 + REVIEWER_MAX_OUTPUT_TOKENS
 MAX_CHUNK_CHARS = ((LLMConfig::CONTEXT_WINDOW - BATCH_OVERHEAD_TOKENS) * 1.5 * 0.75).to_i
 
@@ -33,13 +25,20 @@ Phronomy.configure do |c|
   c.tracer = Phronomy::Tracing::NullTracer.new
 end
 
+REVIEWERS = {
+  security: SecurityReviewerAgent,
+  performance: PerformanceReviewerAgent,
+  readability: ReadabilityReviewerAgent,
+  abstraction: AbstractionConsistencyReviewerAgent
+}.freeze
+
 # ---- collect target files ----
 all_files = Dir.glob("#{LIB_ROOT}/**/*.rb").sort
 target_files = all_files.select { |f| File.readlines(f).count >= MIN_LINES }
 
 puts "=== phronomy Source Code Review (batch) ==="
 puts "Target: #{target_files.size} files (>= #{MIN_LINES} lines) out of #{all_files.size} total"
-puts "Reviewers: Security / Performance / Readability (parallel)"
+puts "Reviewers: Security / Performance / Readability / Abstraction (async Agent invocations)"
 puts "=" * 60
 puts
 
@@ -50,60 +49,54 @@ target_files.each_with_index do |path, idx|
   rel = path.sub("#{LIB_ROOT}/", "")
   line_count = File.readlines(path).count
   source = File.read(path)
-  # Split into context-window-safe chunks so no information is truncated.
+
   splitter = Phronomy::VectorStore::Splitter::RecursiveSplitter.new(
     chunk_size: MAX_CHUNK_CHARS,
     chunk_overlap: 200
   )
-  chunks = splitter.split({ text: source, metadata: { file: rel } })
+  chunks = splitter.split({text: source, metadata: {file: rel}})
   chunk_texts = chunks.map { |c| c[:text] }
 
   print "[#{idx + 1}/#{target_files.size}] #{rel} (#{line_count} lines, #{chunk_texts.size} chunk(s)) ... "
   $stdout.flush
 
   start = Time.now
-
-  # Review each chunk; collect findings per perspective across all chunks.
-  all_security     = []
-  all_performance  = []
-  all_readability  = []
-  all_abstraction  = []
+  findings = REVIEWERS.transform_values { [] }
 
   chunk_texts.each_with_index do |chunk, cidx|
-    label = chunk_texts.size > 1 ? " chunk #{cidx + 1}/#{chunk_texts.size}" : ""
-    print label.empty? ? "" : "\n  [chunk #{cidx + 1}] "
+    print chunk_texts.size > 1 ? "\n  [chunk #{cidx + 1}] " : ""
 
-    sec_t = Thread.new { SecurityReviewerAgent.new.invoke(chunk)[:output] }
-    per_t = Thread.new { PerformanceReviewerAgent.new.invoke(chunk)[:output] }
-    red_t = Thread.new { ReadabilityReviewerAgent.new.invoke(chunk)[:output] }
-    abs_t = Thread.new { AbstractionConsistencyReviewerAgent.new.invoke(chunk)[:output] }
+    operations = REVIEWERS.map do |key, agent_class|
+      agent = agent_class.new(knowledge: [agent_class.review_knowledge])
+      [key, agent.invoke_async(chunk)]
+    end
 
-    begin
-      all_security    << sec_t.value
-      all_performance << per_t.value
-      all_readability << red_t.value
-      all_abstraction << abs_t.value
-    rescue Phronomy::ContextLengthError, Phronomy::TransportError => e
-      warn "\n  [SKIP chunk #{cidx + 1}] #{e.class}: #{e.message}"
+    # This script is the external CLI caller, not an EventLoop callback, so
+    # waiting for the already-started Agent Tasks here is valid. No raw Threads
+    # are created by the application.
+    operations.each do |key, task|
+      begin
+        result = task.wait_result
+        findings[key] << result[:output].to_s
+      rescue Phronomy::ContextLengthError, Phronomy::TransportError => e
+        warn "\n  [SKIP #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
+      rescue => e
+        warn "\n  [ERROR #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
+      end
     end
   end
-
-  security    = all_security.join("\n")
-  performance = all_performance.join("\n")
-  readability = all_readability.join("\n")
-  abstraction = all_abstraction.join("\n")
 
   elapsed = ((Time.now - start) * 1000).to_i
   puts "done (#{elapsed}ms)"
 
   findings_by_file[rel] = {
-    lines:       line_count,
-    chunks:      chunk_texts.size,
-    elapsed_ms:  elapsed,
-    security:    security.strip,
-    performance: performance.strip,
-    readability: readability.strip,
-    abstraction: abstraction.strip
+    lines: line_count,
+    chunks: chunk_texts.size,
+    elapsed_ms: elapsed,
+    security: findings[:security].join("\n").strip,
+    performance: findings[:performance].join("\n").strip,
+    readability: findings[:readability].join("\n").strip,
+    abstraction: findings[:abstraction].join("\n").strip
   }
 end
 

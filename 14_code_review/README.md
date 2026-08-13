@@ -1,7 +1,8 @@
 # 14 AI Code Review Pipeline
 
-A larger example that composes Phronomy Workflow, stateful Agents, Journal-backed
-Knowledge, streaming, Filters, evaluation, and tracing into one application flow.
+A larger example that composes Phronomy Workflow, stateful Agents,
+Journal-backed Knowledge, streaming, Filters, application-level quality scoring,
+and tracing into one application flow.
 
 ## Current Phronomy features
 
@@ -14,16 +15,20 @@ Knowledge, streaming, Filters, evaluation, and tracing into one application flow
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
 | Event-driven completion | `Workflow#signal` | Async work returns to the FSM as later events |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
+| Agent async lifecycle | `Agent#invoke_async`, `Agent#stream_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Persistent Knowledge | `knowledge:` | Reviewer criteria / improvement policy become Journal context candidates |
 | Prompt template | `Agent::Context::Instruction::PromptTemplate` | Builds the improvement request |
-| Streaming | `Agent#stream` | Streams the improved source |
-| Eval | `Phronomy::Eval::Runner` | Scores review/improvement output |
+| Blocking I/O boundary | `Runtime#blocking_io` | The direct RubyLLM quality-judge call is isolated behind the bounded pool |
 | Tracing | `Phronomy::Tracing::Base` | Captures major pipeline stages |
 
-The important context distinction is that the review policies are not injected
-through the removed `StaticKnowledge` API. They are ordinary application data
-registered as Agent `knowledge:` and therefore participate in the same
-Journal/candidate/context-policy pipeline as other persistent Agent context.
+`Phronomy::Testing::Eval` is intentionally **not** used by this production-style
+application example. Eval is test support in current Phronomy. The two quality
+scores here are implemented as an application service and the direct blocking
+RubyLLM request is submitted through `BlockingAdapterPool`.
+
+The reviewer policies are ordinary application data registered as Agent
+`knowledge:`. They participate in the Journal/candidate/context-policy pipeline
+instead of using removed static-Knowledge APIs.
 
 ## Run
 
@@ -37,6 +42,12 @@ To bypass the interactive priority prompt:
 bundle exec ruby 14_code_review/run.rb path/to/your_file.rb security
 ```
 
+Batch review:
+
+```bash
+bundle exec ruby 14_code_review/batch_review.rb
+```
+
 ## Flow
 
 ```text
@@ -47,20 +58,22 @@ Filter
 VectorStore::Splitter::RecursiveSplitter
    ↓
 Workflow :parallel_review
-   ├─ SecurityReviewerAgent       + Journal-backed Knowledge
-   ├─ PerformanceReviewerAgent    + Journal-backed Knowledge
-   ├─ ReadabilityReviewerAgent    + Journal-backed Knowledge
-   └─ AbstractionReviewerAgent    + Journal-backed Knowledge
-   ↓
+   ├─ SecurityReviewerAgent.invoke_async
+   ├─ PerformanceReviewerAgent.invoke_async
+   ├─ ReadabilityReviewerAgent.invoke_async
+   └─ AbstractionReviewerAgent.invoke_async
+   ↓ completion callbacks → Workflow#signal
 wait_state :awaiting_priority
    ↓ user event
-ImproverAgent (persistent Agent + knowledge: + streaming)
-   ↓
+ImproverAgent.stream_async
+   ↓ completion callback → Workflow#signal
 output Filter
    ↓
-Eval + tracing
+application quality judge
+   ↓ Runtime#blocking_io
+Workflow completion
 ```
 
-The reviewer branches are application-level concurrent work. The Workflow
-itself remains an event-driven state machine: long-running work completes by
-calling `Workflow#signal`, rather than blocking an EventLoop action.
+No application `Thread.new` is required. Logical asynchronous coordination is
+represented by Phronomy completion handles and Workflow events; unavoidable
+third-party blocking I/O is isolated by `BlockingAdapterPool`.

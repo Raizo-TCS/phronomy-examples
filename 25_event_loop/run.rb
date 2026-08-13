@@ -1,16 +1,16 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# 25 Runtime + EventLoop execution model
+# 25 EventLoop / FSMSession execution model
 #
-# The EventLoop is Runtime-owned infrastructure. Application code should use
-# public APIs such as Runtime#spawn, Task#map, Workflow#invoke_async and
-# Workflow#signal rather than posting internal Event objects directly.
+# The Runtime owns one EventLoop control plane. Application code should use
+# public async APIs and completion events rather than scheduling arbitrary
+# Runtime work.
 
 require_relative "../shared/output_validator"
 require "phronomy"
 
-puts "=== 25 Runtime + EventLoop execution model ==="
+puts "=== 25 EventLoop / FSMSession execution model ==="
 puts
 
 puts "--- Pattern 1: run-to-completion Workflow actions ---"
@@ -37,11 +37,11 @@ pipeline = Phronomy::Workflow.define(PipelineState) do
   transition from: :format, to: :__finish__
 end
 
-pipeline_result = pipeline.invoke({input: "  Hello Runtime  "})
+pipeline_result = pipeline.invoke({input: "  Hello EventLoop  "})
 puts pipeline_result.result
 puts
 
-puts "--- Pattern 2: async work completes by public Workflow#signal ---"
+puts "--- Pattern 2: blocking I/O completes by Workflow#signal ---"
 
 class FetchState
   include Phronomy::WorkflowContext
@@ -49,6 +49,7 @@ class FetchState
   field :url, type: :replace, default: ""
   field :response, type: :replace, default: ""
   field :summary, type: :replace, default: ""
+  field :error_message, type: :replace, default: ""
 end
 
 fetch_workflow = nil
@@ -60,48 +61,64 @@ fetch_workflow = Phronomy::Workflow.define(FetchState) do
     thread_id = ctx.thread_id
     url = ctx.url
 
-    # Runtime owns scheduling. The entry callback itself returns immediately.
-    # Task#map is the public completion-composition API.
-    Phronomy::Runtime.instance.spawn(name: "example-25-fetch") do
-      # Simulate several cooperative work chunks. Real blocking external I/O
-      # belongs behind Phronomy's blocking/adaptor boundary, not as a direct
-      # blocking call inside a cooperative Runtime task.
-      3.times { Phronomy::Runtime.instance.yield }
-      "Content for #{url}: Runtime work completed outside the FSM dispatch."
-    end.map do |response|
-      fetch_workflow.signal(
-        thread_id: thread_id,
-        event: :fetch_done,
-        payload: {response: response}
-      )
-      response
+    # This block stands in for a genuinely blocking external operation. The
+    # worker belongs to Phronomy's bounded BlockingAdapterPool. The Workflow
+    # entry itself returns immediately and never waits on the EventLoop thread.
+    operation = Phronomy::Runtime.instance.blocking_io.submit do
+      sleep 0.05
+      "Content for #{url}: blocking I/O completed outside FSM dispatch."
     end
 
-    nil
+    operation.on_complete do |response, error|
+      fetch_workflow.signal(
+        thread_id: thread_id,
+        event: error ? :fetch_failed : :fetch_done,
+        payload: {
+          response: response,
+          error: error
+        }
+      )
+    end
+
+    ctx
   }
 
   state :summarize, action: lambda { |ctx|
     ctx.merge(summary: "SUMMARY: #{ctx.response[0, 55]}...")
   }
 
+  state :failed
+
   transition(
     from: :fetching,
     on: :fetch_done,
     to: :summarize,
-    action: ->(ctx, event) { ctx.merge(response: event.payload[:response]) }
+    action: ->(ctx, event) { ctx.merge(response: event.payload.fetch(:response)) }
   )
+
+  transition(
+    from: :fetching,
+    on: :fetch_failed,
+    to: :failed,
+    action: lambda { |ctx, event|
+      error = event.payload[:error]
+      ctx.merge(error_message: "#{error.class}: #{error.message}")
+    }
+  )
+
   transition from: :summarize, to: :__finish__
+  transition from: :failed, to: :__finish__
 end
 
 single_result = OutputValidator.validate(
-  "async Workflow completes through Workflow#signal",
-  check: ->(r) { r.summary.start_with?("SUMMARY:") }
+  "blocking I/O resumes Workflow through Workflow#signal",
+  check: ->(r) { r.error_message.empty? && r.summary.start_with?("SUMMARY:") }
 ) { fetch_workflow.invoke({url: "https://example.test/document"}) }
 
 puts single_result.summary
 puts
 
-puts "--- Pattern 3: several Workflow invocations as Phronomy Tasks ---"
+puts "--- Pattern 3: several async Workflow invocations return completion handles ---"
 
 tasks = 3.times.map do |i|
   fetch_workflow.invoke_async(
@@ -110,6 +127,8 @@ tasks = 3.times.map do |i|
   )
 end
 
+# Blocking waits are fine here because this is the external CLI caller, not an
+# EventLoop callback. EventLoop code must continue by events instead of waiting.
 results = tasks.map(&:wait_result)
 
 results.each do |result|

@@ -212,7 +212,7 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    phronomy (0.17.0)
+    phronomy (0.18.0)
       mcp (~> 1.0)
       ruby_llm (>= 1.15, < 2)
       state_machines (~> 0.6)
@@ -399,7 +399,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
-  phronomy (~> 0.17.0)
+  phronomy (~> 0.18.0)
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

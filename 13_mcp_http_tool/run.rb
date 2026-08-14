@@ -7,7 +7,7 @@
 #
 #   headers:        — pass custom HTTP headers (e.g. Authorization, X-Api-Key)
 #                     to every request (tool discovery + tool execution).
-#   execution_mode  — MCP tools default to :blocking_io (BlockingAdapterPool).
+#   execution_mode  — MCP tools default to :offloaded (OffloadPool).
 #                     This keeps the Phronomy EventLoop free even when an MCP
 #                     call takes a long time.
 #

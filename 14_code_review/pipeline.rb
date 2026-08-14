@@ -28,7 +28,7 @@ class LocalLlmJudge
   end
 
   # This method performs blocking third-party I/O and must therefore only be
-  # called from the Runtime BlockingAdapterPool in this example.
+  # called from the Runtime OffloadPool in this example.
   def score(actual:, expected:, input: nil)
     prompt = format(
       DEFAULT_PROMPT,
@@ -282,7 +282,7 @@ def build_pipeline
     state :evaluate
     entry :evaluate, lambda { |state|
       snapshot = state.merge({})
-      operation = Phronomy::Runtime.instance.blocking_io.submit do
+      operation = Phronomy::Runtime.instance.offload.submit do
         Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
           [build_quality_scores(snapshot), nil]
         end

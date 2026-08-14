@@ -64,8 +64,8 @@ COMPONENTS = {
     "FSMSession, generic FSM/state machine, event dispatch, session registration, lifecycle continuation",
   "Cancellation / Deadline" =>
     "CancellationToken, CancellationScope, Deadline, timeout propagation and cancellation semantics",
-  "BlockingAdapterPool / Concurrency" =>
-    "BlockingAdapterPool, PoolRegistry, bounded unavoidable blocking I/O, backpressure, AsyncQueue",
+  "OffloadPool / Concurrency" =>
+    "OffloadPool, PoolRegistry, bounded unavoidable blocking I/O, backpressure, AsyncQueue",
   "Agent Execution / Context" =>
     "Agent::Base, AgentExecution, AgentInvocation, ExecutionCoordinator, Journal, Knowledge, transcript, context lifecycle",
   "Tool / ToolInvocation" =>
@@ -120,7 +120,7 @@ COMP_ABBR = {
   "Runtime / EventLoop / Timer" => "RT",
   "Engine / FSMSession / FSM" => "FS",
   "Cancellation / Deadline" => "CL",
-  "BlockingAdapterPool / Concurrency" => "BP",
+  "OffloadPool / Concurrency" => "BP",
   "Agent Execution / Context" => "AG",
   "Tool / ToolInvocation" => "TL",
   "MultiAgent / FanOut / Handoff" => "MA",

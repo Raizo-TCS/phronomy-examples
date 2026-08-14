@@ -28,7 +28,7 @@ module CveScanner
   end
 
   # Starts an Agent lifecycle directly through Phronomy's EventLoop/FSMSession
-  # control plane. No BlockingAdapterPool worker is occupied merely waiting for
+  # control plane. No OffloadPool worker is occupied merely waiting for
   # the child Agent to finish.
   def self.call_agent_json_async(agent_class, prompt, scan_id: nil, role: agent_class.name.split("::").last)
     operation = call_agent_json(
@@ -161,11 +161,11 @@ module CveScanner
 
   # For genuinely blocking application operations such as shell commands and
   # the synchronous Ubuntu CVE scraper. The worker belongs to Phronomy's bounded
-  # BlockingAdapterPool; the Workflow EventLoop never waits for it.
+  # OffloadPool; the Workflow EventLoop never waits for it.
   def self.start_blocking_node(workflow, state, event:, &operation)
     snapshot = state.merge({})
     thread_id = state.thread_id
-    pending = Phronomy::Runtime.instance.blocking_io.submit do
+    pending = Phronomy::Runtime.instance.offload.submit do
       operation.call(snapshot)
     end
 

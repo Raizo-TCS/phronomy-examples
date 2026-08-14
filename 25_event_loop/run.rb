@@ -62,9 +62,9 @@ fetch_workflow = Phronomy::Workflow.define(FetchState) do
     url = ctx.url
 
     # This block stands in for a genuinely blocking external operation. The
-    # worker belongs to Phronomy's bounded BlockingAdapterPool. The Workflow
+    # worker belongs to Phronomy's bounded OffloadPool. The Workflow
     # entry itself returns immediately and never waits on the EventLoop thread.
-    operation = Phronomy::Runtime.instance.blocking_io.submit do
+    operation = Phronomy::Runtime.instance.offload.submit do
       sleep 0.05
       "Content for #{url}: blocking I/O completed outside FSM dispatch."
     end
@@ -141,9 +141,9 @@ puts "--- Runtime diagnostics ---"
 diagnostics = Phronomy::Diagnostics.snapshot
 
 %i[
-  blocking_pool_size
-  blocking_pool_active
-  blocking_pool_queue_length
+  offload_pool_size
+  offload_pool_active
+  offload_pool_queue_length
   event_loop_lag_last_ms
   event_loop_lag_max_ms
 ].each do |key|

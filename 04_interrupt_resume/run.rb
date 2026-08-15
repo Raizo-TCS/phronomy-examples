@@ -10,7 +10,7 @@
 #
 # 2. Agent tool approval:
 #    a capability declares requires_approval; Agent execution is suspended
-#    before the side effect and resumed by Agent#approve.
+#    before the side effect and resumed by the live Agent owner.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -102,7 +102,7 @@ else
 end
 
 puts
-puts "--- Part 2: Agent tool approval / execution suspension ---"
+puts "--- Part 2: Agent tool approval / live owner lookup ---"
 
 class PublishReleaseTool < Phronomy::Agent::Context::Capability::Base
   description "Publish a software release to an environment."
@@ -147,9 +147,10 @@ end
 
 request = pending.fetch(:approval_request)
 item = request.items.first
+execution_id = pending.fetch(:execution_id)
 
 puts "Execution suspended: #{pending[:suspended]}"
-puts "Execution id:        #{pending[:execution_id]}"
+puts "Execution id:        #{execution_id}"
 puts "Approval id:         #{request.id}"
 puts "Tool:                #{item.tool_name}"
 puts "Safe arguments:      #{item.arguments.inspect}"
@@ -158,6 +159,9 @@ puts
 
 # This is intentionally a second, independent decision. Workflow approval above
 # must never implicitly authorize a tool side effect.
+#
+# In a real HTTP/API application, authorize the caller BEFORE treating this
+# execution as approvable. execution_id is routing identity, not an auth token.
 agent_answer = ARGV.shift
 unless agent_answer
   print "Approve the Agent tool execution? [yes/no]: "
@@ -165,12 +169,21 @@ unless agent_answer
 end
 
 approved = agent_answer == "yes"
-resumed = release_agent.approve(
-  pending[:execution_id],
+
+# If the application still has `release_agent`, it may call
+# `release_agent.approve(...)` directly. This lookup demonstrates the other
+# common boundary: a later request still in the same Ruby process has only the
+# execution_id and needs the existing live owner Agent.
+owner = ReleaseAgent.live_for_execution(execution_id)
+raise "live owner mismatch" unless owner.equal?(release_agent)
+
+resumed = owner.approve(
+  execution_id,
   approval_request_id: request.id,
   approved: approved
 )
 
+puts "Resolved live owner: #{owner.class} (same object=#{owner.equal?(release_agent)})"
 puts "Tool approved:       #{approved}"
 puts "Execution rejected:  #{!!resumed[:rejected]}"
 puts "Agent output:        #{resumed[:output]}"

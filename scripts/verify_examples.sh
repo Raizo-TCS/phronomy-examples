@@ -4,9 +4,11 @@
 # Smoke-tests all phronomy-examples:
 #   - dependency preflight: every bundle must load the same Phronomy version/path
 #   - removed-API / architecture preflight
+#   - active-documentation stale-API preflight
 #   - CLI samples: actual LLM run with timeout (default)
 #                  OR Ruby syntax check only (--syntax-only)
-#   - Rails apps: db:migrate, server boot, health check, Playwright GUI smoke test
+#   - Rails apps: db:migrate, Zeitwerk check, server boot, health check,
+#                 Playwright GUI smoke test
 #
 # Usage:
 #   cd phronomy-examples
@@ -77,8 +79,9 @@ verify_phronomy_dependency() {
   )
 
   local expected_version=""
+  local expected_source_key=""
   local expected_local_path=""
-  local gemfile bundle_dir display resolved version path
+  local gemfile bundle_dir display resolved version path source_key
   local preflight_failed=false
 
   if [[ -n "${PHRONOMY_PATH:-}" ]]; then
@@ -104,19 +107,29 @@ verify_phronomy_dependency() {
 
     version="${resolved%%$'\t'*}"
     path="${resolved#*$'\t'}"
+    source_key="$(basename "$path")"
 
     echo "  $display"
     echo "    version: $version"
     echo "    path:    $path"
+    echo "    source:  $source_key"
 
     if [[ -z "$expected_version" ]]; then
       expected_version="$version"
+      expected_source_key="$source_key"
       pass "$display establishes Phronomy baseline"
     elif [[ "$version" != "$expected_version" ]]; then
       fail "$display loads Phronomy $version; expected $expected_version"
       preflight_failed=true
     else
       pass "$display matches Phronomy $expected_version"
+    fi
+
+    if [[ -n "$expected_source_key" && "$source_key" != "$expected_source_key" ]]; then
+      fail "$display loads Phronomy source $source_key; baseline is $expected_source_key"
+      preflight_failed=true
+    elif [[ "$source_key" == "$expected_source_key" ]]; then
+      pass "$display matches the baseline Phronomy source revision/build"
     fi
 
     if [[ -n "$expected_local_path" && "$path" != "$expected_local_path" ]]; then
@@ -137,7 +150,7 @@ verify_phronomy_dependency() {
   fi
 
   echo
-  echo "All bundles load the same Phronomy version and the expected local checkout when configured."
+  echo "All bundles load the same Phronomy version and source revision/build."
 }
 
 # High-signal migration mistakes that Ruby syntax checking cannot detect.
@@ -169,6 +182,14 @@ verify_removed_api_contract() {
     'DeterministicScheduler'
     'ThreadScheduler'
     'FakeScheduler'
+    'Phronomy::ActiveRecord::ActsAs'
+    'acts_as_phronomy_checkpoint'
+    'Phronomy::StateStore'
+    'StateStore::InMemory'
+    'Phronomy::Runtime\.instance\.blocking_io'
+    'Runtime#blocking_io'
+    'BlockingAdapterPool'
+    '^[[:space:]]*[A-Z][A-Za-z0-9_:]*\.approve(_async)?[[:space:]]*\('
   )
   local -a labels=(
     'removed Guardrail namespace'
@@ -191,6 +212,14 @@ verify_removed_api_contract() {
     'removed DeterministicScheduler runtime primitive'
     'removed ThreadScheduler runtime primitive'
     'removed FakeScheduler runtime primitive'
+    'removed Phronomy ActiveRecord integration'
+    'removed acts_as_phronomy_checkpoint DSL'
+    'removed Phronomy::StateStore namespace'
+    'removed StateStore::InMemory backend'
+    'removed Runtime.instance.blocking_io API'
+    'removed Runtime#blocking_io source guidance'
+    'removed BlockingAdapterPool name'
+    'removed class-level Agent approval routing'
   )
 
   for i in "${!patterns[@]}"; do
@@ -205,6 +234,53 @@ verify_removed_api_contract() {
   done
 
   ! $failed
+}
+
+verify_active_docs_contract() {
+  header "Current Phronomy documentation preflight"
+
+  local failed=false
+  local matches i
+  local -a patterns=(
+    'BlockingAdapterPool'
+    'Runtime#blocking_io'
+    'Workflow / StateStore'
+    'Phronomy 0\.1[67]'
+  )
+  local -a labels=(
+    'removed BlockingAdapterPool name in active Markdown'
+    'removed Runtime#blocking_io API in active Markdown'
+    'removed Workflow / StateStore architecture category'
+    'stale Phronomy 0.16/0.17 version guidance'
+  )
+
+  for i in "${!patterns[@]}"; do
+    matches=$(grep -RInE --include='*.md' --exclude-dir=vendor "${patterns[$i]}" "$BASE_DIR" 2>/dev/null || true)
+    if [[ -n "$matches" ]]; then
+      fail "${labels[$i]}"
+      echo "$matches" | sed 's/^/    /'
+      failed=true
+    else
+      pass "${labels[$i]} not found"
+    fi
+  done
+
+  ! $failed
+}
+
+
+verify_standalone_smoke_tests() {
+  header "Standalone smoke-test syntax"
+
+  local file="$BASE_DIR/test_approval_lmstudio.rb"
+  if (cd "$BASE_DIR" && bundle exec ruby -c "$file" > /dev/null 2>&1); then
+    pass "test_approval_lmstudio.rb syntax OK"
+  else
+    local err
+    err=$(cd "$BASE_DIR" && bundle exec ruby -c "$file" 2>&1 || true)
+    fail "test_approval_lmstudio.rb syntax error: $err"
+    return 1
+  fi
 }
 
 # Examples 14 and 20 are specifically intended to demonstrate Phronomy's
@@ -297,6 +373,14 @@ verify_rails() {
     pass "db:create db:migrate"
   else
     fail "db:migrate: ${migrate_out: -300}"
+    return
+  fi
+
+  local zeitwerk_out
+  if zeitwerk_out=$(cd "$dir" && RAILS_ENV=development bundle exec rails zeitwerk:check 2>&1); then
+    pass "zeitwerk:check"
+  else
+    fail "zeitwerk:check: ${zeitwerk_out: -300}"
     return
   fi
 
@@ -403,6 +487,7 @@ CLI_EXAMPLES=(
   26_agent_event_loop
   27_issue_analyzer
   28_filter
+  29_unified_persistence
 )
 
 echo -e "${BOLD}======================================================${NC}"
@@ -417,7 +502,15 @@ if ! verify_removed_api_contract; then
   exit 1
 fi
 
+if ! verify_active_docs_contract; then
+  exit 1
+fi
+
 if ! verify_event_loop_example_contract; then
+  exit 1
+fi
+
+if ! verify_standalone_smoke_tests; then
   exit 1
 fi
 
@@ -452,11 +545,11 @@ fi
 
 echo -e "${BOLD}======================================================"
 if $WITH_LLM; then
-  echo -e "  CLI: syntax + LLM run (timeout 240s)"
+  echo -e "  CLI: syntax + LLM run (default timeout 240s)"
 else
   echo -e "  CLI: syntax-only (no LLM required)"
 fi
-echo -e "  Rails: db + server + health + Playwright GUI"
+echo -e "  Rails: db + Zeitwerk + server + health + Playwright GUI"
 echo -e "======================================================${NC}"
 
 [[ $FAIL -eq 0 ]]

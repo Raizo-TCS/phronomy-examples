@@ -34,7 +34,7 @@ class FileExplorerAgent < Phronomy::Agent::Base
   end
 end
 
-# Phronomy 0.17 uses ToolClass => alias_or_nil registration.
+# Current Phronomy tool registration uses ToolClass => alias_or_nil.
 FileExplorerAgent.tools(list_files_tool => nil)
 
 puts "=== MCP Tool Example ==="

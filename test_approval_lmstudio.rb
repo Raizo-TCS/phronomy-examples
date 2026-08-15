@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Smoke test for 0.15.0 Tool Approval API (tool_approval_policy / approve())
+# Manual LM Studio smoke test for the current Tool Approval API.
 #
 # Run with:
 #   PHRONOMY_MODEL="openai/gpt-oss-20b" \
@@ -31,11 +31,13 @@ end
 # Agent: tool_approval_policy suspends on requires_approval tools
 # ---------------------------------------------------------------------------
 class FileManagerAgent < Phronomy::Agent::Base
-  model        LLMConfig::MODEL
-  provider     LLMConfig::PROVIDER
+  agent_definition id: "manual-lmstudio-file-manager", version: 1
+
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
   instructions "You are a file management assistant. " \
                "When asked to delete a file, call the delete_file tool."
-  tools DeleteFileTool => nil
+  tools(DeleteFileTool => nil)
 end
 
 # ---------------------------------------------------------------------------
@@ -43,26 +45,24 @@ end
 # ---------------------------------------------------------------------------
 agent = FileManagerAgent.new
 
-# tool_approval_policy and on_tool_approval_required are instance methods
 agent.tool_approval_policy do |_request|
-  # :require_approval => suspend and wait for human decision
   :require_approval
 end
 
 agent.on_tool_approval_required do |request|
   puts "  [APPROVAL REQUIRED]"
-  puts "    request.id           : #{request.id}"
-  puts "    agent_invocation_id  : #{request.agent_invocation_id}"
+  puts "    request.id : #{request.id}"
   request.items.each do |item|
     puts "    tool_name  : #{item.tool_name}"
     puts "    arguments  : #{item.arguments.inspect}"
+    puts "    facts      : #{item.facts.inspect}"
   end
 end
 
-puts "=== Tool Approval API Smoke Test (0.15.0) ==="
+puts "=== Tool Approval API Smoke Test ==="
 puts
 
-# Step 1: invoke — should suspend
+# Step 1: invoke — should suspend.
 puts "Step 1: invoke('Please delete /tmp/old_data.txt')"
 result = agent.invoke("Please delete /tmp/old_data.txt")
 
@@ -72,23 +72,38 @@ unless result[:suspended]
   exit 1
 end
 
-agent_invocation_id  = result[:agent_invocation_id]
-approval_req         = result[:approval_request]
-approval_request_id  = approval_req.id
+execution_id = result.fetch(:execution_id)
+approval_request = result.fetch(:approval_request)
+approval_request_id = approval_request.id
 
 puts "  suspended            : #{result[:suspended]}"
-puts "  agent_invocation_id  : #{agent_invocation_id}"
-result[:approval_request].items.each do |item|
+puts "  execution_id         : #{execution_id}"
+puts "  approval_request_id  : #{approval_request_id}"
+approval_request.items.each do |item|
   puts "  tool_name            : #{item.tool_name}"
   puts "  arguments            : #{item.arguments.inspect}"
 end
 puts
 
-# Step 2: approve — should resume and complete
-puts "Step 2: approve(agent_invocation_id, approval_request_id: ..., approved: true)"
-final = agent.approve(agent_invocation_id, approval_request_id: approval_request_id, approved: true)
+# Step 2: resolve the existing live owner, then approve.
+# execution_id is routing identity, not an authorization token; a real
+# application must authorize the caller before approving the request.
+puts "Step 2: live_for_execution(execution_id) -> approve(...)"
+owner = FileManagerAgent.live_for_execution(execution_id)
+
+unless owner.equal?(agent)
+  puts "UNEXPECTED: live owner is not the original Agent object"
+  exit 1
+end
+
+final = owner.approve(
+  execution_id,
+  approval_request_id: approval_request_id,
+  approved: true
+)
 
 puts
+puts "  live owner: #{owner.class}"
 puts "  output: #{final[:output]}"
 puts
 

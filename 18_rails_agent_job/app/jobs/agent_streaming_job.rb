@@ -2,9 +2,9 @@
 
 # Application-owned ActiveJob adapter for Phronomy streaming.
 #
-# Phronomy 0.17 exposes Agent#stream; Rails integration should compose that
-# public API with the application's own queue and ActionCable conventions,
-# rather than depending on a framework-specific Rails adapter.
+# Phronomy exposes Agent#stream; Rails integration composes that public API with
+# the application's own queue and ActionCable conventions rather than depending
+# on a framework-specific Rails adapter.
 class AgentStreamingJob < ApplicationJob
   queue_as :default
 

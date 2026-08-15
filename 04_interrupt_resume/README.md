@@ -19,8 +19,9 @@ requires_approval true
 
 When the model requests that capability, Phronomy authorizes the tool call,
 persists the execution as suspended, and returns a `ToolApprovalRequest`.
-The application can inspect only its safe parameters/facts, then resume the same
-execution with:
+
+If the application still holds the live Agent instance, approval is simply an
+instance operation:
 
 ```ruby
 agent.approve(
@@ -30,7 +31,43 @@ agent.approve(
 )
 ```
 
-Use this when approval protects a **tool side effect**.
+If a later application boundary has only the `execution_id`, first resolve the
+current process's **existing live owner Agent**, then perform the same instance
+operation:
+
+```ruby
+agent = ReleaseAgent.live_for_execution(execution_id)
+
+agent.approve(
+  execution_id,
+  approval_request_id: request.id,
+  approved: true
+)
+```
+
+`live_for_execution` is a Runtime-local lookup:
+
+```text
+execution_id
+  ↓
+Runtime
+  ↓
+process-local ActivationRegistry
+  ↓
+existing live Agent instance
+```
+
+It does **not** reload Agent or Execution state from Persistence. After process
+restart, or from another Ruby process/service replica, the live Activation may
+not exist and `ExecutionRehydrationRequiredError` is raised until durable
+execution rehydration is implemented.
+
+`execution_id` is also **not an authorization token**. A web/API application
+must authorize the caller against its own application identity and approval
+policy before resolving and approving the Agent execution.
+
+From an EventLoop callback use `agent.approve_async(...)`; the synchronous
+`agent.approve(...)` API is for callers that are allowed to block.
 
 The important distinction is that Workflow waiting and Agent capability
 authorization are related HITL concepts, but they are not the same mechanism.

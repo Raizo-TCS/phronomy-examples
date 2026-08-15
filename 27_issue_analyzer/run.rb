@@ -55,8 +55,8 @@ ISSUE_TYPES = {
     "issue explicitly blocked waiting for an MCP transport PR to merge"
 }.freeze
 
-# Current Phronomy architectural areas. These intentionally avoid the removed
-# scheduler/runtime-backend model.
+# Current Phronomy architectural areas. These intentionally avoid removed
+# scheduler/runtime-backend and StateStore models.
 COMPONENTS = {
   "Runtime / EventLoop / Timer" =>
     "Runtime lifecycle, EventLoop, EventLoop-owned thread, TimerQueue, TimerService, diagnostics, shutdown",
@@ -65,17 +65,17 @@ COMPONENTS = {
   "Cancellation / Deadline" =>
     "CancellationToken, CancellationScope, Deadline, timeout propagation and cancellation semantics",
   "OffloadPool / Concurrency" =>
-    "OffloadPool, PoolRegistry, bounded unavoidable blocking I/O, backpressure, AsyncQueue",
+    "OffloadPool, PoolRegistry, bounded synchronous-work isolation, backpressure, AsyncQueue",
   "Agent Execution / Context" =>
     "Agent::Base, AgentExecution, AgentInvocation, ExecutionCoordinator, Journal, Knowledge, transcript, context lifecycle",
   "Tool / ToolInvocation" =>
     "Tool capability contract, ToolInvocation, ToolExecutor, execution_mode, approval and tool-result handling",
   "MultiAgent / FanOut / Handoff" =>
     "MultiAgent::Orchestrator, FanOut FSMSession, max_concurrency, Agent-as-Tool, handoff, TeamCoordinator",
-  "Workflow / StateStore" =>
-    "Workflow, WorkflowContext, wait states, signals, state transitions, StateStore",
+  "Workflow / Durable State" =>
+    "Workflow, WorkflowContext, workflow_states, wait states, signals, state transitions, thread_id admission",
   "Persistence / ContentStore" =>
-    "Persistence protocol/backends, ContentStore, checkpoints, Journal persistence, restore/load behavior",
+    "Persistence protocol/backends, workflow_states, ContentStore, Agent Journal durability, optimistic revisions, restore/load behavior",
   "Context Policy / Manifest / LLM Adapter" =>
     "ContextPolicy, ContextAssembler, candidates, token budget, LLMInputManifest, provider materialization, LLM adapters",
   "RAG / VectorStore" =>
@@ -120,11 +120,11 @@ COMP_ABBR = {
   "Runtime / EventLoop / Timer" => "RT",
   "Engine / FSMSession / FSM" => "FS",
   "Cancellation / Deadline" => "CL",
-  "OffloadPool / Concurrency" => "BP",
+  "OffloadPool / Concurrency" => "OF",
   "Agent Execution / Context" => "AG",
   "Tool / ToolInvocation" => "TL",
   "MultiAgent / FanOut / Handoff" => "MA",
-  "Workflow / StateStore" => "WF",
+  "Workflow / Durable State" => "WF",
   "Persistence / ContentStore" => "PS",
   "Context Policy / Manifest / LLM Adapter" => "CX",
   "RAG / VectorStore" => "RG",

@@ -1,12 +1,15 @@
 # Phronomy Examples
 
-Examples for **Phronomy 0.17.x**.
+These examples are currently validating the **upcoming Phronomy 0.19 API**.
+`Gemfile.phronomy` therefore tracks `Raizo-TCS/phronomy` `main` until the 0.19.0
+release is cut. After that release, switch the shared dependency to
+`phronomy ~> 0.19.0` and regenerate every lockfile.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM
 wrapper.
 
-## The two main architectural axes
+## The main architectural axes
 
 ### Stateful Agent context
 
@@ -27,6 +30,21 @@ The Agent Journal is canonical state. The provider message list is a
 
 Start with **10_context_management** for this model.
 
+### Unified durable state
+
+```text
+Agent durable state ───────┐
+                           ├─ Phronomy::Persistence
+Workflow workflow_states ──┘
+```
+
+Live Agent state remains owned by the live Agent/Activation. Persistence is the
+last committed durable representation and recovery source. Workflow
+`thread_id` is the durable logical Workflow identity; the Runtime's
+`fsm_session_id` is private execution identity.
+
+Start with **29_unified_persistence** for this model.
+
 ### Runtime and event-driven execution
 
 ```text
@@ -37,8 +55,8 @@ Runtime
   │         ├─ Workflow
   │         ├─ ToolInvocation
   │         └─ MultiAgent fan-out
-  ├─ BlockingAdapterPool
-  │    └─ unavoidable blocking I/O only
+  ├─ OffloadPool
+  │    └─ synchronous work that must stay off EventLoop
   ├─ EventLoop-driven timers
   └─ metrics / shutdown lifecycle
 
@@ -50,6 +68,10 @@ Application code composes public APIs such as `invoke_async`, `stream_async`,
 does not schedule arbitrary Runtime tasks, select a scheduler/backend, or post
 internal Event objects directly.
 
+`OffloadPool` isolates synchronous work that must not execute on the EventLoop.
+It is not a logical async scheduler and does not provide CPU isolation or
+distributed execution.
+
 Start with **25_event_loop** and **26_agent_event_loop**.
 
 ## Dependency management
@@ -60,15 +82,15 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-Normal released-gem use:
+During pre-release 0.19 validation, normal repository use tracks GitHub `main`:
 
 ```bash
-bundle install
 ./scripts/update_phronomy.sh
+./scripts/verify_examples.sh
 ```
 
-Test every bundle against a local checkout. Export `PHRONOMY_PATH` so the same
-value is available to both dependency update and verification:
+To test every bundle against a specific local checkout, export `PHRONOMY_PATH`
+so the same value is available to dependency update and verification:
 
 ```bash
 export PHRONOMY_PATH=../phronomy
@@ -76,8 +98,9 @@ export PHRONOMY_PATH=../phronomy
 ./scripts/verify_examples.sh
 ```
 
-When the target Phronomy version changes, edit **only `Gemfile.phronomy`** and
-run the update script to regenerate each bundle's lockfile.
+After Phronomy 0.19.0 is released, change **only `Gemfile.phronomy`** to
+`phronomy ~> 0.19.0` and run the update script again to regenerate every
+lockfile.
 
 ## Example map
 
@@ -95,20 +118,21 @@ run the update script to regenerate each bundle's lockfile.
 | `16_before_llm_input_hook` | Public pre-materialization context hook |
 | `28_filter` | Input/output/tool-result Filters |
 
-### Stateful context and trust
+### Stateful context, persistence, and trust
 
 | Example | Focus |
 |---|---|
 | `10_context_management` | Journal → candidates → Policy → Manifest |
 | `19_trust_pipeline` | Persistent Knowledge + Generator/Verifier |
 | `24_vector_store_dimension` | VectorStore + VectorSearch Agent RAG |
+| `29_unified_persistence` | Agent + Workflow unified Persistence / durable identity |
 
 ### Human-in-the-loop and execution control
 
 | Example | Focus |
 |---|---|
-| `04_interrupt_resume` | Workflow wait-state HITL + Agent tool approval |
-| `25_event_loop` | EventLoop/FSMSession + blocking-I/O completion events |
+| `04_interrupt_resume` | Workflow wait-state HITL + Agent tool approval + live owner lookup |
+| `25_event_loop` | EventLoop/FSMSession + OffloadPool completion events |
 | `26_agent_event_loop` | Agent async events → Workflow signal; timeout |
 | `23_bounded_parallel` | Bounded child-Agent fan-out |
 
@@ -137,7 +161,7 @@ run the update script to regenerate each bundle's lockfile.
 | `14_code_review` | Event-driven multi-stage code review pipeline |
 | `15_rails_secure_chat` | Rails security/trust boundaries |
 | `18_rails_agent_job` | ActiveJob + Agent streaming + ActionCable |
-| `20_cve_scanner` | Workflow + Agent async lifecycle + blocking-adapter boundary |
+| `20_cve_scanner` | Workflow + Agent async lifecycle + OffloadPool boundary |
 | `27_issue_analyzer` | GitHub issue analysis against current Phronomy components |
 
 ## Choosing the right multi-agent primitive
@@ -178,7 +202,7 @@ export PHRONOMY_PATH=../phronomy
 ```
 
 Printing the actually loaded implementation is useful when diagnosing version
-mismatches:
+or source mismatches:
 
 ```bash
 bundle exec ruby -e '

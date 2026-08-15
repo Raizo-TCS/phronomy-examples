@@ -8,9 +8,9 @@ one on two independent axes using an LLM-backed Phronomy Agent:
 - **Axis 1 — Issue Type (WHAT):** the nature of the work.
 - **Axis 2 — Component (WHERE):** the current architectural area in Phronomy.
 
-The component taxonomy is aligned with the EventLoop/FSMSession architecture in
-current Phronomy. Removed scheduler/task-backend concepts are intentionally not
-used as active component categories.
+The component taxonomy is aligned with the current EventLoop/FSMSession and
+Unified Persistence architecture. Removed scheduler/backend and StateStore
+concepts are intentionally not used as active component categories.
 
 The Agent identifies semantically meaningful `(type, component)` pairs for each
 issue — **not** the cross-product of independent type and component lists.
@@ -25,11 +25,11 @@ The current categories include:
 - Runtime / EventLoop / Timer
 - Engine / FSMSession / FSM
 - Cancellation / Deadline
-- BlockingAdapterPool / Concurrency
+- OffloadPool / Concurrency
 - Agent Execution / Context
 - Tool / ToolInvocation
 - MultiAgent / FanOut / Handoff
-- Workflow / StateStore
+- Workflow / Durable State
 - Persistence / ContentStore
 - Context Policy / Manifest / LLM Adapter
 - RAG / VectorStore
@@ -41,6 +41,11 @@ The current categories include:
 - Testing / CI
 - Cross-cutting / Framework-wide
 
+`Workflow / Durable State` covers Workflow state, `thread_id` admission and
+`Persistence#workflow_states`. `Persistence / ContentStore` covers the unified
+backend protocol, Agent Journal durability, content storage and optimistic
+revision boundaries.
+
 ## Phronomy Features
 
 | Feature | Class / Method | Role |
@@ -48,6 +53,7 @@ The current categories include:
 | LLM agent | `Phronomy::Agent::Base` | `IssueClassifierAgent` subclass; classifies batches of issues |
 | One-shot invocation | `Phronomy::Agent.run_once` | Creates a fresh Agent for each batch so history does not bleed across batches |
 | Runtime architecture | EventLoop / FSMSession | Agent lifecycle coordination is handled by Phronomy; no application runtime backend selection is required |
+| Unified persistence taxonomy | `Persistence#workflow_states` + Agent Journal | Classifies current durable-state issues without using the removed StateStore abstraction |
 | Shared LLM config | `LLMConfig::MODEL`, `LLMConfig::PROVIDER` | Provider-agnostic model/provider config from `shared/llm_config.rb` |
 
 There is deliberately no `runtime_backend` configuration. Current Phronomy no

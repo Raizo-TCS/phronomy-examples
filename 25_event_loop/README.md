@@ -8,8 +8,8 @@ control flow.
 Runtime
   ├─ EventLoop
   │    └─ FSMSession / Workflow FSM dispatch
-  ├─ BlockingAdapterPool
-  │    └─ unavoidable blocking file / DB / network / external-library I/O
+  ├─ OffloadPool
+  │    └─ synchronous work that must stay off EventLoop
   └─ EventLoop-driven timers
 
 Task / PendingOperation = completion handles
@@ -22,7 +22,8 @@ cannot complete immediately:
 
 1. start an asynchronous Phronomy lifecycle (`Agent#invoke_async`,
    `Agent#stream_async`, another Workflow, MultiAgent fan-out), **or** submit a
-   genuinely blocking external operation to `Runtime#blocking_io`;
+   synchronous external operation that must stay off EventLoop to
+   `Runtime#offload`;
 2. return the Workflow context immediately;
 3. attach `on_complete` to the returned completion handle;
 4. call `Workflow#signal` when the operation settles;
@@ -31,16 +32,19 @@ cannot complete immediately:
 
 This example demonstrates:
 
-- `Runtime#blocking_io.submit`
+- `Runtime#offload.submit`
 - completion callbacks via `on_complete`
 - `Workflow#invoke_async`
 - `Workflow#signal`
 - external `Task#wait_result`
 - `Diagnostics.snapshot`
 
-It intentionally does **not** use removed scheduler/runtime-task APIs and does
-not call `Runtime#event_loop.post` or construct internal `Phronomy::Event`
-objects.
+`OffloadPool` is bounded synchronous-work isolation. It is not a scheduler for
+logical Workflow execution and does not imply CPU isolation.
+
+The example intentionally does **not** use removed scheduler/runtime-task APIs
+and does not call `Runtime#event_loop.post` or construct internal
+`Phronomy::Event` objects.
 
 Run:
 

@@ -14,7 +14,7 @@
 # The Journal remains the canonical history. A particular LLM call may receive
 # only a selected projection of that history.
 #
-# Important public-API detail for Phronomy 0.17:
+# Public-API detail:
 # result[:messages] is the current logical transcript materialization. It is not
 # the exact per-call LLMInputManifest/provider input.
 
@@ -133,6 +133,9 @@ puts "Journal position:              #{knowledge_result[:journal_position]}"
 puts
 
 puts "--- Reload the same logical Agent ---"
+# This simulates a later request/application boundary. From this point onward
+# the example mutates only `reloaded`; it does not treat the original `agent`
+# object and the reloaded object as independent concurrent mutable owners.
 reloaded = ContextDemoAgent.load(agent.agent_id, persistence: persistence)
 
 puts "Reloaded id:                  #{reloaded.agent_id}"

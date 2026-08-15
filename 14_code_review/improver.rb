@@ -6,9 +6,8 @@ require_relative "../shared/llm_config"
 IMPROVER_MAX_OUTPUT_TOKENS = [1024, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.25).to_i].min
 IMPROVE_OVERHEAD_TOKENS = 150 + 150 + 200 + IMPROVER_MAX_OUTPUT_TOKENS
 
-# Persistent Knowledge in 0.17 is application content written to the Agent
-# Journal. The pipeline supplies this string via knowledge: when the Agent is
-# first created.
+# Persistent Knowledge is application content written to the Agent Journal.
+# The pipeline supplies this string via knowledge: when the Agent is created.
 IMPROVEMENT_POLICY = (
   "Return ONLY the improved Ruby code inside a ```ruby ... ``` fenced block. " \
   "No explanations, preamble, or commentary outside the code block."

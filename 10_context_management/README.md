@@ -36,11 +36,15 @@ provider-specific materialization
 The point is **not** merely "chat memory." The point is that persisted Agent
 state and per-call model context are separate concepts.
 
-Phronomy 0.17 keeps the exact per-call `LLMInputManifest` as framework-owned
-execution state; `Agent#invoke` does not expose that manifest through
-`result[:messages]`. This example therefore demonstrates the public state
-boundaries without pretending that the returned logical transcript is the
-provider projection.
+The exact per-call `LLMInputManifest` remains framework-owned execution state;
+`Agent#invoke` does not expose that manifest through `result[:messages]`. This
+example therefore demonstrates the public state boundaries without pretending
+that the returned logical transcript is the provider projection.
+
+The reload section represents a later application/request boundary. Once the
+same logical Agent is reloaded, the example stops mutating the original Ruby
+Agent object. Applications should not treat two objects loaded for the same
+`agent_id` as independent concurrent mutable owners.
 
 Run:
 

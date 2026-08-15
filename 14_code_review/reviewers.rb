@@ -3,7 +3,7 @@
 require "phronomy"
 require_relative "../shared/llm_config"
 
-# Phronomy 0.17 treats persistent Knowledge as Journal-backed context candidates.
+# Persistent Knowledge is represented as Journal-backed context candidates.
 # These constants are plain application data. The pipeline passes the selected
 # policy through Agent#create/new(knowledge: [...]) rather than using the
 # removed StaticKnowledge/static_knowledge API.

@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 # =============================================================================
-# multi_user_test.rb -- 15_rails_secure_chat Multi-User Scenario Test (0.16)
+# multi_user_test.rb -- 15_rails_secure_chat Multi-User Scenario Test
 #
 # Verifies all four NIST AI RMF features with two concurrent browser sessions
 # and captures screenshots at each key step as evidence.
 #
-# Architecture (0.16):
+# Current architecture:
 #   - SecureChatAgent.create/load via Persistence::InMemory (PhronomyStore)
 #   - SummarizationGraph uses invoke_async + :summary_done signal
-#   - No encrypted checkpoints; no PhronomyMessage DB model
+#   - No ActiveRecord checkpoint/message model for Phronomy state
 #   - session[:agent_id] is the conversation handle
 #
 # Usage:
@@ -109,7 +109,7 @@ puts
 # SCENARIO START
 # ===========================================================================
 puts "=" * 70
-puts " 15_rails_secure_chat -- Multi-User Scenario Test (phronomy 0.16)"
+puts " 15_rails_secure_chat -- Multi-User Scenario Test"
 puts " Date: #{Time.now.strftime("%Y-%m-%d %H:%M:%S")}"
 puts "=" * 70
 puts

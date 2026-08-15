@@ -15,7 +15,8 @@ echo "Phronomy dependency source:"
 if [[ -n "${PHRONOMY_PATH:-}" ]]; then
   echo "  local path: $PHRONOMY_PATH"
 else
-  echo "  version constraint from: $ROOT_DIR/Gemfile.phronomy"
+  echo "  definition: $ROOT_DIR/Gemfile.phronomy"
+  echo "  pre-release validation source: Raizo-TCS/phronomy main"
 fi
 echo
 

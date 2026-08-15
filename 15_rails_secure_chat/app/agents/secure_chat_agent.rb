@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Application-specific PII policy built on the public 0.17 Filter boundary.
+# Application-specific PII policy built on the public Filter boundary.
 class PIIInputFilter < Phronomy::Filter::Base
   PATTERNS = {
     credit_card: {pattern: /\b(?:\d{4}[- ]?){3}\d{4}\b/, label: "credit card number"},

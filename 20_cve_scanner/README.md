@@ -12,17 +12,21 @@ Workflow EventLoop / FSMSession
   ├─ Agent reasoning
   │    └─ Agent#stream_async → completion Task → Workflow#signal
   │
-  └─ unavoidable blocking application I/O
+  └─ synchronous application work that must stay off EventLoop
        ├─ shell commands
        └─ Ubuntu CVE scraper
             ↓
-       Runtime#blocking_io (bounded BlockingAdapterPool)
+       Runtime#offload (bounded OffloadPool)
             ↓ on_complete
        Workflow#signal
 ```
 
 The application does not create raw Threads for Workflow orchestration and does
-not place logical waits for child Agents into the blocking-I/O pool.
+not place logical waits for child Agents into the OffloadPool.
+
+`OffloadPool` is a bounded isolation boundary for synchronous work. It is not a
+logical Workflow scheduler, CPU-isolation guarantee, or distributed execution
+mechanism.
 
 ## Main Phronomy features
 
@@ -30,7 +34,7 @@ not place logical waits for child Agents into the blocking-I/O pool.
 - `Workflow#signal`
 - Agent `stream_async`
 - `Phronomy::Task` completion handles
-- `Runtime#blocking_io`
+- `Runtime#offload`
 - Tool approval / operator wait states
 - follow-up and remediation loops represented as FSM state
 

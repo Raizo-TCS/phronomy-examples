@@ -1,3 +1,14 @@
+GIT
+  remote: https://github.com/Raizo-TCS/phronomy.git
+  revision: 6a4fb712669833c3219b82d0eb0b27392970a9b7
+  branch: main
+  specs:
+    phronomy (0.18.0)
+      mcp (~> 1.0)
+      ruby_llm (>= 1.15, < 2)
+      state_machines (~> 0.6)
+      zeitwerk (>= 2.6, < 3)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -163,7 +174,7 @@ GEM
       net-pop
       net-smtp
     marcel (1.2.1)
-    mcp (1.1.0)
+    mcp (1.2.0)
       json_schemer (>= 2.4)
     mini_mime (1.1.5)
     minitest (6.0.6)
@@ -209,11 +220,6 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    phronomy (0.18.0)
-      mcp (~> 1.0)
-      ruby_llm (>= 1.15, < 2)
-      state_machines (~> 0.6)
-      zeitwerk (>= 2.6, < 3)
     pp (0.6.3)
       prettyprint
     prettyprint (0.2.0)
@@ -395,7 +401,7 @@ DEPENDENCIES
   debug
   importmap-rails
   kamal
-  phronomy (~> 0.18.0)
+  phronomy!
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

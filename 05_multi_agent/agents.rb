@@ -4,9 +4,9 @@ require_relative "../shared/llm_config"
 require "phronomy"
 
 # max_output_tokens sets the Phronomy context-budget output reserve for each
-# agent. In Phronomy 0.19.x this value is not forwarded to the provider as a
-# generation hard-limit; it is used by the Context Policy to compute available
-# input space. Prompt instructions control actual output length here.
+# agent. Phronomy 0.19.x does not implement provider-specific output-token
+# mapping; it is forwarded only when RubyLLM provides a normalised API for it.
+# Prompt instructions are responsible for controlling actual output length here.
 RESEARCHER_CONTEXT_RESERVE = 512
 WRITER_CONTEXT_RESERVE     = 2048
 ORCHESTRATOR_CONTEXT_RESERVE = 2048

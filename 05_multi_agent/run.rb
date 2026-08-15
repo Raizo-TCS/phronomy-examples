@@ -28,7 +28,8 @@ puts "Task: #{task}"
 puts
 puts "[config] Model:              #{LLMConfig::MODEL}"
 puts "[config] max_output_tokens is the Phronomy context-budget output reserve."
-puts "[config]   In Phronomy 0.19.x it is NOT forwarded to the provider API."
+puts "[config]   Provider-side output limiting is not guaranteed in Phronomy 0.19.x;"
+puts "[config]   it is forwarded only when RubyLLM provides a normalised API for it."
 puts "[config]   Actual output length is controlled by prompt instructions."
 puts "[config] LLM calls expected: 3+ (Orchestrator drives tool calls autonomously)"
 puts

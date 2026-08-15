@@ -3,15 +3,14 @@
 # Single source of truth for the Phronomy dependency used by every bundle in
 # this repository.
 #
-# Pre-release 0.19 validation:
-#   without PHRONOMY_PATH, track Raizo-TCS/phronomy main.
+# Normal released-gem use:
+#   bundle install
 #
 # Test against a specific local Phronomy checkout:
 #   PHRONOMY_PATH=../phronomy bundle install
 #
-# After Phronomy 0.19.0 is released, replace the git source below with:
-#   gem "phronomy", "~> 0.19.0"
-# and run ./scripts/update_phronomy.sh to regenerate every lockfile.
+# When the target Phronomy version changes, edit only this file and run:
+#   ./scripts/update_phronomy.sh
 #
 # PHRONOMY_PATH is resolved relative to this file, not to the individual
 # Rails application's Gemfile.
@@ -20,7 +19,5 @@ phronomy_path = ENV["PHRONOMY_PATH"]
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy",
-    git: "https://github.com/Raizo-TCS/phronomy.git",
-    branch: "main"
+  gem "phronomy", "~> 0.19.0"
 end

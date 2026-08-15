@@ -3,19 +3,23 @@
 require_relative "../shared/llm_config"
 require "phronomy"
 
-# Reasonable output budget: ResearcherAgent produces bullet notes, WriterAgent
-# writes a short article. Both are bounded so the slow local LLM finishes promptly.
-RESEARCHER_MAX_TOKENS = 512  # ~400 words for bullet notes
-WRITER_MAX_TOKENS     = 2048 # ~1500 words for blog article
+# max_output_tokens sets the Phronomy context-budget output reserve for each
+# agent. In Phronomy 0.19.x this value is not forwarded to the provider as a
+# generation hard-limit; it is used by the Context Policy to compute available
+# input space. Prompt instructions control actual output length here.
+RESEARCHER_CONTEXT_RESERVE = 512
+WRITER_CONTEXT_RESERVE     = 2048
+ORCHESTRATOR_CONTEXT_RESERVE = 2048
 
 class ResearcherAgent < Phronomy::Agent::Base
   agent_definition id: "example-05-researcher-agent", version: 1
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  max_output_tokens RESEARCHER_MAX_TOKENS
+  max_output_tokens RESEARCHER_CONTEXT_RESERVE
   instructions "You are a technical researcher. " \
-               "List about 5 key points on the given topic as concise bullet points."
+               "Return exactly 5 concise bullet points on the given topic. " \
+               "Keep each bullet to one or two sentences."
 end
 
 class WriterAgent < Phronomy::Agent::Base
@@ -23,9 +27,9 @@ class WriterAgent < Phronomy::Agent::Base
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  max_output_tokens WRITER_MAX_TOKENS
+  max_output_tokens WRITER_CONTEXT_RESERVE
   instructions "You are a technical writer. " \
-               "Write a readable technical blog post based on the instructions given. " \
+               "Write a concise technical article of about 250-350 words based on the instructions given. " \
                "Return only the article body."
 end
 
@@ -38,7 +42,6 @@ class ResearchTool < Phronomy::Agent::Context::Capability::Base
   def execute(topic:)
     t0 = Time.now
     puts "  [ResearchTool] input: #{topic.inspect[0, 80]}"
-    puts "  [ResearchTool] ResearcherAgent max_output_tokens=#{RESEARCHER_MAX_TOKENS}"
     result = ResearcherAgent.new.invoke(topic)[:output]
     $accumulated_tool_chars = ($accumulated_tool_chars || 0) + result.length
     puts "  [ResearchTool] done: #{result.length} chars in #{(Time.now - t0).round(1)}s (total tool chars: #{$accumulated_tool_chars})"
@@ -47,14 +50,13 @@ class ResearchTool < Phronomy::Agent::Context::Capability::Base
 end
 
 class WriteTool < Phronomy::Agent::Context::Capability::Base
-  description "Write a technical blog post given research notes and a writing brief."
+  description "Write a concise technical article given research notes and a writing brief."
   param :instructions, type: :string, desc: "Writing brief including research notes"
 
   def execute(instructions:)
     t0 = Time.now
     puts "  [WriteTool] input: #{instructions.length} chars"
     puts "  [WriteTool] first 120: #{instructions[0, 120].inspect}"
-    puts "  [WriteTool] WriterAgent max_output_tokens=#{WRITER_MAX_TOKENS}"
     result = WriterAgent.new.invoke(instructions)[:output]
     $accumulated_tool_chars = ($accumulated_tool_chars || 0) + result.length
     puts "  [WriteTool] done: #{result.length} chars in #{(Time.now - t0).round(1)}s (total tool chars: #{$accumulated_tool_chars})"
@@ -67,13 +69,14 @@ class OrchestratorAgent < Phronomy::Agent::Base
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  # Orchestrator needs tokens for tool calls AND for returning the article.
-  max_output_tokens 2048
+  max_output_tokens ORCHESTRATOR_CONTEXT_RESERVE
   tools(
     ResearchTool => nil,
     WriteTool => nil
   )
-  instructions "You are an orchestrator responsible for producing a high-quality technical blog post. " \
-               "Use the research tool to gather information, then use the write tool to produce the article. " \
-               "After write tool returns the article, output ONLY the article text verbatim with no additional commentary."
+  instructions "You are an orchestrator responsible for producing a concise technical blog post. " \
+               "Use the research tool to gather bullet-point notes, then the write tool to produce the article. " \
+               "The writer has been instructed to produce a concise article (250-350 words). " \
+               "After the write tool returns the article, output that article text only. " \
+               "Do not expand, summarize, or add commentary."
 end

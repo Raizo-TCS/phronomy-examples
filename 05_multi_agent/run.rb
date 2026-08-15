@@ -26,17 +26,17 @@ task = "Write a technical blog post about Ruby 3.4 new features."
 puts "=== Multi-Agent Example ==="
 puts "Task: #{task}"
 puts
-puts "[config] Model:                #{LLMConfig::MODEL}"
-puts "[config] OrchestratorAgent:    max_output_tokens=2048 (tool calls + article passthrough)"
-puts "[config] ResearcherAgent:      max_output_tokens=#{RESEARCHER_MAX_TOKENS} tokens (~400 words)"
-puts "[config] WriterAgent:          max_output_tokens=#{WRITER_MAX_TOKENS} tokens (~1500 words)"
-puts "[config] LLM calls expected:   3+ (Orchestrator drives tool calls autonomously)"
+puts "[config] Model:              #{LLMConfig::MODEL}"
+puts "[config] max_output_tokens is the Phronomy context-budget output reserve."
+puts "[config]   In Phronomy 0.19.x it is NOT forwarded to the provider API."
+puts "[config]   Actual output length is controlled by prompt instructions."
+puts "[config] LLM calls expected: 3+ (Orchestrator drives tool calls autonomously)"
 puts
 
 llm_call_count = 0
 
-# Map agent definition IDs to their configured max_output_tokens for logging.
-agent_max_tokens = {
+# Map agent definition IDs to their configured context output reserve for logging.
+agent_context_reserve = {
   "example-05-orchestrator-agent" => OrchestratorAgent.max_output_tokens,
   "example-05-researcher-agent"   => ResearcherAgent.max_output_tokens,
   "example-05-writer-agent"       => WriterAgent.max_output_tokens
@@ -44,9 +44,9 @@ agent_max_tokens = {
 
 Phronomy.configuration.before_llm_input = ->(ctx) {
   llm_call_count += 1
-  max_tok = agent_max_tokens[ctx.agent_definition_id] || "(not set)"
+  reserve = agent_context_reserve[ctx.agent_definition_id] || "(not set)"
   puts "  [LLM call ##{llm_call_count}] agent=#{ctx.agent_definition_id} " \
-       "call_seq=#{ctx.call_sequence} max_output_tokens=#{max_tok}"
+       "call_seq=#{ctx.call_sequence} context_output_reserve=#{reserve}"
   puts "  [LLM call ##{llm_call_count}] accumulated tool result chars: #{$accumulated_tool_chars || 0}"
   nil
 }

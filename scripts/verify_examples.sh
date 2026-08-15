@@ -39,7 +39,8 @@ export PHRONOMY_API_KEY="${PHRONOMY_API_KEY:-lm-studio}"
 export PHRONOMY_PROVIDER="${PHRONOMY_PROVIDER:-openai}"
 
 declare -A EXAMPLE_TIMEOUTS
-EXAMPLE_TIMEOUTS["10_context_management"]=480
+EXAMPLE_TIMEOUTS["05_multi_agent"]=360
+EXAMPLE_TIMEOUTS["10_context_management"]=720
 EXAMPLE_TIMEOUTS["27_issue_analyzer"]=900
 
 declare -A EXAMPLE_ARGS

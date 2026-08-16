@@ -19,5 +19,5 @@ phronomy_path = ENV["PHRONOMY_PATH"]
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", "~> 0.19.0"
+  gem "phronomy", "~> 0.20.0"
 end

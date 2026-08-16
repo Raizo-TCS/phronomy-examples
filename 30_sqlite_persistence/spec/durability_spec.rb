@@ -1,0 +1,72 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "ActiveRecord SQLite Persistence durability" do
+  it "reloads Agent, Journal, content, and Workflow state from a fresh pool" do
+    database_path = File.join(@sqlite_persistence_tmpdir, "durable.sqlite3")
+
+    first_backend, first_pool, = build_sqlite_persistence(
+      database_path: database_path
+    )
+
+    root = build_agent_root(prefix: "durable-agent")
+    first_backend.agents.create(root)
+    content_id = first_backend.contents.put_text("durable content")
+    appended = first_backend.journals.append(
+      root.agent_id,
+      expected_position: 0,
+      records: [
+        Phronomy::Agent::JournalRecord.new(
+          agent_id: root.agent_id,
+          kind: :knowledge,
+          channel: :context,
+          role: :user,
+          content_ref: content_id,
+          context_candidate: true
+        )
+      ]
+    )
+    updated = root.with(
+      agent_revision: 1,
+      journal_position: appended.length,
+      lifecycle_status: :active
+    )
+    first_backend.agents.save(root.agent_id, expected_revision: 0, root: updated)
+
+    thread_id = "durable-workflow-#{SecureRandom.uuid}"
+    first_backend.workflow_states.save(
+      thread_id,
+      expected_revision: nil,
+      snapshot: {fields: {value: "persisted"}, phase: "pause"}
+    )
+
+    first_pool.disconnect!
+
+    second_backend, = build_sqlite_persistence(database_path: database_path)
+
+    expect(second_backend.contents.fetch_text(content_id)).to eq("durable content")
+    expect(second_backend.agents.load(root.agent_id).agent_revision).to eq(1)
+    expect(second_backend.journals.head(root.agent_id)).to eq(1)
+    expect(second_backend.journals.read(root.agent_id).first.content_ref).to eq(content_id)
+
+    workflow = second_backend.workflow_states.load(thread_id)
+    expect(workflow[:revision]).to eq(1)
+    expect(workflow[:snapshot]).to eq(
+      "fields" => {"value" => "persisted"},
+      "phase" => "pause"
+    )
+  end
+
+  it "rejects unsupported Workflow values instead of using a Ruby object serializer" do
+    persistence = build_sqlite_persistence.first
+
+    expect do
+      persistence.workflow_states.save(
+        "unsupported-#{SecureRandom.uuid}",
+        expected_revision: nil,
+        snapshot: {fields: {object: Object.new}, phase: "pause"}
+      )
+    end.to raise_error(Phronomy::Persistence::SerializationError)
+  end
+end

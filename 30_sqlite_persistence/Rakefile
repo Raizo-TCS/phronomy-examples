@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+require "rake"
+
+desc "Run the SQLite Persistence reference backend contract and integration specs"
+task :spec do
+  sh "bundle exec rspec"
+end
+
+desc "Run the durable SQLite Persistence demonstration"
+task :demo do
+  sh "bundle exec ruby run.rb"
+end
+
+task default: :spec

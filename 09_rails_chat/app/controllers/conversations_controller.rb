@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "ostruct"
+
 class ConversationsController < ApplicationController
   def index
     @agent_id = session[:agent_id]

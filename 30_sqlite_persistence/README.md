@@ -63,7 +63,8 @@ backend =
   )
 ```
 
-That same constructor can later be used by a Rails application.
+Example `09_rails_chat` now uses exactly this constructor with its Rails primary
+connection pool.
 
 ## SQLite transaction model
 
@@ -158,7 +159,7 @@ The suite includes:
 - Workflow CAS
 - active Execution admission
 - transactional `assert_idle!` + admission serialization
-- fresh-pool durability/reload
+- fresh-pool durability/reload for all five durable repositories
 - unsupported Workflow serialization
 
 SQLite is a single-writer database. Therefore these concurrency tests prove
@@ -203,24 +204,47 @@ It does not require an LLM API key.
         ↓
 30_sqlite_persistence
     external durable backend / contract / SQLite concurrency results
+        ↓
+09_rails_chat
+    Rails consumer / Agent → LLM → SQLite Persistence
 ```
 
 This example does not replace example 29.
 
 ## Rails integration
 
-The existing Rails examples already use ActiveRecord and SQLite3, so this
-backend is intentionally constructed to accept an injected ActiveRecord
-connection pool.
+Example `09_rails_chat` is the Phase A consumer integration for this backend.
+It deliberately reuses the implementation from this example instead of copying
+repository classes into the Rails application.
 
-However, the Rails examples are **not modified in this phase**. First this
-standalone backend must pass its authoritative contract and concurrency suite.
-After that is green, a Rails example can consume the same backend without
-copying its implementation.
+The Rails initializer injects:
+
+```ruby
+PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+  connection_pool: ActiveRecord::Base.connection_pool
+)
+```
+
+and Rails owns schema provisioning through its migration. The controllers keep
+using Phronomy's normal public Agent lifecycle:
+
+```text
+ChatAgent.create
+ChatAgent.load
+ChatAgent#invoke
+```
+
+so Persistence remains below the Agent boundary rather than leaking into
+Runtime or application execution logic.
+
+The repository Playwright smoke test sends a real LLM turn through example 09
+and reloads the page to verify that the durable transcript is available through
+`ChatAgent.load`.
 
 ## PostgreSQL next
 
-SQLite validates the portable Persistence contract, but not:
+SQLite validates the portable Persistence contract and the Rails consumer path,
+but not:
 
 - true concurrent independent writers
 - row-level lock behavior

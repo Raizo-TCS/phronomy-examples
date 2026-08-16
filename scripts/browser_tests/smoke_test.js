@@ -22,6 +22,10 @@ const BASE     = `http://localhost:${PORT}`;
  *   - Root page shows a "New Chat" button (no thread_id yet)
  *   - Clicking "New Chat" POSTs to /conversations and redirects back
  *   - After redirect the chat input (#chat-input) and Send button appear
+ *
+ * 09_rails_chat additionally exercises the real Agent → LLM → SQLite
+ * Persistence consumer path and then reloads the page to verify durable
+ * transcript read-back.
  */
 async function testConversationApp(page) {
   // 1. Load root page
@@ -49,6 +53,73 @@ async function testConversationApp(page) {
   const sendBtn = page.locator('button[type="submit"]:has-text("Send")');
   await sendBtn.waitFor({ state: 'visible', timeout: 5000 });
   console.log('    "Send" button visible');
+
+  if (APP_NAME !== '09_rails_chat') return;
+
+  // 6. Exercise the actual Rails consumer path:
+  //    MessagesController → ChatAgent.load → Agent#invoke → LLM → Persistence.
+  const prompt = `Persistence smoke ${Date.now()}: reply in one short sentence.`;
+  const assistantSelector =
+    '#messages > div.flex.justify-start:not(#thinking) > div';
+  const assistantCountBefore =
+    await page.locator(assistantSelector).count();
+
+  await chatInput.fill(prompt);
+  await sendBtn.click();
+  console.log('    sent real Agent/LLM persistence smoke message');
+
+  // Wait for either a new assistant bubble or a rendered application error.
+  const outcomeHandle = await page.waitForFunction(
+    ({ selector, before }) => {
+      const assistants = document.querySelectorAll(selector);
+      if (assistants.length > before) {
+        return { kind: 'reply' };
+      }
+
+      const error = document.querySelector('#error-msg');
+      if (error && !error.classList.contains('hidden')) {
+        return {
+          kind: 'error',
+          text: (error.textContent || '').trim(),
+        };
+      }
+
+      return false;
+    },
+    { selector: assistantSelector, before: assistantCountBefore },
+    { timeout: 240000 }
+  );
+  const outcome = await outcomeHandle.jsonValue();
+
+  if (outcome.kind === 'error') {
+    throw new Error(`09_rails_chat LLM request failed: ${outcome.text}`);
+  }
+
+  const assistantBubbles = page.locator(assistantSelector);
+  const assistantText =
+    (await assistantBubbles.last().innerText()).trim();
+  if (!assistantText) {
+    throw new Error('09_rails_chat returned an empty assistant message');
+  }
+  console.log(`    assistant reply received (${assistantText.length} chars)`);
+
+  // 7. A GET / after the LLM request constructs a fresh ChatAgent instance via
+  //    ChatAgent.load. Verify the same transcript is read back from SQLite.
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
+
+  await page.getByText(prompt, { exact: true })
+    .waitFor({ state: 'visible', timeout: 5000 });
+
+  const reloadedAssistantText =
+    (await page.locator(assistantSelector).last().innerText()).trim();
+
+  if (reloadedAssistantText !== assistantText) {
+    throw new Error(
+      '09_rails_chat assistant transcript changed after durable reload'
+    );
+  }
+
+  console.log('    durable user/assistant transcript survived page reload');
 }
 
 /**

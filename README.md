@@ -41,8 +41,14 @@ last committed durable representation and recovery source. Workflow
 `thread_id` is the durable logical Workflow identity; the Runtime's
 `fsm_session_id` is private execution identity.
 
-Start with **29_unified_persistence** for the architecture and
-**30_sqlite_persistence** for a real external durable backend.
+Start with:
+
+- **29_unified_persistence** for the architecture;
+- **30_sqlite_persistence** for the portable external backend contract and
+  file-backed durability;
+- **09_rails_chat** for a real Agent → LLM → SQLite consumer path;
+- **31_postgresql_persistence** for true multi-writer and row-level-lock
+  behavior on a server database.
 
 ### Runtime and event-driven execution
 
@@ -98,6 +104,10 @@ export PHRONOMY_PATH=../phronomy
 ./scripts/verify_examples.sh
 ```
 
+`31_postgresql_persistence` is included in dependency updates but its database
+suite is run separately because ordinary repository verification must remain
+usable without a PostgreSQL server.
+
 ## Example map
 
 ### Fundamentals
@@ -123,6 +133,7 @@ export PHRONOMY_PATH=../phronomy
 | `24_vector_store_dimension` | VectorStore + VectorSearch Agent RAG |
 | `29_unified_persistence` | Agent + Workflow unified Persistence / durable identity |
 | `30_sqlite_persistence` | ActiveRecord + SQLite external Persistence backend / contract / durability |
+| `31_postgresql_persistence` | ActiveRecord + PostgreSQL / true multi-writer / row locking / storage failures |
 
 ### Human-in-the-loop and execution control
 
@@ -154,7 +165,7 @@ export PHRONOMY_PATH=../phronomy
 
 | Example | Focus |
 |---|---|
-| `09_rails_chat` | Rails chat |
+| `09_rails_chat` | Rails chat + real Agent/LLM durable SQLite consumer |
 | `14_code_review` | Event-driven multi-stage code review pipeline |
 | `15_rails_secure_chat` | Rails security/trust boundaries |
 | `18_rails_agent_job` | ActiveJob + Agent streaming + ActionCable |
@@ -183,19 +194,41 @@ Install/update all bundles first:
 ./scripts/update_phronomy.sh
 ```
 
-Then run the repository verification:
+Then run the ordinary repository verification:
 
 ```bash
 ./scripts/verify_examples.sh
 ```
 
-The SQLite Persistence reference backend has an additional database contract
+The SQLite Persistence reference backend also has a focused database contract
 suite that does not require an LLM:
 
 ```bash
 cd 30_sqlite_persistence
 bundle exec rspec
 ```
+
+The PostgreSQL Phase B suite requires a PostgreSQL server. For example:
+
+```bash
+docker run --rm --name phronomy-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=phronomy_persistence_test \
+  -p 5432:5432 \
+  postgres:17
+```
+
+Then:
+
+```bash
+export PHRONOMY_POSTGRES_URL='postgresql://postgres:postgres@127.0.0.1:5432/phronomy_persistence_test'
+./scripts/verify_postgresql_persistence.sh
+```
+
+The dedicated PostgreSQL verifier runs the authoritative Persistence contract,
+PostgreSQL-specific concurrency/locking/failure specs, and the fresh-pool
+durability demonstration.
 
 For local Phronomy development, keep `PHRONOMY_PATH` exported while running
 dependency update and verification:
@@ -205,6 +238,9 @@ export PHRONOMY_PATH=../phronomy
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 (cd 30_sqlite_persistence && bundle exec rspec)
+
+# With PostgreSQL available:
+./scripts/verify_postgresql_persistence.sh
 ```
 
 Printing the actually loaded implementation is useful when diagnosing version

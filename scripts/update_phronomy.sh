@@ -10,6 +10,7 @@ GEMFILES=(
   "$ROOT_DIR/18_rails_agent_job/Gemfile"
   "$ROOT_DIR/20_cve_scanner/Gemfile"
   "$ROOT_DIR/30_sqlite_persistence/Gemfile"
+  "$ROOT_DIR/31_postgresql_persistence/Gemfile"
 )
 
 echo "Phronomy dependency source:"
@@ -43,10 +44,10 @@ echo
 if [[ -n "${PHRONOMY_PATH:-}" ]]; then
   echo "Keep PHRONOMY_PATH set for verification so local bundles resolve the same checkout:"
   printf '  export PHRONOMY_PATH=%q\n' "$PHRONOMY_PATH"
-  echo "  ./scripts/verify_examples.sh"
-  echo "  (cd 30_sqlite_persistence && bundle exec rspec)"
-else
-  echo "Next:"
-  echo "  ./scripts/verify_examples.sh"
-  echo "  (cd 30_sqlite_persistence && bundle exec rspec)"
 fi
+
+echo "Verification:"
+echo "  ./scripts/verify_examples.sh"
+echo "  (cd 30_sqlite_persistence && bundle exec rspec)"
+echo "  # With PostgreSQL available:"
+echo "  ./scripts/verify_postgresql_persistence.sh"

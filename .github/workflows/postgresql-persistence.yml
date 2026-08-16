@@ -1,0 +1,66 @@
+name: PostgreSQL Persistence Reference Backend
+
+on:
+  push:
+    paths:
+      - "31_postgresql_persistence/**"
+      - "Gemfile.phronomy"
+      - ".github/workflows/postgresql-persistence.yml"
+      - "scripts/verify_postgresql_persistence.sh"
+  pull_request:
+    paths:
+      - "31_postgresql_persistence/**"
+      - "Gemfile.phronomy"
+      - ".github/workflows/postgresql-persistence.yml"
+      - "scripts/verify_postgresql_persistence.sh"
+
+jobs:
+  postgresql-persistence:
+    name: Ruby ${{ matrix.ruby }} / PostgreSQL Persistence
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - "3.2"
+          - "3.3"
+          - "3.4"
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: phronomy_persistence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d phronomy_persistence_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PHRONOMY_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/phronomy_persistence_test
+
+    defaults:
+      run:
+        working-directory: 31_postgresql_persistence
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - name: Install bundle
+        run: bundle install
+
+      - name: Run authoritative contract and PostgreSQL integration specs
+        run: bundle exec rspec
+
+      - name: Run durable reload demonstration
+        run: bundle exec ruby run.rb

@@ -12,7 +12,7 @@ SQLite3 file
 ```
 
 It is the first database-backed reference implementation in
-`phronomy-examples`. It deliberately uses SQLite3 before PostgreSQL so the full
+`phronomy-examples`. SQLite3 is deliberately used before PostgreSQL so the full
 portable Persistence contract can be exercised without provisioning a database
 server.
 
@@ -63,7 +63,7 @@ backend =
   )
 ```
 
-Example `09_rails_chat` now uses exactly this constructor with its Rails primary
+Example `09_rails_chat` uses exactly this constructor with its Rails primary
 connection pool.
 
 ## SQLite transaction model
@@ -167,7 +167,8 @@ that the **observable conflict result** is correct across distinct Ruby threads
 and ActiveRecord connections. They do not prove PostgreSQL-style true
 multi-writer or row-level-lock behavior.
 
-That additional validation belongs to the later PostgreSQL phase.
+Those server-database concerns are covered separately by
+`31_postgresql_persistence`.
 
 ## Run the durable-state demonstration
 
@@ -188,28 +189,29 @@ Override it with:
 PHRONOMY_SQLITE_DB=/path/to/phronomy.sqlite3 bundle exec ruby run.rb
 ```
 
-The demonstration writes Agent, Journal, Content, and Workflow state, closes the
-ActiveRecord pool, creates a fresh pool, and reloads the durable state.
+The demonstration writes durable state, closes the ActiveRecord pool, creates a
+fresh pool, and reloads the stored values.
 
 It does not require an LLM API key.
 
-## Relationship to example 29
-
-`29_unified_persistence` remains the compact architecture example and uses
-`Persistence::InMemory` intentionally.
+## Relationship to the other Persistence examples
 
 ```text
 29_unified_persistence
     architecture / ownership semantics
         ↓
 30_sqlite_persistence
-    external durable backend / contract / SQLite concurrency results
+    portable external backend / SQLite contract and durability
         ↓
 09_rails_chat
-    Rails consumer / Agent → LLM → SQLite Persistence
+    Rails consumer / real Agent → LLM → SQLite Persistence
+        ↓
+31_postgresql_persistence
+    true multi-writer / row-level locking / server DB failures
 ```
 
-This example does not replace example 29.
+`29_unified_persistence` remains the compact architecture example and uses
+`Persistence::InMemory` intentionally.
 
 ## Rails integration
 
@@ -241,18 +243,19 @@ The repository Playwright smoke test sends a real LLM turn through example 09
 and reloads the page to verify that the durable transcript is available through
 `ChatAgent.load`.
 
-## PostgreSQL next
+## PostgreSQL Phase B companion
 
-SQLite validates the portable Persistence contract and the Rails consumer path,
-but not:
+`31_postgresql_persistence` implements a second concrete ActiveRecord backend
+against PostgreSQL. It runs the same authoritative contract and adds
+PostgreSQL-specific validation for:
 
 - true concurrent independent writers
 - row-level lock behavior
-- PostgreSQL deadlocks / lock ordering
-- server/network failure behavior
+- same-Agent lock contention
+- deadlock / lock-order behavior
+- terminated database-session failure classification
 
-The next phase adds a separate PostgreSQL reference backend and runs the same
-authoritative contract there, followed by PostgreSQL-specific concurrency tests.
-
-Only after both concrete backends exist should common implementation code be
-considered for extraction.
+The SQLite and PostgreSQL implementations remain intentionally separate in this
+phase. Only after both concrete backends have been exercised should common
+implementation code be considered for extraction, and only when extraction does
+not hide transaction or locking semantics.

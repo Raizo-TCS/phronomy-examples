@@ -72,10 +72,12 @@ phronomy_executions
 phronomy_workflow_states
 ```
 
-Older checkouts of this example may also have legacy
-`phronomy_messages` / `phronomy_checkpoints` tables in an existing development
-database. The current application does not read or write those tables; current
-Agent state is stored exclusively through the Persistence SPI tables above.
+The checked-in `db/schema.rb` now reflects exactly those current Persistence
+tables. An older development database may still physically contain legacy
+`phronomy_messages` / `phronomy_checkpoints` tables from an earlier version of
+this example. The current application does not read or write those tables and
+this change deliberately does not add a destructive migration merely to remove
+unused historical tables.
 
 ## LLM configuration
 
@@ -86,9 +88,14 @@ verification script:
 export PHRONOMY_MODEL="openai/gpt-oss-20b"
 export PHRONOMY_BASE_URL="http://192.168.122.1:1234/v1"
 export PHRONOMY_API_KEY="lm-studio"
+export PHRONOMY_OUTPUT_RESERVE="4096"
 ```
 
-Those values have local-development defaults, so an OpenAI-compatible LM Studio
+`PHRONOMY_OUTPUT_RESERVE` is the fallback output-token reserve used when the
+selected model does not publish a usable `max_output_tokens` value through the
+model registry. Keep it positive and below the selected model's context window.
+
+The values have local-development defaults, so an OpenAI-compatible LM Studio
 endpoint at the default address works without editing source files.
 
 ## How to Run

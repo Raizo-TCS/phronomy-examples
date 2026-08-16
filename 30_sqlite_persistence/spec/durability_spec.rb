@@ -3,7 +3,7 @@
 require "spec_helper"
 
 RSpec.describe "ActiveRecord SQLite Persistence durability" do
-  it "reloads Agent, Journal, content, and Workflow state from a fresh pool" do
+  it "reloads all 5 durable repositories (Agent, Journal, Content, Execution, Workflow) from a fresh pool" do
     database_path = File.join(@sqlite_persistence_tmpdir, "durable.sqlite3")
 
     first_backend, first_pool, = build_sqlite_persistence(
@@ -34,6 +34,9 @@ RSpec.describe "ActiveRecord SQLite Persistence durability" do
     )
     first_backend.agents.save(root.agent_id, expected_revision: 0, root: updated)
 
+    execution = build_execution(root)
+    first_backend.executions.create_active(execution)
+
     thread_id = "durable-workflow-#{SecureRandom.uuid}"
     first_backend.workflow_states.save(
       thread_id,
@@ -56,6 +59,11 @@ RSpec.describe "ActiveRecord SQLite Persistence durability" do
       "fields" => {"value" => "persisted"},
       "phase" => "pause"
     )
+
+    # Verify all 5 durable repositories survive a fresh-pool reload.
+    execution_reloaded = second_backend.executions.load(execution.execution_id)
+    expect(execution_reloaded.execution_id).to eq(execution.execution_id)
+    expect(execution_reloaded.agent_id).to eq(root.agent_id)
   end
 
   it "rejects unsupported Workflow values instead of using a Ruby object serializer" do

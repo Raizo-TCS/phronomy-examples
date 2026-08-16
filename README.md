@@ -81,7 +81,7 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-Normal repository use resolves the released 0.19-compatible dependency through
+Normal repository use resolves the released Phronomy 0.20.x dependency through
 that shared definition:
 
 ```bash

@@ -1,0 +1,45 @@
+name: SQLite Persistence Reference Backend
+
+on:
+  push:
+    paths:
+      - "30_sqlite_persistence/**"
+      - "Gemfile.phronomy"
+      - ".github/workflows/sqlite-persistence.yml"
+  pull_request:
+    paths:
+      - "30_sqlite_persistence/**"
+      - "Gemfile.phronomy"
+      - ".github/workflows/sqlite-persistence.yml"
+
+jobs:
+  sqlite-persistence:
+    name: Ruby ${{ matrix.ruby }} / SQLite Persistence
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - "3.2"
+          - "3.3"
+          - "3.4"
+
+    defaults:
+      run:
+        working-directory: 30_sqlite_persistence
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - name: Install bundle
+        run: bundle install
+
+      - name: Run authoritative contract and SQLite integration specs
+        run: bundle exec rspec
+
+      - name: Run durable reload demonstration
+        run: bundle exec ruby run.rb

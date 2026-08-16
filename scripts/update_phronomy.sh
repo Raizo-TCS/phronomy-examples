@@ -9,6 +9,7 @@ GEMFILES=(
   "$ROOT_DIR/15_rails_secure_chat/Gemfile"
   "$ROOT_DIR/18_rails_agent_job/Gemfile"
   "$ROOT_DIR/20_cve_scanner/Gemfile"
+  "$ROOT_DIR/30_sqlite_persistence/Gemfile"
 )
 
 echo "Phronomy dependency source:"
@@ -16,7 +17,6 @@ if [[ -n "${PHRONOMY_PATH:-}" ]]; then
   echo "  local path: $PHRONOMY_PATH"
 else
   echo "  definition: $ROOT_DIR/Gemfile.phronomy"
-  echo "  pre-release validation source: Raizo-TCS/phronomy main"
 fi
 echo
 
@@ -41,9 +41,12 @@ echo "All bundle lockfiles were updated."
 echo
 
 if [[ -n "${PHRONOMY_PATH:-}" ]]; then
-  echo "Keep PHRONOMY_PATH set for verification so the preflight can assert the local checkout path:"
+  echo "Keep PHRONOMY_PATH set for verification so local bundles resolve the same checkout:"
   printf '  export PHRONOMY_PATH=%q\n' "$PHRONOMY_PATH"
   echo "  ./scripts/verify_examples.sh"
+  echo "  (cd 30_sqlite_persistence && bundle exec rspec)"
 else
-  echo "Next: ./scripts/verify_examples.sh"
+  echo "Next:"
+  echo "  ./scripts/verify_examples.sh"
+  echo "  (cd 30_sqlite_persistence && bundle exec rspec)"
 fi

@@ -77,6 +77,7 @@ verify_phronomy_dependency() {
     "$BASE_DIR/15_rails_secure_chat/Gemfile"
     "$BASE_DIR/18_rails_agent_job/Gemfile"
     "$BASE_DIR/20_cve_scanner/Gemfile"
+    "$BASE_DIR/30_sqlite_persistence/Gemfile"
   )
 
   local expected_version=""
@@ -527,6 +528,16 @@ verify_rails "09_rails_chat"        3009
 verify_rails "15_rails_secure_chat" 3015
 verify_rails "18_rails_agent_job"   3018
 verify_rails "20_cve_scanner"       3020 "CVE_SCANNER_MOCK_LLM=1"
+
+# ── 30_sqlite_persistence: independent database spec suite (no LLM required) ──
+header "30_sqlite_persistence [RSpec]"
+rspec_out=$(cd "$BASE_DIR/30_sqlite_persistence" && bundle exec rspec 2>&1) && rspec_rc=$? || rspec_rc=$?
+if [[ $rspec_rc -eq 0 ]]; then
+  examples=$(echo "$rspec_out" | grep -oE '[0-9]+ examples' | head -1)
+  pass "rspec OK ($examples, 0 failures)"
+else
+  fail "rspec failed: ${rspec_out: -300}"
+fi
 
 echo ""
 echo -e "${BOLD}======================================================"

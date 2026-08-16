@@ -1,9 +1,7 @@
 # Phronomy Examples
 
-These examples are currently validating the **upcoming Phronomy 0.19 API**.
-`Gemfile.phronomy` therefore tracks `Raizo-TCS/phronomy` `main` until the 0.19.0
-release is cut. After that release, switch the shared dependency to
-`phronomy ~> 0.19.0` and regenerate every lockfile.
+These examples target **Phronomy 0.20.x** through the
+shared `Gemfile.phronomy` dependency.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM
@@ -43,7 +41,8 @@ last committed durable representation and recovery source. Workflow
 `thread_id` is the durable logical Workflow identity; the Runtime's
 `fsm_session_id` is private execution identity.
 
-Start with **29_unified_persistence** for this model.
+Start with **29_unified_persistence** for the architecture and
+**30_sqlite_persistence** for a real external durable backend.
 
 ### Runtime and event-driven execution
 
@@ -82,7 +81,8 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-During pre-release 0.19 validation, normal repository use tracks GitHub `main`:
+Normal repository use resolves the released 0.19-compatible dependency through
+that shared definition:
 
 ```bash
 ./scripts/update_phronomy.sh
@@ -97,10 +97,6 @@ export PHRONOMY_PATH=../phronomy
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
-
-After Phronomy 0.19.0 is released, change **only `Gemfile.phronomy`** to
-`phronomy ~> 0.19.0` and run the update script again to regenerate every
-lockfile.
 
 ## Example map
 
@@ -126,6 +122,7 @@ lockfile.
 | `19_trust_pipeline` | Persistent Knowledge + Generator/Verifier |
 | `24_vector_store_dimension` | VectorStore + VectorSearch Agent RAG |
 | `29_unified_persistence` | Agent + Workflow unified Persistence / durable identity |
+| `30_sqlite_persistence` | ActiveRecord + SQLite external Persistence backend / contract / durability |
 
 ### Human-in-the-loop and execution control
 
@@ -192,13 +189,22 @@ Then run the repository verification:
 ./scripts/verify_examples.sh
 ```
 
-For local Phronomy development, keep `PHRONOMY_PATH` exported while running both
-commands so the verification preflight can also assert the actual checkout path:
+The SQLite Persistence reference backend has an additional database contract
+suite that does not require an LLM:
+
+```bash
+cd 30_sqlite_persistence
+bundle exec rspec
+```
+
+For local Phronomy development, keep `PHRONOMY_PATH` exported while running
+dependency update and verification:
 
 ```bash
 export PHRONOMY_PATH=../phronomy
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
+(cd 30_sqlite_persistence && bundle exec rspec)
 ```
 
 Printing the actually loaded implementation is useful when diagnosing version

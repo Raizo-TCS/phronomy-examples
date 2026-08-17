@@ -39,55 +39,50 @@ class ImproverAgent < Phronomy::Agent::Base
   instructions "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text."
 end
 
-# workflow is captured by reference in the on_event lambdas.
+# workflow is captured by reference in the Agent event blocks.
 workflow = nil
 workflow = Phronomy::Workflow.define(MyState) do
   initial :evaluate
 
-  # :evaluate — active state: entry starts the LLM call and returns immediately.
   state :evaluate
   entry :evaluate, ->(state) {
-    thread_id  = state.thread_id
-    text       = state.text
+    thread_id = state.thread_id
     iterations = state.iterations
+    prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
 
-    EvaluatorAgent.new.invoke_async(
-      "Rate the quality of the following text on a scale of 0 to 10.\n\n#{text}",
-      on_event: ->(event) {
-        next unless event.type == :done
-        score = event.payload[:output].scan(/\d+/).first.to_i.clamp(0, 10)
-        puts "[Iteration #{iterations}] Score: #{score}"
-        workflow.signal(
-          thread_id: thread_id,
-          event: :evaluation_completed,
-          payload: {score: score}
-        )
-      }
-    )
+    EvaluatorAgent.new.invoke_async(prompt) do |event|
+      next unless event.type == :done
+
+      score = event.payload[:output].scan(/\d+/).first.to_i.clamp(0, 10)
+      puts "[Iteration #{iterations}] Score: #{score}"
+      workflow.signal(
+        thread_id: thread_id,
+        event: :evaluation_completed,
+        payload: {score: score}
+      )
+    end
+
     state
   }
 
-  # :improve — active state: entry starts the rewrite and returns immediately.
   state :improve
   entry :improve, ->(state) {
-    thread_id  = state.thread_id
-    text       = state.text
+    thread_id = state.thread_id
     iterations = state.iterations
 
-    ImproverAgent.new.invoke_async(
-      text,
-      on_event: ->(event) {
-        next unless event.type == :done
-        workflow.signal(
-          thread_id: thread_id,
-          event: :improvement_completed,
-          payload: {
-            text:       event.payload[:output].strip,
-            iterations: iterations + 1
-          }
-        )
-      }
-    )
+    ImproverAgent.new.invoke_async(state.text) do |event|
+      next unless event.type == :done
+
+      workflow.signal(
+        thread_id: thread_id,
+        event: :improvement_completed,
+        payload: {
+          text: event.payload[:output].strip,
+          iterations: iterations + 1
+        }
+      )
+    end
+
     state
   }
 
@@ -120,7 +115,7 @@ workflow = Phronomy::Workflow.define(MyState) do
     to: :evaluate,
     action: ->(ctx, event) {
       ctx.merge(
-        text:       event.payload[:text],
+        text: event.payload[:text],
         iterations: event.payload[:iterations]
       )
     }

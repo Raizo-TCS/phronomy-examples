@@ -32,8 +32,8 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-# workflow is assigned after Workflow.define so the closure captures it by
-# reference and can call workflow.signal when the Agent completes.
+# app is assigned after Workflow.define so the closure captures it by
+# reference and can call app.signal when the Agent completes.
 app = nil
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
@@ -43,18 +43,18 @@ app = Phronomy::Workflow.define(CodeState) do
 
   entry :generate, ->(state) {
     thread_id = state.thread_id
-    language  = state.language
-    CodeGeneratorAgent.new.invoke_async(
-      "Write a Hello World program in #{language}. Return code only.",
-      on_event: ->(event) {
-        next unless event.type == :done
-        app.signal(
-          thread_id: thread_id,
-          event: :generation_completed,
-          payload: {output: event.payload[:output]}
-        )
-      }
-    )
+    prompt = "Write a Hello World program in #{state.language}. Return code only."
+
+    CodeGeneratorAgent.new.invoke_async(prompt) do |event|
+      next unless event.type == :done
+
+      app.signal(
+        thread_id: thread_id,
+        event: :generation_completed,
+        payload: {output: event.payload[:output]}
+      )
+    end
+
     state
   }
 

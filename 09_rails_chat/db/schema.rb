@@ -18,6 +18,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_180000) do
     t.index ["agent_id"], name: "idx_phronomy_agents_agent_id", unique: true
   end
 
+  create_table "phronomy_checkpoints", force: :cascade do |t|
+    t.string "completed_node"
+    t.datetime "created_at", null: false
+    t.string "graph_id"
+    t.string "interrupted_at"
+    t.text "state_json", null: false
+    t.integer "step", default: 0, null: false
+    t.string "thread_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["thread_id", "created_at"], name: "index_phronomy_checkpoints_on_thread_id_and_created_at"
+    t.index ["thread_id"], name: "index_phronomy_checkpoints_on_thread_id", unique: true
+  end
+
   create_table "phronomy_contents", id: false, force: :cascade do |t|
     t.binary "bytes", null: false
     t.integer "canonicalization_version", null: false
@@ -49,6 +62,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_180000) do
     t.integer "sequence", null: false
     t.index ["agent_id", "record_id"], name: "idx_phronomy_journal_records_record_id", unique: true
     t.index ["agent_id", "sequence"], name: "idx_phronomy_journal_records_sequence", unique: true
+  end
+
+  create_table "phronomy_messages", force: :cascade do |t|
+    t.text "content", null: false
+    t.datetime "created_at", null: false
+    t.string "model_id"
+    t.string "role", null: false
+    t.string "thread_id", null: false
+    t.text "tool_calls_json"
+    t.datetime "updated_at", null: false
+    t.index ["thread_id", "created_at"], name: "index_phronomy_messages_on_thread_id_and_created_at"
+    t.index ["thread_id"], name: "index_phronomy_messages_on_thread_id"
   end
 
   create_table "phronomy_workflow_states", id: false, force: :cascade do |t|

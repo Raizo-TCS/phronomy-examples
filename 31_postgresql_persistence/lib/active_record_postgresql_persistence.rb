@@ -56,15 +56,11 @@ module PhronomyExamples
 
       def assert_postgresql_adapter!
         connection_pool.with_connection do |connection|
-          unless connection.adapter_name == "PostgreSQL"
-            raise Phronomy::Persistence::UnsupportedBackendError,
-                  "ActiveRecordPostgreSQL requires the ActiveRecord PostgreSQL adapter; " \
-                  "got #{connection.adapter_name.inspect}"
-          end
+          return if connection.adapter_name == "PostgreSQL"
 
-          # Verify the connection is actually reachable; an unavailable endpoint
-          # must surface as a storage error here rather than later at first use.
-          connection.select_value("SELECT 1")
+          raise Phronomy::Persistence::UnsupportedBackendError,
+                "ActiveRecordPostgreSQL requires the ActiveRecord PostgreSQL adapter; " \
+                "got #{connection.adapter_name.inspect}"
         end
       end
     end

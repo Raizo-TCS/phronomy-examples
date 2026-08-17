@@ -51,9 +51,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     )
 
     error = begin
-      PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+      backend = PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
         connection_pool: record_class.connection_pool
       )
+      backend.agents.load("connection-failure-probe")
       nil
     rescue StandardError => e
       e

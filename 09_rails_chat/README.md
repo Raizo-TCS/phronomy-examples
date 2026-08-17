@@ -72,12 +72,10 @@ phronomy_executions
 phronomy_workflow_states
 ```
 
-The checked-in `db/schema.rb` now reflects exactly those current Persistence
-tables. An older development database may still physically contain legacy
-`phronomy_messages` / `phronomy_checkpoints` tables from an earlier version of
-this example. The current application does not read or write those tables and
-this change deliberately does not add a destructive migration merely to remove
-unused historical tables.
+The checked-in `db/schema.rb` reflects exactly those six current Persistence
+tables. Rails 8.1 loads `schema.rb` as the base when migrating an empty
+database, so the schema file is the authoritative definition of what a fresh
+`db:create db:migrate` produces.
 
 ## LLM configuration
 

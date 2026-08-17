@@ -14,7 +14,7 @@
 #
 # PHRONOMY_PATH is resolved relative to this file, not to the individual
 # Rails application's Gemfile.
-phronomy_path = ENV["PHRONOMY_PATH"]
+phronomy_path = ENV.fetch("PHRONOMY_PATH", "../phronomy")
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)

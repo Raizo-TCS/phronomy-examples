@@ -31,6 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out phronomy sibling
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          path: ../phronomy
+
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}

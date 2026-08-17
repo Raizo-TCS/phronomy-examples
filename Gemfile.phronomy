@@ -3,14 +3,16 @@
 # Single source of truth for the Phronomy dependency used by every bundle in
 # this repository.
 #
-# Normal released-gem use:
-#   bundle install
+# Default: sibling local checkout (../phronomy) — lets examples track phronomy
+# main before a release is tagged.  CI replicates this by checking out phronomy
+# at that same sibling path via actions/checkout path: ../phronomy.
 #
-# Test against a specific local Phronomy checkout:
-#   PHRONOMY_PATH=../phronomy bundle install
+# Override at any time:
+#   PHRONOMY_PATH=/absolute/path/to/phronomy bundle install
 #
-# When the target Phronomy version changes, edit only this file and run:
-#   ./scripts/update_phronomy.sh
+# When a new Phronomy release is published, update the default back to the
+# released gem and remove the sibling checkout steps from the CI workflows:
+#   gem "phronomy", "~> X.Y.0"
 #
 # PHRONOMY_PATH is resolved relative to this file, not to the individual
 # Rails application's Gemfile.

@@ -1,3 +1,12 @@
+PATH
+  remote: /home/raizo-tcs/ruby_ai_agent_framework/phronomy
+  specs:
+    phronomy (0.21.0)
+      mcp (~> 1.0)
+      ruby_llm (>= 1.15, < 2)
+      state_machines (~> 0.6)
+      zeitwerk (>= 2.6, < 3)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -29,11 +38,6 @@ GEM
     multipart-post (2.4.1)
     net-http (0.9.1)
       uri (>= 0.11.1)
-    phronomy (0.21.0)
-      mcp (~> 1.0)
-      ruby_llm (>= 1.15, < 2)
-      state_machines (~> 0.6)
-      zeitwerk (>= 2.6, < 3)
     regexp_parser (2.12.0)
     ruby_llm (1.16.0)
       base64
@@ -64,7 +68,7 @@ PLATFORMS
   x86_64-linux-gnu
 
 DEPENDENCIES
-  phronomy (~> 0.21.0)
+  phronomy!
   simplecov
   simplecov-lcov
   webrick (~> 1.8)
@@ -87,7 +91,7 @@ CHECKSUMS
   mcp (1.2.0) sha256=af75a270fbcbff5db74992e1d0664cfe7e2aa7f89fa9b31592bba40e9f554ba6
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
-  phronomy (0.21.0) sha256=027cc6d3a97f40c13d60aebdc55039e3d7694e89d831c9493b675d65d42a199e
+  phronomy (0.21.0)
   regexp_parser (2.12.0) sha256=35a916a1d63190ab5c9009457136ae5f3c0c7512d60291d0d1378ba18ce08ebb
   ruby_llm (1.16.0) sha256=26bd5310cf2ce55f74a60f8aae0b0d0327b586ff4532c84828103c3b2b905a18
   ruby_llm-schema (0.4.0) sha256=e930f5a5316f9301bff3fb7fe572e44727d05bb8e50621001bbb49a47d63b8da

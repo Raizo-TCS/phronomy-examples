@@ -53,10 +53,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check out phronomy sibling
-        uses: actions/checkout@v4
-        with:
-          repository: Raizo-TCS/phronomy
-          path: ../phronomy
+        run: git clone --depth=1 https://github.com/Raizo-TCS/phronomy.git "${{ github.workspace }}/../phronomy"
 
       - uses: ruby/setup-ruby@v1
         with:

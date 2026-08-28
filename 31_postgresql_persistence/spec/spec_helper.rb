@@ -50,7 +50,7 @@ module PostgreSQLPersistenceSpecSupport
     Phronomy::Agent::AgentRoot.create(
       agent_id: "#{prefix}-#{SecureRandom.uuid}",
       agent_definition_id: "postgres-reference-agent",
-      definition_version: 1
+      agent_definition_version: 1
     )
   end
 
@@ -105,7 +105,8 @@ module PostgreSQLPersistenceSpecSupport
     persistence.connection_pool.with_connection do |connection|
       connection.transaction do
         tx =
-          PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.new(
+          PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.build(
+            persistence: persistence,
             connection_pool: persistence.connection_pool,
             connection: connection
           )

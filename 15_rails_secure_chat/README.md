@@ -10,7 +10,7 @@ A Rails application showing trust boundaries around a stateful Phronomy Agent.
 | Application PII policy | `Phronomy::Filter::Base` | Demonstrates custom input/output Filters |
 | Stateful Agent | `Agent.create` / `Agent.load` | Gives each browser session an independent Agent identity |
 | Canonical transcript | `agent.transcript` | Reads Journal-backed conversation state |
-| Caller metadata | `config: { user_id:, session_id: }` | Propagates application identity metadata into the invocation |
+| Caller metadata | `config: { user_id: }` | Propagates the supported caller identity metadata into the invocation |
 | Async summarization | `invoke_async` + `Workflow#signal` | Keeps Workflow state transitions event-driven |
 | Logical context clear | `agent.clear_transcript!` | Advances transcript generation without deleting Journal history |
 | Shared Persistence | `Persistence::InMemory` | Keeps Agent state in the Phronomy Persistence boundary for this demo |

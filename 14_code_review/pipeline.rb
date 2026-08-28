@@ -161,18 +161,10 @@ def start_improvement(snapshot)
   agent = load_or_create_improver(snapshot)
   user_prompt = build_improvement_prompt(snapshot)
   result_task = Phronomy::Task.deferred(name: "example-14-improvement")
-  improved = +""
-  mutex = Mutex.new
 
-  puts "\n[ImproverAgent] Generating improvements (streaming)..."
-  operation = agent.stream_async({message: user_prompt, priority: snapshot.priority || "security"}) do |event|
-    next unless event.type == :token
-
-    token = event.payload[:content].to_s
-    print token
-    $stdout.flush
-    mutex.synchronize { improved << token }
-  end
+  puts "
+[ImproverAgent] Generating improvements..."
+  operation = agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
 
   operation.on_complete do |result, error|
     if error
@@ -180,12 +172,8 @@ def start_improvement(snapshot)
       next
     end
 
-    final_output = result&.dig(:output).to_s
-    value = mutex.synchronize do
-      improved << final_output if improved.empty? && !final_output.empty?
-      improved.dup
-    end
-    puts
+    value = result&.dig(:output).to_s
+    puts value
 
     begin
       CODE_OUTPUT_GUARDRAIL.call(value)
@@ -235,7 +223,7 @@ end
 def signal_completion(workflow, thread_id:, event:, operation:, key:)
   operation.on_complete do |value, error|
     workflow.signal(
-      thread_id: thread_id,
+      workflow_instance_id: workflow_instance_id,
       event: event,
       payload: error ? {error: error} : {key => value}
     )
@@ -256,7 +244,7 @@ def build_pipeline
       operation = start_parallel_reviews(snapshot)
       signal_completion(
         workflow,
-        thread_id: state.thread_id,
+        thread_id: state.workflow_instance_id,
         event: :reviews_completed,
         operation: operation,
         key: :reviews
@@ -271,7 +259,7 @@ def build_pipeline
       operation = start_improvement(state.merge({}))
       signal_completion(
         workflow,
-        thread_id: state.thread_id,
+        thread_id: state.workflow_instance_id,
         event: :improvement_completed,
         operation: operation,
         key: :improved_code
@@ -289,7 +277,7 @@ def build_pipeline
       end
       signal_completion(
         workflow,
-        thread_id: state.thread_id,
+        thread_id: state.workflow_instance_id,
         event: :evaluation_completed,
         operation: operation,
         key: :quality_scores

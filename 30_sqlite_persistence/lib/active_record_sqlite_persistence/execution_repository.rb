@@ -4,34 +4,39 @@ module PhronomyExamples
   module Persistence
     class ActiveRecordSQLite < Phronomy::Persistence
       class ExecutionRepository < ConnectionAccess
-        def create_active(execution)
+        def create_active(execution_id:, agent_id:, execution_revision:, record:)
+          execution_key = String(execution_id)
+          agent_key = String(agent_id)
+          revision = Integer(execution_revision)
+          raise Phronomy::Persistence::ConflictError, "execution_id must not be empty" if execution_key.empty?
+          raise Phronomy::Persistence::ConflictError, "agent_id must not be empty" if agent_key.empty?
+          raise Phronomy::Persistence::ConflictError, "execution_revision must be non-negative" if revision.negative?
+
           with_write_connection do |connection|
-            if execution_exists_on?(connection, execution.execution_id)
+            if execution_exists_on?(connection, execution_key)
               raise Phronomy::Persistence::ConflictError,
-                    "Execution already exists: #{execution.execution_id}"
+                "Execution already exists: #{execution_key}"
             end
-
-            if active_for_agent_on?(connection, execution.agent_id)
+            if active_for_agent_on?(connection, agent_key)
               raise Phronomy::AgentBusyError,
-                    "Agent already has an active execution: #{execution.agent_id}"
+                "Agent already has an active execution: #{agent_key}"
             end
-
             execute_sql(
               connection,
               "INSERT INTO phronomy_executions " \
               "(execution_id, agent_id, revision, status, active, execution_json) VALUES (" \
-              "#{quote_value(connection, execution.execution_id)}, " \
-              "#{quote_value(connection, execution.agent_id)}, " \
-              "#{Integer(execution.execution_revision)}, " \
-              "#{quote_value(connection, execution.status.to_s)}, " \
-              "#{execution.active? ? 1 : 0}, " \
-              "#{quote_value(connection, Codec.dump_domain(execution))})"
+              "#{quote_value(connection, execution_key)}, " \
+              "#{quote_value(connection, agent_key)}, #{revision}, 'opaque', 1, " \
+              "#{quote_value(connection, Codec.dump_record(record))})"
             )
           end
-
-          execution
-        rescue ActiveRecord::RecordNotUnique => error
-          classify_admission_conflict!(execution, error)
+          record.copy
+        rescue ActiveRecord::RecordNotUnique => e
+          if active_for_agent?(agent_key)
+            raise Phronomy::AgentBusyError,
+              "Agent already has an active execution: #{agent_key}"
+          end
+          raise Phronomy::Persistence::ConflictError, e.message
         end
 
         def load(execution_id)
@@ -42,52 +47,59 @@ module PhronomyExamples
               "WHERE execution_id = #{quote_value(connection, execution_id)}"
             )
           end
-
           unless row
             raise Phronomy::Persistence::NotFoundError,
-                  "Execution not found: #{execution_id}"
+              "Execution not found: #{execution_id}"
           end
-
-          Codec.load_execution(row.fetch("execution_json"))
+          Codec.load_record(row.fetch("execution_json"))
         end
 
-        def save(execution_id, expected_revision:, execution:)
-          unless execution.execution_id == execution_id
+        def save(execution_id, expected_revision:, next_revision:, agent_id:, active:, record:)
+          expected = Integer(expected_revision)
+          next_value = Integer(next_revision)
+          unless next_value == expected + 1
             raise Phronomy::Persistence::ConflictError,
-                  "Execution identity mismatch: expected #{execution_id}, " \
-                  "got #{execution.execution_id}"
+              "Execution revision must advance exactly once"
+          end
+          unless active.equal?(true) || active.equal?(false)
+            raise Phronomy::Persistence::ConflictError,
+              "Execution active metadata must be true or false"
           end
 
-          unless execution.execution_revision == expected_revision + 1
-            raise Phronomy::Persistence::ConflictError,
-                  "Execution revision must advance exactly once"
-          end
-
-          affected = with_write_connection do |connection|
-            update_sql(
+          outcome = with_write_connection do |connection|
+            stored = select_one_sql(
               connection,
-              "UPDATE phronomy_executions " \
-              "SET revision = #{Integer(execution.execution_revision)}, " \
-              "status = #{quote_value(connection, execution.status.to_s)}, " \
-              "active = #{execution.active? ? 1 : 0}, " \
-              "execution_json = #{quote_value(connection, Codec.dump_domain(execution))} " \
-              "WHERE execution_id = #{quote_value(connection, execution_id)} " \
-              "AND revision = #{Integer(expected_revision)}"
+              "SELECT agent_id FROM phronomy_executions " \
+              "WHERE execution_id = #{quote_value(connection, execution_id)}"
             )
+            next :not_found unless stored
+            next :identity_conflict unless stored.fetch("agent_id") == agent_id.to_s
+            if active && active_for_agent_on?(connection, agent_id, excluding_execution_id: execution_id)
+              next :agent_busy
+            end
+
+            affected = update_sql(
+              connection,
+              "UPDATE phronomy_executions SET " \
+              "revision = #{next_value}, active = #{active ? 1 : 0}, " \
+              "execution_json = #{quote_value(connection, Codec.dump_record(record))} " \
+              "WHERE execution_id = #{quote_value(connection, execution_id)} " \
+              "AND revision = #{expected}"
+            )
+            affected == 1 ? :ok : :conflict
           end
 
-          return execution if affected == 1
-
-          if execution_exists?(execution_id)
-            raise Phronomy::Persistence::ConflictError,
-                  "stale Execution revision for #{execution_id}"
+          case outcome
+          when :ok then record.copy
+          when :not_found
+            raise Phronomy::Persistence::NotFoundError, "Execution not found: #{execution_id}"
+          when :identity_conflict
+            raise Phronomy::Persistence::ConflictError, "Execution Agent identity mismatch: #{execution_id}"
+          when :agent_busy
+            raise Phronomy::AgentBusyError, "Agent already has an active execution: #{agent_id}"
+          else
+            raise Phronomy::Persistence::ConflictError, "stale Execution revision for #{execution_id}"
           end
-
-          raise Phronomy::Persistence::NotFoundError,
-                "Execution not found: #{execution_id}"
-        rescue ActiveRecord::RecordNotUnique
-          raise Phronomy::AgentBusyError,
-                "Agent already has an active execution: #{execution.agent_id}"
         end
 
         def list_active(agent_id)
@@ -95,91 +107,57 @@ module PhronomyExamples
             select_all_sql(
               connection,
               "SELECT execution_json FROM phronomy_executions " \
-              "WHERE agent_id = #{quote_value(connection, agent_id)} " \
-              "AND active = 1 ORDER BY execution_id ASC"
+              "WHERE agent_id = #{quote_value(connection, agent_id)} AND active = 1 " \
+              "ORDER BY execution_id ASC"
             )
           end
-
-          rows.map { |row| Codec.load_execution(row.fetch("execution_json")) }.freeze
+          rows.map { |row| Codec.load_record(row.fetch("execution_json")) }.freeze
         end
 
         def assert_idle!(agent_id)
-          busy = with_write_connection do |connection|
-            active_for_agent_on?(connection, agent_id)
-          end
+          busy = with_write_connection { |connection| active_for_agent_on?(connection, agent_id) }
           if busy
             raise Phronomy::AgentBusyError,
-                  "Agent already has an active execution: #{agent_id}"
+              "Agent already has an active execution: #{agent_id}"
           end
-
           true
         end
 
         def delete(execution_id)
           with_write_connection do |connection|
-            delete_sql(
-              connection,
-              "DELETE FROM phronomy_executions " \
-              "WHERE execution_id = #{quote_value(connection, execution_id)}"
-            )
+            delete_sql(connection, "DELETE FROM phronomy_executions WHERE execution_id = #{quote_value(connection, execution_id)}")
           end
           nil
         end
 
         def delete_for_agent(agent_id)
           with_write_connection do |connection|
-            delete_sql(
-              connection,
-              "DELETE FROM phronomy_executions " \
-              "WHERE agent_id = #{quote_value(connection, agent_id)}"
-            )
+            delete_sql(connection, "DELETE FROM phronomy_executions WHERE agent_id = #{quote_value(connection, agent_id)}")
           end
           nil
         end
 
         private
 
-        def classify_admission_conflict!(execution, original_error)
-          if execution_exists?(execution.execution_id)
-            raise Phronomy::Persistence::ConflictError,
-                  "Execution already exists: #{execution.execution_id}"
-          end
-
-          if active_for_agent?(execution.agent_id)
-            raise Phronomy::AgentBusyError,
-                  "Agent already has an active execution: #{execution.agent_id}"
-          end
-
-          raise original_error
-        end
-
-        def execution_exists?(execution_id)
-          with_read_connection do |connection|
-            execution_exists_on?(connection, execution_id)
-          end
-        end
-
         def execution_exists_on?(connection, execution_id)
           !select_one_sql(
             connection,
-            "SELECT 1 FROM phronomy_executions " \
-            "WHERE execution_id = #{quote_value(connection, execution_id)} LIMIT 1"
+            "SELECT 1 FROM phronomy_executions WHERE execution_id = #{quote_value(connection, execution_id)} LIMIT 1"
           ).nil?
         end
 
         def active_for_agent?(agent_id)
-          with_read_connection do |connection|
-            active_for_agent_on?(connection, agent_id)
-          end
+          with_read_connection { |connection| active_for_agent_on?(connection, agent_id) }
         end
 
-        def active_for_agent_on?(connection, agent_id)
-          !select_one_sql(
-            connection,
-            "SELECT 1 FROM phronomy_executions " \
-            "WHERE agent_id = #{quote_value(connection, agent_id)} " \
-            "AND active = 1 LIMIT 1"
-          ).nil?
+        def active_for_agent_on?(connection, agent_id, excluding_execution_id: nil)
+          query = +"SELECT 1 FROM phronomy_executions " \
+                   "WHERE agent_id = #{quote_value(connection, agent_id)} AND active = 1"
+          if excluding_execution_id
+            query << " AND execution_id <> #{quote_value(connection, excluding_execution_id)}"
+          end
+          query << " LIMIT 1"
+          !select_one_sql(connection, query).nil?
         end
       end
     end

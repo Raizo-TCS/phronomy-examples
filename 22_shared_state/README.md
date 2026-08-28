@@ -103,7 +103,7 @@ Total findings   : 6
    `SecurityAuditor`, `QualityReviewer` — each with role-scoped instructions and
    `tools ListFilesTool, ReadFileTool`.
 2. Implement `ListFilesTool` and `ReadFileTool` as
-   `Phronomy::Agent::Context::Capability::Base` subclasses; guard both with
+   `Phronomy::Tool::Base` subclasses; guard both with
    `DirectoryAccess` approval and reject path traversal in `ReadFileTool`.
 3. Create `CodeReviewTeam < Phronomy::Agent::SharedState` using:
    - `coordination` — shared-store protocol sent to every member

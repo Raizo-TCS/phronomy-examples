@@ -34,7 +34,8 @@ module PhronomyExamples
       def transaction
         connection_pool.with_connection do |connection|
           connection.transaction do
-            yield TransactionView.new(
+            yield TransactionView.build(
+              persistence: self,
               connection_pool: connection_pool,
               connection: connection
             )
@@ -57,10 +58,8 @@ module PhronomyExamples
       def assert_postgresql_adapter!
         connection_pool.with_connection do |connection|
           return if connection.adapter_name == "PostgreSQL"
-
           raise Phronomy::Persistence::UnsupportedBackendError,
-                "ActiveRecordPostgreSQL requires the ActiveRecord PostgreSQL adapter; " \
-                "got #{connection.adapter_name.inspect}"
+            "ActiveRecordPostgreSQL requires the ActiveRecord PostgreSQL adapter; got #{connection.adapter_name.inspect}"
         end
       end
     end

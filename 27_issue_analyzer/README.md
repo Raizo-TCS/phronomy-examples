@@ -41,7 +41,7 @@ The current categories include:
 - Testing / CI
 - Cross-cutting / Framework-wide
 
-`Workflow / Durable State` covers Workflow state, `thread_id` admission and
+`Workflow / Durable State` covers Workflow state, `workflow_instance_id` admission and
 `Persistence#workflow_states`. `Persistence / ContentStore` covers the unified
 backend protocol, Agent Journal durability, content storage and optimistic
 revision boundaries.

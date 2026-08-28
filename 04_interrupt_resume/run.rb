@@ -44,20 +44,20 @@ mail_workflow = Phronomy::Workflow.define(MailState) do
 
   state :draft
   entry :draft, lambda { |state|
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
 
-    DraftAgent.new.invoke_async(
-      "Topic: #{state.topic}",
+    agent = DraftAgent.new(
       on_event: lambda { |event|
         next unless event.type == :done
 
         mail_workflow.signal(
-          thread_id: thread_id,
+          workflow_instance_id: workflow_instance_id,
           event: :draft_completed,
           payload: {draft: event.payload[:output].strip}
         )
       }
     )
+    agent.invoke_async("Topic: #{state.topic}")
 
     nil
   }
@@ -104,7 +104,7 @@ end
 puts
 puts "--- Part 2: Agent tool approval / live owner lookup ---"
 
-class PublishReleaseTool < Phronomy::Agent::Context::Capability::Base
+class PublishReleaseTool < Phronomy::Tool::Base
   description "Publish a software release to an environment."
   param :version, type: :string, desc: "Release version"
   param :environment, type: :string, desc: "Target environment"

@@ -121,10 +121,8 @@ result = OutputValidator.validate(
       }
   }
 ) do
-  RagAgent.new.invoke(
-    question,
-    on_event: ->(event) { events << event }
-  )
+  rag_agent = RagAgent.new(on_event: ->(event) { events << event })
+  rag_agent.invoke(question)
 end
 
 retrieval_calls = events.count do |event|

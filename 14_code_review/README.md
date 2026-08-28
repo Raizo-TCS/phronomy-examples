@@ -1,7 +1,7 @@
 # 14 AI Code Review Pipeline
 
 A larger example that composes Phronomy Workflow, stateful Agents,
-Journal-backed Knowledge, streaming, Filters, application-level quality scoring,
+Journal-backed Knowledge, asynchronous Agent execution, Filters, application-level quality scoring,
 and tracing into one application flow.
 
 ## Current Phronomy features
@@ -15,7 +15,7 @@ and tracing into one application flow.
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
 | Event-driven completion | `Workflow#signal` | Async work returns to the FSM as later events |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
-| Agent async lifecycle | `Agent#invoke_async`, `Agent#stream_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
+| Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Persistent Knowledge | `knowledge:` | Reviewer criteria / improvement policy become Journal context candidates |
 | Prompt template | `Agent::Context::Instruction::PromptTemplate` | Builds the improvement request |
 | Synchronous-work boundary | `Runtime#offload` | The direct RubyLLM quality-judge call is isolated from EventLoop by the bounded OffloadPool |
@@ -68,7 +68,7 @@ Workflow :parallel_review
    ↓ completion callbacks → Workflow#signal
 wait_state :awaiting_priority
    ↓ user event
-ImproverAgent.stream_async
+ImproverAgent.invoke_async
    ↓ completion callback → Workflow#signal
 output Filter
    ↓

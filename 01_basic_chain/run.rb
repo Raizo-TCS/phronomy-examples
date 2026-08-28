@@ -42,18 +42,21 @@ app = Phronomy::Workflow.define(CodeState) do
   state :done
 
   entry :generate, ->(state) {
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
     prompt = "Write a Hello World program in #{state.language}. Return code only."
 
-    CodeGeneratorAgent.new.invoke_async(prompt) do |event|
-      next unless event.type == :done
+    agent = CodeGeneratorAgent.new(
+      on_event: ->(event) {
+        next unless event.type == :done
 
-      app.signal(
-        thread_id: thread_id,
-        event: :generation_completed,
-        payload: {output: event.payload[:output]}
-      )
-    end
+        app.signal(
+          workflow_instance_id: workflow_instance_id,
+          event: :generation_completed,
+          payload: {output: event.payload[:output]}
+        )
+      }
+    )
+    agent.invoke_async(prompt)
 
     state
   }

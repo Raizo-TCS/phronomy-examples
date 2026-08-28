@@ -30,7 +30,7 @@ class SecretBlockingFilter < Phronomy::Filter::Base
   end
 end
 
-class CustomerLookupTool < Phronomy::Agent::Context::Capability::Base
+class CustomerLookupTool < Phronomy::Tool::Base
   description "Look up the example customer record."
   param :customer_id, type: :string, desc: "Customer id"
 
@@ -73,13 +73,14 @@ end
 puts
 
 puts "--- 3. Tool-result Filter transforms data at the capability boundary ---"
-tool_filtered_agent = CustomerAgent.new
+tool_events = []
+tool_filtered_agent = CustomerAgent.new(
+  on_event: ->(event) { tool_events << event }
+)
 tool_filtered_agent.add_tool_result_filter(
   CustomerLookupTool,
   PiiMaskFilter.new
 )
-
-tool_events = []
 tool_result = OutputValidator.validate(
   "tool result passes through the scoped Filter",
   check: lambda { |_r|
@@ -91,8 +92,7 @@ tool_result = OutputValidator.validate(
   }
 ) do
   tool_filtered_agent.invoke(
-    "Look up customer 42. You MUST use customer_lookup and report the result.",
-    on_event: ->(event) { tool_events << event }
+    "Look up customer 42. You MUST use customer_lookup and report the result."
   )
 end
 
@@ -124,6 +124,9 @@ class SafeCustomerAgent < Phronomy::Agent::Base
 end
 
 safe_events = []
+safe_agent = SafeCustomerAgent.new(
+  on_event: ->(event) { safe_events << event }
+)
 safe_result = OutputValidator.validate(
   "class-level Filters protect tool and output boundaries",
   check: lambda { |r|
@@ -134,10 +137,7 @@ safe_result = OutputValidator.validate(
       }
   }
 ) do
-  SafeCustomerAgent.new.invoke(
-    "Look up customer 99. You MUST use customer_lookup.",
-    on_event: ->(event) { safe_events << event }
-  )
+  safe_agent.invoke("Look up customer 99. You MUST use customer_lookup.")
 end
 
 safe_tool_event = safe_events.find { |event| event.type == :tool_result }

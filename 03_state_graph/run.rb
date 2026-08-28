@@ -46,42 +46,48 @@ workflow = Phronomy::Workflow.define(MyState) do
 
   state :evaluate
   entry :evaluate, ->(state) {
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
     iterations = state.iterations
     prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
 
-    EvaluatorAgent.new.invoke_async(prompt) do |event|
-      next unless event.type == :done
+    agent = EvaluatorAgent.new(
+      on_event: ->(event) {
+        next unless event.type == :done
 
-      score = event.payload[:output].scan(/\d+/).first.to_i.clamp(0, 10)
-      puts "[Iteration #{iterations}] Score: #{score}"
-      workflow.signal(
-        thread_id: thread_id,
-        event: :evaluation_completed,
-        payload: {score: score}
-      )
-    end
+        score = event.payload[:output].scan(/\d+/).first.to_i.clamp(0, 10)
+        puts "[Iteration #{iterations}] Score: #{score}"
+        workflow.signal(
+          workflow_instance_id: workflow_instance_id,
+          event: :evaluation_completed,
+          payload: {score: score}
+        )
+      }
+    )
+    agent.invoke_async(prompt)
 
     state
   }
 
   state :improve
   entry :improve, ->(state) {
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
     iterations = state.iterations
 
-    ImproverAgent.new.invoke_async(state.text) do |event|
-      next unless event.type == :done
+    agent = ImproverAgent.new(
+      on_event: ->(event) {
+        next unless event.type == :done
 
-      workflow.signal(
-        thread_id: thread_id,
-        event: :improvement_completed,
-        payload: {
-          text: event.payload[:output].strip,
-          iterations: iterations + 1
-        }
-      )
-    end
+        workflow.signal(
+          workflow_instance_id: workflow_instance_id,
+          event: :improvement_completed,
+          payload: {
+            text: event.payload[:output].strip,
+            iterations: iterations + 1
+          }
+        )
+      }
+    )
+    agent.invoke_async(state.text)
 
     state
   }

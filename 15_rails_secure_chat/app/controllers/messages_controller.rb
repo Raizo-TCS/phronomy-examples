@@ -26,8 +26,7 @@ class MessagesController < ApplicationController
     result = agent.invoke(
       content,
       config: {
-        user_id: session[:user_id],
-        session_id: session[:session_id]
+        user_id: session[:user_id]
       }
     )
 

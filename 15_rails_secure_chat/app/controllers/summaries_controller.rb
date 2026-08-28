@@ -30,8 +30,8 @@ class SummariesController < ApplicationController
     summary_thread_id = "summary-#{agent_id}"
     app    = SummarizationGraph.compile
     result = app.invoke(
-      { messages: messages, wf_thread_id: summary_thread_id },
-      config: { thread_id: summary_thread_id }
+      { messages: messages },
+      config: { workflow_instance_id: summary_thread_id }
     )
 
     render json: { summary: result.summary }

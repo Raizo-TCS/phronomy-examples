@@ -4,81 +4,75 @@ module PhronomyExamples
   module Persistence
     class ActiveRecordPostgreSQL < Phronomy::Persistence
       class WorkflowStateRepository < ConnectionAccess
-        def load(thread_id)
+        def load(workflow_instance_id)
           row = with_read_connection do |connection|
             select_one_sql(
               connection,
-              "SELECT revision, snapshot_json FROM phronomy_workflow_states " \
-              "WHERE thread_id = #{quote_value(connection, thread_id)}"
+              "SELECT snapshot_json FROM phronomy_workflow_states " \
+              "WHERE thread_id = #{quote_value(connection, workflow_instance_id)}"
             )
           end
-          return nil unless row
-
-          {
-            revision: Integer(row.fetch("revision")),
-            snapshot: Codec.load_workflow(row.fetch("snapshot_json"))
-          }
+          row ? Codec.load_record(row.fetch("snapshot_json")) : nil
         end
 
-        def save(thread_id, expected_revision:, snapshot:)
-          encoded = Codec.dump_workflow(snapshot)
-
-          if expected_revision.nil?
-            inserted = with_write_connection do |connection|
-              exec_query_sql(
-                connection,
-                "INSERT INTO phronomy_workflow_states " \
-                "(thread_id, revision, snapshot_json) VALUES (" \
-                "#{quote_value(connection, thread_id)}, 1, " \
-                "#{quote_value(connection, encoded)}) " \
-                "ON CONFLICT (thread_id) DO NOTHING " \
-                "RETURNING revision"
-              )
-            end
-
-            if inserted.empty?
-              raise Phronomy::Persistence::ConflictError,
-                    "Workflow state already exists: #{thread_id}"
-            end
-
-            return 1
+        def save(workflow_instance_id, expected_revision:, next_revision:, record:)
+          expected = expected_revision.nil? ? nil : Integer(expected_revision)
+          next_value = Integer(next_revision)
+          expected_next = expected.nil? ? 1 : expected + 1
+          unless next_value == expected_next
+            raise Phronomy::Persistence::ConflictError,
+              "Workflow revision must advance exactly once"
           end
 
-          next_revision = Integer(expected_revision) + 1
+          if expected.nil?
+            with_write_connection do |connection|
+              inserted = exec_query_sql(
+                connection,
+                "INSERT INTO phronomy_workflow_states (thread_id, revision, snapshot_json) VALUES (" \
+                "#{quote_value(connection, workflow_instance_id)}, #{next_value}, " \
+                "#{quote_value(connection, Codec.dump_record(record))}) " \
+                "ON CONFLICT (thread_id) DO NOTHING RETURNING revision"
+              )
+              if inserted.empty?
+                raise Phronomy::Persistence::ConflictError,
+                  "Workflow state already exists: #{workflow_instance_id}"
+              end
+            end
+            return record.copy
+          end
+
           affected = with_write_connection do |connection|
             update_sql(
               connection,
-              "UPDATE phronomy_workflow_states " \
-              "SET revision = #{next_revision}, " \
-              "snapshot_json = #{quote_value(connection, encoded)} " \
-              "WHERE thread_id = #{quote_value(connection, thread_id)} " \
-              "AND revision = #{Integer(expected_revision)}"
+              "UPDATE phronomy_workflow_states SET revision = #{next_value}, " \
+              "snapshot_json = #{quote_value(connection, Codec.dump_record(record))} " \
+              "WHERE thread_id = #{quote_value(connection, workflow_instance_id)} " \
+              "AND revision = #{expected}"
             )
           end
-
-          if affected != 1
+          unless affected == 1
             raise Phronomy::Persistence::ConflictError,
-                  "stale Workflow revision for #{thread_id}"
+              "stale Workflow revision for #{workflow_instance_id}"
           end
-
-          next_revision
+          record.copy
+        rescue ActiveRecord::RecordNotUnique
+          raise Phronomy::Persistence::ConflictError,
+            "Workflow state already exists: #{workflow_instance_id}"
         end
 
-        def delete(thread_id, expected_revision:)
+        def delete(workflow_instance_id, expected_revision:)
           affected = with_write_connection do |connection|
             delete_sql(
               connection,
               "DELETE FROM phronomy_workflow_states " \
-              "WHERE thread_id = #{quote_value(connection, thread_id)} " \
+              "WHERE thread_id = #{quote_value(connection, workflow_instance_id)} " \
               "AND revision = #{Integer(expected_revision)}"
             )
           end
-
-          if affected != 1
+          unless affected == 1
             raise Phronomy::Persistence::ConflictError,
-                  "stale Workflow revision for #{thread_id}"
+              "stale Workflow revision for #{workflow_instance_id}"
           end
-
           nil
         end
       end

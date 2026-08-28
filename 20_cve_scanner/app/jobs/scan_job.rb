@@ -15,7 +15,7 @@ class ScanJob < ApplicationJob
     broadcast(scan_id, {type: "status", message: "Starting scan for: #{cve_ids.join(", ")}"})
 
     graph = CveScanner.build_graph(scan_id: scan_id)
-    state = graph.invoke({cve_ids: cve_ids}, config: {thread_id: "scan_#{scan_id}"})
+    state = graph.invoke({cve_ids: cve_ids}, config: {workflow_instance_id: "scan_#{scan_id}"})
 
     self.class.handle_state(scan, state)
   rescue StandardError => e
@@ -36,14 +36,14 @@ class ScanJob < ApplicationJob
     graph = CveScanner.build_graph(scan_id: scan_id)
 
     # Restore state from persisted hash
-    meta_keys = %w[thread_id phase]
+    meta_keys = %w[workflow_instance_id phase]
     field_attrs = state_data
       .reject { |k, _| meta_keys.include?(k.to_s) }
       .transform_keys(&:to_sym)
 
     state = CveScanner::ScanState.new(**field_attrs)
     state.set_graph_metadata(
-      thread_id: state_data["thread_id"],
+      workflow_instance_id: state_data["workflow_instance_id"],
       phase:     state_data["phase"]&.to_sym
     )
 
@@ -77,14 +77,14 @@ class ScanJob < ApplicationJob
 
     graph = CveScanner.build_graph(scan_id: scan_id)
 
-    meta_keys = %w[thread_id phase]
+    meta_keys = %w[workflow_instance_id phase]
     field_attrs = state_data
       .reject { |k, _| meta_keys.include?(k.to_s) }
       .transform_keys(&:to_sym)
 
     state = CveScanner::ScanState.new(**field_attrs)
     state.set_graph_metadata(
-      thread_id: state_data["thread_id"],
+      workflow_instance_id: state_data["workflow_instance_id"],
       phase:     state_data["phase"]&.to_sym
     )
     state = state.merge(followup_request: message)
@@ -116,7 +116,7 @@ class ScanJob < ApplicationJob
       if pending_phase == :awaiting_check_approval
         commands = state.proposed_checks
         persisted_state = state.to_h.merge(
-          "thread_id" => state.thread_id,
+          "workflow_instance_id" => state.workflow_instance_id,
           "phase"     => state.phase.to_s
         )
         scan.update!(
@@ -132,7 +132,7 @@ class ScanJob < ApplicationJob
       elsif pending_phase == :awaiting_remediation_approval
         commands = state.proposed_remediations
         persisted_state = state.to_h.merge(
-          "thread_id" => state.thread_id,
+          "workflow_instance_id" => state.workflow_instance_id,
           "phase"     => state.phase.to_s
         )
         scan.update!(
@@ -148,7 +148,7 @@ class ScanJob < ApplicationJob
       elsif pending_phase == :awaiting_followup
         # Report is ready; pause and wait for the user's first follow-up message
         persisted_state = state.to_h.merge(
-          "thread_id" => state.thread_id,
+          "workflow_instance_id" => state.workflow_instance_id,
           "phase"     => state.phase.to_s
         )
         scan.update!(

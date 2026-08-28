@@ -13,7 +13,7 @@ execution order in a workflow.
 | Feature | Usage |
 |---------|-------|
 | `Phronomy::Agent::Base` | Defines specialist and orchestrator agents |
-| `Phronomy::Agent::Context::Capability::Base` | Wraps sub-agents as callable tools |
+| `Phronomy::Tool::Base` | Wraps sub-agents as callable tools |
 | `tools` DSL | Registers sub-agent tools on the orchestrator |
 
 ## Agents and Tools

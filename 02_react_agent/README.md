@@ -20,14 +20,14 @@ weather, then composes a concise report.
 | Feature | Usage |
 |---------|-------|
 | `Phronomy::Agent::Base` | DSL-based agent definition |
-| `Phronomy::Agent::Context::Capability::Base` | Base class for custom tools callable by the LLM |
+| `Phronomy::Tool::Base` | Base class for custom tools callable by the LLM |
 | `Agent#invoke` | Runs the ReAct loop (Thought → Action → Observation) |
 | `model` / `instructions` / `tools` DSL | Agent configuration |
 
 ## Tools
 
 Both tools are defined in `tools.rb` and inherit from
-`Phronomy::Agent::Context::Capability::Base`.
+`Phronomy::Tool::Base`.
 
 | Tool | Description | Returns (dummy) |
 |------|-------------|-----------------|

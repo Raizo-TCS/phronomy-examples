@@ -16,7 +16,7 @@ require "phronomy"
 # ---------------------------------------------------------------------------
 # Tool: requires human approval before execution
 # ---------------------------------------------------------------------------
-class DeleteFileTool < Phronomy::Agent::Context::Capability::Base
+class DeleteFileTool < Phronomy::Tool::Base
   tool_name "delete_file"
   description "Deletes a file from the filesystem. DANGEROUS — requires human approval."
   param :path, type: :string, desc: "File path to delete"
@@ -43,20 +43,23 @@ end
 # ---------------------------------------------------------------------------
 # Flow
 # ---------------------------------------------------------------------------
-agent = FileManagerAgent.new
+agent = FileManagerAgent.new(
+  on_event: ->(event) {
+    next unless event.type == :approval_required
+
+    request = event.payload.fetch(:request)
+    puts "  [APPROVAL REQUIRED]"
+    puts "    request.id : #{request.id}"
+    request.items.each do |item|
+      puts "    tool_name  : #{item.tool_name}"
+      puts "    arguments  : #{item.arguments.inspect}"
+      puts "    facts      : #{item.facts.inspect}"
+    end
+  }
+)
 
 agent.tool_approval_policy do |_request|
   :require_approval
-end
-
-agent.on_tool_approval_required do |request|
-  puts "  [APPROVAL REQUIRED]"
-  puts "    request.id : #{request.id}"
-  request.items.each do |item|
-    puts "    tool_name  : #{item.tool_name}"
-    puts "    arguments  : #{item.arguments.inspect}"
-    puts "    facts      : #{item.facts.inspect}"
-  end
 end
 
 puts "=== Tool Approval API Smoke Test ==="

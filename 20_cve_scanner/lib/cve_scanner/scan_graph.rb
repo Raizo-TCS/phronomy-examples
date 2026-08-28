@@ -53,7 +53,6 @@ module CveScanner
       )
     end
 
-    agent = agent_class.new
     accumulated = +""
     last_tool_name = +"unknown"
 
@@ -64,28 +63,31 @@ module CveScanner
       )
     end
 
-    source = agent.stream_async(prompt) do |event|
-      case event.type
-      when :token
-        token = event.payload[:content].to_s
-        accumulated << token
-        ScanChannel.broadcast(scan_id, {type: "llm_token", role: role, token: token}) if scan_id
-      when :tool_call
-        tool_call = event.payload[:tool_call]
-        last_tool_name.replace(tool_call.respond_to?(:name) ? tool_call.name.to_s : "tool")
-        args = tool_call.respond_to?(:arguments) ? tool_call.arguments.inspect.slice(0, 120) : ""
-        ScanChannel.broadcast(
-          scan_id,
-          {type: "log", subtype: "tool_call", message: "#{role} -> calling #{last_tool_name}: #{args}"}
-        ) if scan_id
-      when :tool_result
-        result_text = event.payload[:tool_result].to_s
-        ScanChannel.broadcast(
-          scan_id,
-          {type: "log", subtype: "tool_result", message: "#{role} <- #{last_tool_name} result (#{result_text.length} chars)"}
-        ) if scan_id
-      end
-    end
+    agent = agent_class.new(
+      on_event: ->(event) {
+        case event.type
+        when :token
+          token = event.payload[:content].to_s
+          accumulated << token
+          ScanChannel.broadcast(scan_id, {type: "llm_token", role: role, token: token}) if scan_id
+        when :tool_call
+          tool_call = event.payload[:tool_call]
+          last_tool_name.replace(tool_call.respond_to?(:name) ? tool_call.name.to_s : "tool")
+          args = tool_call.respond_to?(:arguments) ? tool_call.arguments.inspect.slice(0, 120) : ""
+          ScanChannel.broadcast(
+            scan_id,
+            {type: "log", subtype: "tool_call", message: "#{role} -> calling #{last_tool_name}: #{args}"}
+          ) if scan_id
+        when :tool_result
+          result_text = event.payload[:tool_result].to_s
+          ScanChannel.broadcast(
+            scan_id,
+            {type: "log", subtype: "tool_result", message: "#{role} <- #{last_tool_name} result (#{result_text.length} chars)"}
+          ) if scan_id
+        end
+      }
+    )
+    source = agent.stream_async(prompt)
 
     source.map do |result|
       parse_agent_json_result(result, accumulated, scan_id: scan_id, role: role)
@@ -129,14 +131,14 @@ module CveScanner
 
   def self.signal_node_result(workflow, thread_id:, event:, value:, error:)
     payload = error ? {error: error} : {state: value}
-    workflow.signal(thread_id: thread_id, event: event, payload: payload)
+    workflow.signal(workflow_instance_id: workflow_instance_id, event: event, payload: payload)
   end
 
   # For logical asynchronous work already represented by a Phronomy completion
   # handle (Agent lifecycle, FanOut, another Workflow, ...).
   def self.start_task_node(workflow, state, event:, &operation_builder)
     snapshot = state.merge({})
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
     operation = operation_builder.call(snapshot)
 
     unless operation.respond_to?(:on_complete)
@@ -155,7 +157,7 @@ module CveScanner
 
     state
   rescue => error
-    workflow.signal(thread_id: state.thread_id, event: event, payload: {error: error})
+    workflow.signal(workflow_instance_id: state.workflow_instance_id, event: event, payload: {error: error})
     state
   end
 
@@ -164,7 +166,7 @@ module CveScanner
   # OffloadPool; the Workflow EventLoop never waits for it.
   def self.start_blocking_node(workflow, state, event:, &operation)
     snapshot = state.merge({})
-    thread_id = state.thread_id
+    workflow_instance_id = state.workflow_instance_id
     pending = Phronomy::Runtime.instance.offload.submit do
       operation.call(snapshot)
     end
@@ -181,7 +183,7 @@ module CveScanner
 
     state
   rescue => error
-    workflow.signal(thread_id: state.thread_id, event: event, payload: {error: error})
+    workflow.signal(workflow_instance_id: state.workflow_instance_id, event: event, payload: {error: error})
     state
   end
 

@@ -1,3 +1,12 @@
+PATH
+  remote: /home/raizo-tcs/ruby_ai_agent_framework/phronomy
+  specs:
+    phronomy (0.22.0)
+      mcp (~> 1.0)
+      ruby_llm (>= 1.15, < 2)
+      state_machines (~> 0.6)
+      zeitwerk (>= 2.6, < 3)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -174,7 +183,7 @@ GEM
       net-pop
       net-smtp
     marcel (1.2.1)
-    mcp (1.2.0)
+    mcp (1.4.0)
       json_schemer (>= 2.4)
     mini_mime (1.1.5)
     minitest (6.0.6)
@@ -220,11 +229,6 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    phronomy (0.22.0)
-      mcp (~> 1.0)
-      ruby_llm (>= 1.15, < 2)
-      state_machines (~> 0.6)
-      zeitwerk (>= 2.6, < 3)
     pp (0.6.3)
       prettyprint
     prettyprint (0.2.0)
@@ -410,7 +414,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
-  phronomy (~> 0.22.0)
+  phronomy!
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

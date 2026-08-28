@@ -77,7 +77,7 @@ module SQLitePersistenceDemo
     puts "  agent_id:    #{root.agent_id}"
     puts "  content_id:  #{content_id}"
     puts "  journal:     #{backend.journals.head(root.agent_id)}"
-    puts "  thread_id:   #{workflow_instance_id}"
+    puts "  workflow_id: #{workflow_instance_id}"
 
     Record.connection_pool.disconnect!
 

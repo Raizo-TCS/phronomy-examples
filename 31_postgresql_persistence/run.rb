@@ -85,7 +85,7 @@ begin
 
   workflow_instance_id = "postgres-demo-workflow-#{SecureRandom.uuid}"
   first_backend.workflow_states.save(
-    thread_id,
+    workflow_instance_id,
     expected_revision: nil,
     snapshot: {
       fields: {value: "persisted"},

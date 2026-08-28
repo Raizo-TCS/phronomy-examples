@@ -95,7 +95,7 @@ puts "Workflow instance id: #{halted.workflow_instance_id}"
 puts "Workflow phase:       #{halted.phase}"
 puts "Workflow status:      #{halted.status}"
 puts "Durable revision:     #{halted_record.fetch(:revision)}"
-puts "Durable phase:        #{halted_record.fetch(:snapshot).fetch(:phase)}"
+puts "Durable phase:        #{halted_record.fetch(:snapshot).fetch("phase")}"
 
 completed = approval_workflow.send_event(
   state: halted,
@@ -109,7 +109,7 @@ puts "After approval:"
 puts "Workflow phase:       #{completed.phase}"
 puts "Workflow status:      #{completed.status}"
 puts "Durable revision:     #{completed_record.fetch(:revision)}"
-puts "Durable phase:        #{completed_record.fetch(:snapshot).fetch(:phase)}"
+puts "Durable phase:        #{completed_record.fetch(:snapshot).fetch("phase")}"
 
 puts
 puts "--- Identity summary ---"

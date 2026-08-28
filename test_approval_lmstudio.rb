@@ -10,6 +10,7 @@
 #   PHRONOMY_PROVIDER="openai" \
 #   bundle exec ruby test_approval_lmstudio.rb
 
+require "thread"
 require_relative "shared/llm_config"
 require "phronomy"
 
@@ -43,6 +44,7 @@ end
 # ---------------------------------------------------------------------------
 # Flow
 # ---------------------------------------------------------------------------
+approval_requests = Queue.new
 agent = FileManagerAgent.new(
   on_event: ->(event) {
     next unless event.type == :approval_required
@@ -55,6 +57,7 @@ agent = FileManagerAgent.new(
       puts "    arguments  : #{item.arguments.inspect}"
       puts "    facts      : #{item.facts.inspect}"
     end
+    approval_requests << request
   }
 )
 
@@ -65,21 +68,16 @@ end
 puts "=== Tool Approval API Smoke Test ==="
 puts
 
-# Step 1: invoke — should suspend.
-puts "Step 1: invoke('Please delete /tmp/old_data.txt')"
-result = agent.invoke("Please delete /tmp/old_data.txt")
-
-unless result[:suspended]
-  puts "UNEXPECTED: agent did NOT suspend (model may not have called the tool)"
-  puts "Output: #{result[:output]}"
-  exit 1
-end
-
-execution_id = result.fetch(:execution_id)
-approval_request = result.fetch(:approval_request)
+# Step 1: start asynchronously. Approval suspension is nonterminal, so the
+# original Task must remain pending while the application handles the request.
+puts "Step 1: invoke_async('Please delete /tmp/old_data.txt')"
+original_task = agent.invoke_async("Please delete /tmp/old_data.txt")
+approval_request = approval_requests.pop
+execution_id = approval_request.execution_id
 approval_request_id = approval_request.id
 
-puts "  suspended            : #{result[:suspended]}"
+puts "  suspended            : true"
+puts "  original_task.done?  : #{original_task.done?}"
 puts "  execution_id         : #{execution_id}"
 puts "  approval_request_id  : #{approval_request_id}"
 approval_request.items.each do |item|
@@ -87,6 +85,11 @@ approval_request.items.each do |item|
   puts "  arguments            : #{item.arguments.inspect}"
 end
 puts
+
+if original_task.done?
+  puts "UNEXPECTED: original Agent Task settled while approval was still pending"
+  exit 1
+end
 
 # Step 2: resolve the existing live owner, then approve.
 # execution_id is routing identity, not an authorization token; a real
@@ -104,10 +107,17 @@ final = owner.approve(
   approval_request_id: approval_request_id,
   approved: true
 )
+original_result = original_task.wait_result
+
+unless original_result[:execution_id] == final[:execution_id]
+  puts "UNEXPECTED: approval result and original Task refer to different executions"
+  exit 1
+end
 
 puts
-puts "  live owner: #{owner.class}"
-puts "  output: #{final[:output]}"
+puts "  live owner:           #{owner.class}"
+puts "  original_task.done? : #{original_task.done?}"
+puts "  output:               #{final[:output]}"
 puts
 
 if final[:output].to_s.length >= 5

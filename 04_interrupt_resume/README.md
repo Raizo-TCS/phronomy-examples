@@ -30,15 +30,44 @@ Use this when the approval is part of the **business process state machine**.
 requires_approval true
 ```
 
-When the model requests that capability, Phronomy authorizes the tool call,
-persists the execution as suspended, and returns a `ToolApprovalRequest`.
+Agent approval suspension has an important completion contract:
+
+```text
+ReleaseAgent#invoke_async
+  → original Phronomy::Task remains pending
+  → Agent emits :approval_required
+  → application receives ToolApprovalRequest
+  → approve / approve_async resumes the same execution
+  → terminal result settles both the original Task and the accepted approval Task
+```
+
+Suspension is therefore **not** a terminal result returned by `Agent#invoke`.
+A synchronous `invoke` waits for terminal completion, so an application that
+needs to stop and ask a human must start with `invoke_async` and observe
+`:approval_required` through the Agent listener (or arrange another independent
+approval path).
+
+The example registers the listener when the live Agent is created:
+
+```ruby
+approval_requests = Queue.new
+agent = ReleaseAgent.new(
+  on_event: ->(event) {
+    approval_requests << event.payload.fetch(:request) if
+      event.type == :approval_required
+  }
+)
+
+original_task = agent.invoke_async("Publish version 2.4.0 to production.")
+request = approval_requests.pop
+```
 
 If the application still holds the live Agent instance, approval is simply an
 instance operation:
 
 ```ruby
 agent.approve(
-  execution_id,
+  request.execution_id,
   approval_request_id: request.id,
   approved: true
 )

@@ -3,34 +3,43 @@
 This example shows how Agent execution participates in Phronomy's Runtime
 without exposing the internal EventLoop as an application API.
 
-## Agent async contract
+## Two complementary Agent async surfaces
 
-`Agent#invoke_async` returns a `Phronomy::Task`.
+`Agent#invoke_async` returns a `Phronomy::Task` and an Agent may independently
+have an `on_event` listener bound when lifecycle observation is required.
 
-Its `on_event` callback receives structured lifecycle events. For a normal
-non-streaming invocation the terminal event is `:done`; errors, timeout and
-explicit cancellation have distinct terminal event types.
+Use the two surfaces for different purposes:
 
-The callback itself is delivered through the Runtime/EventLoop machinery.
+- `on_event` — observe lifecycle detail such as token/tool/terminal event types;
+- `Task` — observe the terminal value/failure/cancellation of the operation.
+
+The first section intentionally uses both: lifecycle events are printed while
+the returned Task supplies the terminal result to the external caller.
 
 ## Agent → Workflow bridge
 
-The important application pattern is:
+When a Workflow only needs terminal completion, it does not need to subscribe to
+Agent `:done`. The application uses the common completion contract instead:
 
 ```text
 Workflow entry
   → Agent#invoke_async
+  → Phronomy::Task
   → return immediately
-  → Agent :done event
+  → Task#on_complete
   → Workflow#signal(workflow_instance_id:, event:, payload:)
   → Workflow transition
 ```
 
-The Agent and Workflow therefore remain independently modelled:
+This is the same shape used for other asynchronous producers that return a Task,
+such as OffloadPool work or child lifecycle operations.
 
-- Agent owns model/tool execution, persisted execution state, and context assembly.
-- Workflow owns business-process state.
-- the event payload is the explicit hand-off.
+The Agent and Workflow remain independently modelled:
+
+- Agent owns model/tool execution, persisted execution state, and context assembly;
+- Task represents terminal completion only;
+- Workflow owns business-process state;
+- `Workflow#signal` remains the explicit event ingress into the Workflow FSM.
 
 The final section shows `CancellationToken.timeout_after` and demonstrates that
 timeout is classified as `Phronomy::TimeoutError` / `:timeout`, not as a generic

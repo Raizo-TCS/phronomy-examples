@@ -3,12 +3,13 @@
 
 # 26 Agent async events + Workflow coordination
 #
-# Shows the public bridge between Agent execution and Workflow state:
+# Shows two complementary public Agent async surfaces:
 #
-#   Agent#invoke_async
-#       -> structured lifecycle event on Runtime EventLoop
-#       -> Workflow#signal
-#       -> FSM transition
+#   Agent lifecycle observation:
+#     Agent#invoke_async -> structured on_event lifecycle events
+#
+#   Terminal completion coordination:
+#     Agent#invoke_async -> Task#on_complete -> Workflow#signal -> FSM transition
 #
 # Also demonstrates explicit Workflow-instance correlation and timeout classification.
 
@@ -22,6 +23,12 @@ class TranslationAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "Translate the user's text to Japanese. Return only the translation."
+end
+
+def event_payload!(event)
+  payload = event.payload || {}
+  raise payload[:error] if payload[:error]
+  payload
 end
 
 puts "=== 26 Agent async events + Workflow coordination ==="
@@ -49,7 +56,7 @@ puts "Journal pos.:  #{direct_result[:journal_position]}"
 puts "Events:       #{events.inspect}"
 puts
 
-puts "--- Pattern 2: Agent completion signals a Workflow ---"
+puts "--- Pattern 2: Agent Task completion signals a Workflow ---"
 
 class TranslationState
   include Phronomy::WorkflowContext
@@ -68,22 +75,22 @@ translation_workflow = Phronomy::Workflow.define(TranslationState) do
   entry :translating, lambda { |ctx|
     workflow_instance_id = ctx.workflow_instance_id
 
-    agent = TranslationAgent.new(
-      on_event: lambda { |event|
-        next unless event.type == :done
-
-        translation_workflow.signal(
-          workflow_instance_id: workflow_instance_id,
-          event: :translation_completed,
-          payload: {
-            answer: event.payload[:output],
-            execution_id: event.payload[:execution_id].to_s,
-            journal_position: event.payload[:journal_position]
-          }
-        )
+    agent = TranslationAgent.new
+    task = agent.invoke_async(ctx.query).map do |result|
+      {
+        answer: result.fetch(:output),
+        execution_id: result.fetch(:execution_id).to_s,
+        journal_position: result.fetch(:journal_position)
       }
-    )
-    agent.invoke_async(ctx.query)
+    end
+
+    task.on_complete do |payload, error|
+      translation_workflow.signal(
+        workflow_instance_id: workflow_instance_id,
+        event: :translation_completed,
+        payload: error ? {error: error} : payload
+      )
+    end
 
     nil
   }
@@ -95,10 +102,11 @@ translation_workflow = Phronomy::Workflow.define(TranslationState) do
     on: :translation_completed,
     to: :complete,
     action: lambda { |ctx, event|
+      payload = event_payload!(event)
       ctx.merge(
-        answer: event.payload[:answer],
-        execution_id: event.payload[:execution_id],
-        journal_position: event.payload[:journal_position]
+        answer: payload.fetch(:answer),
+        execution_id: payload.fetch(:execution_id),
+        journal_position: payload.fetch(:journal_position)
       )
     }
   )
@@ -106,7 +114,7 @@ translation_workflow = Phronomy::Workflow.define(TranslationState) do
 end
 
 workflow_result = OutputValidator.validate(
-  "Agent event advances Workflow",
+  "Agent Task completion advances Workflow",
   check: ->(r) { r.answer.to_s.length >= 2 }
 ) do
   translation_workflow.invoke(

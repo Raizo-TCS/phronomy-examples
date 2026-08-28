@@ -32,22 +32,33 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-app = nil  # declared first so the on_event lambda can capture it by reference
+def event_payload!(event)
+  payload = event.payload || {}
+  raise payload[:error] if payload[:error]
+  payload
+end
+
+app = nil  # declared first so the Task completion callback can capture it by reference
 
 GENERATE_NODE_WITH_TRACE = ->(state) {
   workflow_instance_id = state.workflow_instance_id
-  language  = state.language
-  agent = CodeGeneratorAgent.new(
-    on_event: ->(event) {
-      next unless event.type == :done
-      app.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :generation_completed,
-        payload: {output: event.payload[:output]}
-      )
-    }
-  )
-  agent.invoke_async("Write a Hello World program in #{language}. Return code only.")
+  language = state.language
+
+  agent = CodeGeneratorAgent.new
+  task = agent.invoke_async(
+    "Write a Hello World program in #{language}. Return code only."
+  ).map do |result|
+    {output: result.fetch(:output)}
+  end
+
+  task.on_complete do |payload, error|
+    app.signal(
+      workflow_instance_id: workflow_instance_id,
+      event: :generation_completed,
+      payload: error ? {error: error} : payload
+    )
+  end
+
   state
 }
 
@@ -62,7 +73,9 @@ app = Phronomy::Workflow.define(CodeState) do
     from: :generate,
     on: :generation_completed,
     to: :done,
-    action: ->(ctx, event) { ctx.merge(output: event.payload[:output]) }
+    action: ->(ctx, event) {
+      ctx.merge(output: event_payload!(event).fetch(:output))
+    }
   )
   transition from: :done, to: :__finish__
 end

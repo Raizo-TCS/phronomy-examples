@@ -12,6 +12,7 @@
 #    a capability declares requires_approval; Agent execution is suspended
 #    before the side effect and resumed by the live Agent owner.
 
+require "thread"
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
@@ -32,6 +33,12 @@ class DraftAgent < Phronomy::Agent::Base
   instructions "Write a polite business email including a subject and body."
 end
 
+def event_payload!(event)
+  payload = event.payload || {}
+  raise payload[:error] if payload[:error]
+  payload
+end
+
 SEND_NODE = lambda do |state|
   puts
   puts "[WORKFLOW] Email sent."
@@ -46,18 +53,18 @@ mail_workflow = Phronomy::Workflow.define(MailState) do
   entry :draft, lambda { |state|
     workflow_instance_id = state.workflow_instance_id
 
-    agent = DraftAgent.new(
-      on_event: lambda { |event|
-        next unless event.type == :done
+    agent = DraftAgent.new
+    task = agent.invoke_async("Topic: #{state.topic}").map do |result|
+      {draft: result.fetch(:output).strip}
+    end
 
-        mail_workflow.signal(
-          workflow_instance_id: workflow_instance_id,
-          event: :draft_completed,
-          payload: {draft: event.payload[:output].strip}
-        )
-      }
-    )
-    agent.invoke_async("Topic: #{state.topic}")
+    task.on_complete do |payload, error|
+      mail_workflow.signal(
+        workflow_instance_id: workflow_instance_id,
+        event: :draft_completed,
+        payload: error ? {error: error} : payload
+      )
+    end
 
     nil
   }
@@ -69,7 +76,9 @@ mail_workflow = Phronomy::Workflow.define(MailState) do
     from: :draft,
     on: :draft_completed,
     to: :awaiting_approval,
-    action: ->(ctx, event) { ctx.merge(draft: event.payload[:draft]) }
+    action: ->(ctx, event) {
+      ctx.merge(draft: event_payload!(event).fetch(:draft))
+    }
   )
   transition from: :awaiting_approval, on: :approve, to: :send
   transition from: :send, to: :__finish__
@@ -138,24 +147,32 @@ class ReleaseAgent < Phronomy::Agent::Base
   tools(PublishReleaseTool => "publish_release")
 end
 
-release_agent = ReleaseAgent.new
-pending = release_agent.invoke("Publish version 2.4.0 to production.")
+# Agent suspension is not terminal completion. The Task returned by invoke_async
+# remains pending while approval is required, so the approval request arrives
+# through the Agent's lifecycle listener.
+approval_requests = Queue.new
+release_agent = ReleaseAgent.new(
+  on_event: ->(event) {
+    next unless event.type == :approval_required
 
-unless pending[:suspended]
-  raise "Expected the approval-required tool call to suspend the Agent execution."
-end
-
-request = pending.fetch(:approval_request)
+    approval_requests << event.payload.fetch(:request)
+  }
+)
+original_task = release_agent.invoke_async("Publish version 2.4.0 to production.")
+request = approval_requests.pop
 item = request.items.first
-execution_id = pending.fetch(:execution_id)
+execution_id = request.execution_id
 
-puts "Execution suspended: #{pending[:suspended]}"
+puts "Execution suspended: true"
 puts "Execution id:        #{execution_id}"
 puts "Approval id:         #{request.id}"
 puts "Tool:                #{item.tool_name}"
 puts "Safe arguments:      #{item.arguments.inspect}"
 puts "Approval facts:      #{item.facts.inspect}"
+puts "Original Task done:  #{original_task.done?}"
 puts
+
+raise "Original Agent Task settled before approval" if original_task.done?
 
 # This is intentionally a second, independent decision. Workflow approval above
 # must never implicitly authorize a tool side effect.
@@ -170,20 +187,27 @@ end
 
 approved = agent_answer == "yes"
 
-# If the application still has `release_agent`, it may call
-# `release_agent.approve(...)` directly. This lookup demonstrates the other
-# common boundary: a later request still in the same Ruby process has only the
-# execution_id and needs the existing live owner Agent.
+# A later request in the same Ruby process may have only execution_id. Resolve
+# the existing live owner; do not construct or reload a second Agent instance.
 owner = ReleaseAgent.live_for_execution(execution_id)
 raise "live owner mismatch" unless owner.equal?(release_agent)
 
+# This call runs on the CLI/main thread, so the synchronous wrapper is allowed.
+# It resumes the same suspended execution and waits for its terminal result.
 resumed = owner.approve(
   execution_id,
   approval_request_id: request.id,
   approved: approved
 )
 
+# The original invoke_async Task observes the same logical execution and must
+# settle to the same terminal result after approval/rejection resolution.
+original_result = original_task.wait_result
+raise "approval/original execution mismatch" unless
+  original_result[:execution_id] == resumed[:execution_id]
+
 puts "Resolved live owner: #{owner.class} (same object=#{owner.equal?(release_agent)})"
 puts "Tool approved:       #{approved}"
 puts "Execution rejected:  #{!!resumed[:rejected]}"
+puts "Original Task done:  #{original_task.done?}"
 puts "Agent output:        #{resumed[:output]}"

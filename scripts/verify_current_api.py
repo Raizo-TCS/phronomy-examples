@@ -38,6 +38,15 @@ for path in ruby_files():
     if "on_tool_approval_required" in text:
         fail(path, "removed approval listener API remains")
 
+
+    # Helper methods that bridge async completion back into Workflow#signal must
+    # use the canonical workflow_instance_id keyword as well. This catches
+    # mechanical rename bugs that are valid Ruby syntax but fail at callback time.
+    if re.search(
+        r"\b(?:signal_completion|signal_node_result)\s*\([^)]*\bthread_id\s*:", text, re.S
+    ):
+        fail(path, "Workflow completion helper still uses thread_id keyword")
+
     # High-signal per-operation listener patterns.
     # 21_team_coordinator uses TeamCoordinator#stream(&block) — a coordinator-specific
     # task-progress callback, not the Agent on_event SPI; skip the block check there.

@@ -10,7 +10,7 @@
 #       -> Workflow#signal
 #       -> FSM transition
 #
-# Also demonstrates explicit thread correlation and timeout classification.
+# Also demonstrates explicit Workflow-instance correlation and timeout classification.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"

@@ -129,7 +129,7 @@ module CveScanner
     end
   end
 
-  def self.signal_node_result(workflow, thread_id:, event:, value:, error:)
+  def self.signal_node_result(workflow, workflow_instance_id:, event:, value:, error:)
     payload = error ? {error: error} : {state: value}
     workflow.signal(workflow_instance_id: workflow_instance_id, event: event, payload: payload)
   end
@@ -148,7 +148,7 @@ module CveScanner
     operation.on_complete do |value, error|
       signal_node_result(
         workflow,
-        thread_id: thread_id,
+        workflow_instance_id: workflow_instance_id,
         event: event,
         value: value,
         error: error
@@ -174,7 +174,7 @@ module CveScanner
     pending.on_complete do |value, error|
       signal_node_result(
         workflow,
-        thread_id: thread_id,
+        workflow_instance_id: workflow_instance_id,
         event: event,
         value: value,
         error: error

@@ -3,22 +3,16 @@
 # Single source of truth for the Phronomy dependency used by every bundle in
 # this repository.
 #
-# This examples revision targets the unreleased Phronomy main baseline below.
-# A released gem cannot represent this baseline because main contains API changes
-# after the published 0.22.0 gem while Phronomy::VERSION is still 0.22.0.
+# Default: use the released gem from RubyGems.org.
+# Local framework development: set PHRONOMY_PATH to a checkout of the same
+# release tag.
 #
-# Default: use the exact reviewed Phronomy Git revision.
-# Local framework development: set PHRONOMY_PATH to a checkout of the same SHA.
+#   PHRONOMY_PATH=../phronomy bundle install
 #
-#   PHRONOMY_PATH=../phronomy ./scripts/update_phronomy.sh
-#
-PHRONOMY_TARGET_REF = "11951ae12809102194bf64c190518993739b7099"
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy",
-    git: "https://github.com/Raizo-TCS/phronomy.git",
-    ref: PHRONOMY_TARGET_REF
+  gem "phronomy", "~> 0.23.0"
 end

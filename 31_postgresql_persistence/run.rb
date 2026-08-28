@@ -39,7 +39,7 @@ begin
   root = Phronomy::Agent::AgentRoot.create(
     agent_id: "postgres-demo-agent-#{SecureRandom.uuid}",
     agent_definition_id: "postgres-reference-agent",
-    agent_agent_definition_version: 1
+    agent_definition_version: 1
   )
   first_backend.agents.create(root)
 

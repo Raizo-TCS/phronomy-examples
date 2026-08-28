@@ -36,7 +36,7 @@ module SQLitePersistenceDemo
     root = Phronomy::Agent::AgentRoot.create(
       agent_id: "sqlite-demo-agent-#{suffix}",
       agent_definition_id: "sqlite-reference-demo",
-      agent_agent_definition_version: 1
+      agent_definition_version: 1
     )
     backend.agents.create(root)
 

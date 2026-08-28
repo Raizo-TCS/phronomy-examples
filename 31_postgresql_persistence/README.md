@@ -124,21 +124,13 @@ in addition to the Agent-row admission lock.
 
 ## Durable representation
 
-The PostgreSQL implementation uses the same public Phronomy domain codecs as the
-SQLite reference:
-
-- `AgentRoot#to_h` / `.from_h`
-- `JournalRecord#to_h` / `.from_h`
-- `AgentExecution#to_h` / `.from_h`
-
-Workflow state uses the same documented JSON-compatible value domain and raises
-`Phronomy::Persistence::SerializationError` for unsupported values.
+The backend implements Phronomy's record-oriented Persistence SPI. Except for the ContentStore, raw backend repositories persist opaque `Phronomy::Persistence::DurableRecord` envelopes. `agent_id`, revisions, Journal record IDs/positions, Execution admission metadata, and Workflow revisions are supplied separately as backend arguments; backend code does not decode Phronomy domain objects or inspect `DurableRecord#payload` to rediscover index semantics.
 
 Content bytes are stored as PostgreSQL `bytea`. The reference implementation
 uses PostgreSQL `decode(..., 'hex')` and `encode(..., 'hex')` so arbitrary binary
 content does not depend on Ruby string quoting behavior.
 
-No `Marshal`, Runtime object serialization, or private Phronomy API is used.
+No `Marshal`, Runtime object serialization, private Phronomy API, or backend-owned Agent/Workflow domain codec is used.
 
 ## Start PostgreSQL locally
 

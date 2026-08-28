@@ -9,8 +9,6 @@ class SummarizationGraph
 
     field :messages, default: -> { [] }
     field :summary, default: ""
-    # Stored so the invoke_async callback can signal back to this execution.
-    field :wf_thread_id, default: ""
   end
 
   class SummarizationAgent < Phronomy::Agent::Base
@@ -35,26 +33,26 @@ class SummarizationGraph
         text = state.messages.map { |m| "#{m['role']}: #{m['content']}" }.join("\n")
         prompt = "Summarize the following conversation in 3-5 concise sentences:\n\n#{text}"
 
-        # Fire the agent without blocking the EventLoop thread.
-        SummarizationAgent.new.invoke_async(
-          prompt,
+        # Bind the listener to this Agent incarnation, then start the async call.
+        agent = SummarizationAgent.new(
           on_event: ->(event) {
             case event.type
             when :done
               wf_ref.signal(
-                thread_id: state.wf_thread_id,
+                workflow_instance_id: state.workflow_instance_id,
                 event: :summary_done,
                 payload: { summary: event.payload[:output].to_s }
               )
             when :error, :timeout, :cancelled
               wf_ref.signal(
-                thread_id: state.wf_thread_id,
+                workflow_instance_id: state.workflow_instance_id,
                 event: :summary_done,
                 payload: { summary: "" }
               )
             end
           }
         )
+        agent.invoke_async(prompt)
         state  # return state unchanged; auto-transition to :summarize_waiting
       }
 

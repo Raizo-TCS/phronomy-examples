@@ -1,6 +1,6 @@
 # 11 Agent Streaming
 
-Demonstrates token-level streaming from `Agent::Base#stream`.
+Demonstrates token-level streaming from `Agent::Base#stream` with the event listener bound when the Agent instance is created.
 
 ## Purpose
 
@@ -12,7 +12,7 @@ each token to the terminal in real time. Also illustrates the full set of
 
 | Feature | Usage |
 |---------|-------|
-| `Agent::Base#stream(input) { \|event\| ... }` | Token-level streaming |
+| `Agent::Base.new(on_event: ...); agent.stream(input)` | Token-level streaming with an Agent-lifetime listener |
 | `Phronomy::Agent::StreamEvent` | Event object with `type` and `payload` |
 
 ## StreamEvent Types

@@ -220,7 +220,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       state = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                           config: {thread_id: "test-path-a"})
+                           config: {workflow_instance_id: "test-path-a"})
 
       expect(state).to be_halted
       expect(state.phase).to eq(:awaiting_followup)
@@ -239,7 +239,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       state = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                           config: {thread_id: "test-path-b"})
+                           config: {workflow_instance_id: "test-path-b"})
 
       expect(state).to be_halted
       expect(state.phase).to eq(:awaiting_check_approval)
@@ -262,7 +262,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-path-b2"})
+                            config: {workflow_instance_id: "test-path-b2"})
       expect(halted.phase).to eq(:awaiting_check_approval)
 
       resumed = resume_graph(graph, halted,
@@ -287,7 +287,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-path-b3"})
+                            config: {workflow_instance_id: "test-path-b3"})
       expect(halted.phase).to eq(:awaiting_check_approval)
 
       # User approves nothing (skip)
@@ -317,7 +317,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = CveScanner.build_graph(scan_id: nil)
       state = graph.invoke({cve_ids: ["CVE-9999-0001"]},
-                           config: {thread_id: "test-path-c"})
+                           config: {workflow_instance_id: "test-path-c"})
 
       expect(state).to be_halted
       expect(state.phase).to eq(:awaiting_followup)
@@ -341,7 +341,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-fu1"})
+                            config: {workflow_instance_id: "test-fu1"})
       expect(halted.phase).to eq(:awaiting_followup)
 
       final = resume_graph(graph, halted, followup_request: "done")
@@ -358,7 +358,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph(scan_id: 1)
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-fu1-broadcast"})
+                            config: {workflow_instance_id: "test-fu1-broadcast"})
       broadcasts.clear
       resume_graph(graph, halted, followup_request: "done")
 
@@ -377,7 +377,7 @@ RSpec.describe "CveScanner scan graph" do
       %w[exit quit finish].each do |keyword|
         graph = build_stubbed_graph
         halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                              config: {thread_id: "test-fu1-#{keyword}"})
+                              config: {workflow_instance_id: "test-fu1-#{keyword}"})
         final = resume_graph(graph, halted, followup_request: keyword)
         expect(final).not_to be_halted, "expected done for keyword '#{keyword}'"
       end
@@ -398,7 +398,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-fu2"})
+                            config: {workflow_instance_id: "test-fu2"})
 
       resumed = resume_graph(graph, halted,
                              followup_request: "What does this mean?")
@@ -428,7 +428,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-fu3"})
+                            config: {workflow_instance_id: "test-fu3"})
       expect(halted.phase).to eq(:awaiting_followup)
 
       resumed = resume_graph(graph, halted, followup_request: "check again")
@@ -507,7 +507,7 @@ RSpec.describe "CveScanner scan graph" do
     it "reaches awaiting_followup and returns correct CVE keys" do
       graph = build_stubbed_graph
       state = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                           config: {thread_id: "test-mock"})
+                           config: {workflow_instance_id: "test-mock"})
 
       expect(state).to be_halted
       expect(state.phase).to eq(:awaiting_followup)
@@ -518,7 +518,7 @@ RSpec.describe "CveScanner scan graph" do
     it "followup 'done' ends the session" do
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-mock-done"})
+                            config: {workflow_instance_id: "test-mock-done"})
       final = resume_graph(graph, halted, followup_request: "done")
 
       expect(final).not_to be_halted
@@ -527,7 +527,7 @@ RSpec.describe "CveScanner scan graph" do
     it "followup question returns answered and halts at awaiting_followup again" do
       graph = build_stubbed_graph
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                            config: {thread_id: "test-mock-fu"})
+                            config: {workflow_instance_id: "test-mock-fu"})
       resumed = resume_graph(graph, halted, followup_request: "Is this exploitable?")
 
       expect(resumed).to be_halted
@@ -557,7 +557,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted1 = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                             config: {thread_id: "test-path-b4"})
+                             config: {workflow_instance_id: "test-path-b4"})
       expect(halted1.phase).to eq(:awaiting_check_approval)
       expect(halted1.check_iteration).to eq(1)
 
@@ -592,7 +592,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted1 = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                             config: {thread_id: "test-path-b5"})
+                             config: {workflow_instance_id: "test-path-b5"})
       expect(halted1.phase).to eq(:awaiting_check_approval)
 
       # Approve R1 → evaluate need_more → propose R2 → halt
@@ -629,7 +629,7 @@ RSpec.describe "CveScanner scan graph" do
 
       graph = build_stubbed_graph
       halted1 = graph.invoke({cve_ids: ["CVE-2023-52160"]},
-                             config: {thread_id: "test-path-b6"})
+                             config: {workflow_instance_id: "test-path-b6"})
       expect(halted1.phase).to eq(:awaiting_check_approval)
 
       # R1: skip (approve nothing) → evaluate need_more (no LLM) → propose R2 → halt

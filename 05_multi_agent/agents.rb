@@ -35,7 +35,7 @@ end
 
 # Agent-as-Tool wrappers: expose sub-agents as callable tools so the
 # orchestrator LLM can invoke them on demand rather than in a fixed order.
-class ResearchTool < Phronomy::Agent::Context::Capability::Base
+class ResearchTool < Phronomy::Tool::Base
   description "Research a topic and return key findings as bullet points."
   param :topic, type: :string, desc: "The topic to research"
 
@@ -49,7 +49,7 @@ class ResearchTool < Phronomy::Agent::Context::Capability::Base
   end
 end
 
-class WriteTool < Phronomy::Agent::Context::Capability::Base
+class WriteTool < Phronomy::Tool::Base
   description "Write a concise technical article given research notes and a writing brief."
   param :instructions, type: :string, desc: "Writing brief including research notes"
 

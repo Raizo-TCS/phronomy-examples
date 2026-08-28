@@ -44,7 +44,7 @@ module SQLitePersistenceSpecSupport
     Phronomy::Agent::AgentRoot.create(
       agent_id: "#{prefix}-#{SecureRandom.uuid}",
       agent_definition_id: "sqlite-reference-agent",
-      definition_version: 1
+      agent_definition_version: 1
     )
   end
 

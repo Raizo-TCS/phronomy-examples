@@ -1,7 +1,7 @@
 # Phronomy Examples
 
-These examples target **Phronomy 0.20.x** through the
-shared `Gemfile.phronomy` dependency.
+These examples target the reviewed Phronomy `main` baseline
+`11951ae12809102194bf64c190518993739b7099` through the shared `Gemfile.phronomy` dependency.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM
@@ -36,10 +36,10 @@ Agent durable state ───────┐
 Workflow workflow_states ──┘
 ```
 
-Live Agent state remains owned by the live Agent/Activation. Persistence is the
-last committed durable representation and recovery source. Workflow
-`thread_id` is the durable logical Workflow identity; the Runtime's
-`fsm_session_id` is private execution identity.
+Live Agent state remains owned by the single live process-local Agent owner.
+Persistence is the last committed durable representation and recovery source.
+Workflow `workflow_instance_id` is the durable logical Workflow identity; the
+Runtime's `fsm_session_id` is private execution identity.
 
 Start with:
 
@@ -87,7 +87,7 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-Normal repository use resolves the released Phronomy 0.20.x dependency through
+Normal repository use resolves the exact reviewed Phronomy Git revision through
 that shared definition:
 
 ```bash
@@ -95,8 +95,8 @@ that shared definition:
 ./scripts/verify_examples.sh
 ```
 
-To test every bundle against a specific local checkout, export `PHRONOMY_PATH`
-so the same value is available to dependency update and verification:
+To test every bundle against a local checkout of the same reviewed baseline,
+export `PHRONOMY_PATH` so dependency update and verification use that checkout:
 
 ```bash
 export PHRONOMY_PATH=../phronomy

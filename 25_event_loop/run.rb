@@ -58,7 +58,7 @@ fetch_workflow = Phronomy::Workflow.define(FetchState) do
 
   state :fetching
   entry :fetching, lambda { |ctx|
-    thread_id = ctx.thread_id
+    workflow_instance_id = ctx.workflow_instance_id
     url = ctx.url
 
     # This block stands in for a genuinely blocking external operation. The
@@ -71,7 +71,7 @@ fetch_workflow = Phronomy::Workflow.define(FetchState) do
 
     operation.on_complete do |response, error|
       fetch_workflow.signal(
-        thread_id: thread_id,
+        workflow_instance_id: workflow_instance_id,
         event: error ? :fetch_failed : :fetch_done,
         payload: {
           response: response,
@@ -123,7 +123,7 @@ puts "--- Pattern 3: several async Workflow invocations return completion handle
 tasks = 3.times.map do |i|
   fetch_workflow.invoke_async(
     {url: "https://example.test/item/#{i}"},
-    config: {thread_id: "example-25-#{i}"}
+    config: {workflow_instance_id: "example-25-#{i}"}
   )
 end
 

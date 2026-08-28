@@ -39,7 +39,7 @@ begin
   root = Phronomy::Agent::AgentRoot.create(
     agent_id: "postgres-demo-agent-#{SecureRandom.uuid}",
     agent_definition_id: "postgres-reference-agent",
-    definition_version: 1
+    agent_definition_version: 1
   )
   first_backend.agents.create(root)
 
@@ -83,9 +83,9 @@ begin
   )
   first_backend.executions.create_active(execution)
 
-  thread_id = "postgres-demo-workflow-#{SecureRandom.uuid}"
+  workflow_instance_id = "postgres-demo-workflow-#{SecureRandom.uuid}"
   first_backend.workflow_states.save(
-    thread_id,
+    workflow_instance_id,
     expected_revision: nil,
     snapshot: {
       fields: {value: "persisted"},
@@ -98,7 +98,7 @@ begin
   puts "  Content:   #{content_id}"
   puts "  Journal:   #{first_backend.journals.head(root.agent_id)} record(s)"
   puts "  Execution: #{execution.execution_id}"
-  puts "  Workflow:  #{thread_id}"
+  puts "  Workflow:  #{workflow_instance_id}"
 
   first_pool.disconnect!
   first_pool = nil
@@ -113,7 +113,7 @@ begin
 
   reloaded_root = second_backend.agents.load(root.agent_id)
   reloaded_execution = second_backend.executions.load(execution.execution_id)
-  reloaded_workflow = second_backend.workflow_states.load(thread_id)
+  reloaded_workflow = second_backend.workflow_states.load(workflow_instance_id)
 
   puts
   puts "Reloaded through a fresh ActiveRecord pool:"

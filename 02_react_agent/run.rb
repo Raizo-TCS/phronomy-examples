@@ -37,14 +37,12 @@ question = ARGV.empty? ?
 puts "Question: #{question}"
 
 events = []
+agent = AssistantAgent.new(on_event: ->(event) { events << event })
 result = OutputValidator.validate(
   "ReAct agent returns a non-empty answer",
   check: ->(r) { r[:output].to_s.length >= 20 }
 ) do
-  AssistantAgent.new.invoke(
-    question,
-    on_event: ->(event) { events << event }
-  )
+  agent.invoke(question)
 end
 
 tool_events = events.select { |event| event.type == :tool_call }

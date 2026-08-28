@@ -3,27 +3,35 @@
 
 # 17 Multi-Agent Handoff
 #
-# Demonstrates Phronomy::Agent::Runner for hub-and-spoke routing.
-# A TriageAgent receives all user queries and transfers them to the appropriate
-# specialist (BillingAgent or TechSupportAgent) via auto-generated handoff tools.
-#
-# result[:agent] reports which agent produced the final answer.
+# Demonstrates Phronomy::MultiAgent::Runner and explicit Handoff edges.
+# A TriageAgent receives all user queries and may transfer responsibility to
+# BillingAgent or TechSupportAgent through framework-generated handoff tools.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
-# ---------------------------------------------------------------------------
-# Build the runner: triage is the entry point, routes to both specialists
-# ---------------------------------------------------------------------------
-triage      = TriageAgent.new
-billing     = BillingAgent.new
-tech        = TechSupportAgent.new
+triage = TriageAgent.new
+billing = BillingAgent.new
+tech = TechSupportAgent.new
 
-runner = Phronomy::Agent::Runner.new(
-  agents: [triage, billing, tech],
-  routes: {triage => [billing, tech]}
+handoffs = [
+  Phronomy::MultiAgent::Handoff.new(
+    source_agent: triage,
+    target_agent: billing,
+    description: "Transfer billing, invoice, payment, refund, or charge-dispute requests."
+  ),
+  Phronomy::MultiAgent::Handoff.new(
+    source_agent: triage,
+    target_agent: tech,
+    description: "Transfer software errors, crashes, bugs, and technical-support requests."
+  )
+]
+
+runner = Phronomy::MultiAgent::Runner.new(
+  main_agent: triage,
+  handoffs: handoffs
 )
 
 puts "=== 17 Multi-Agent Handoff ===\n\n"

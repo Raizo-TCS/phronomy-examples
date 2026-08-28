@@ -35,19 +35,19 @@ end
 app = nil  # declared first so the on_event lambda can capture it by reference
 
 GENERATE_NODE_WITH_TRACE = ->(state) {
-  thread_id = state.thread_id
+  workflow_instance_id = state.workflow_instance_id
   language  = state.language
-  CodeGeneratorAgent.new.invoke_async(
-    "Write a Hello World program in #{language}. Return code only.",
+  agent = CodeGeneratorAgent.new(
     on_event: ->(event) {
       next unless event.type == :done
       app.signal(
-        thread_id: thread_id,
+        workflow_instance_id: workflow_instance_id,
         event: :generation_completed,
         payload: {output: event.payload[:output]}
       )
     }
   )
+  agent.invoke_async("Write a Hello World program in #{language}. Return code only.")
   state
 }
 

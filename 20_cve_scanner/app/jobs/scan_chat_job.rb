@@ -9,7 +9,6 @@ class ScanChatJob < ApplicationJob
     scan = Scan.find(scan_id)
     context = build_context(scan, question)
 
-    agent = CveScanner::ChatAgent.new
     accumulated = +""
 
     ScanChannel.broadcast(scan_id, {
@@ -18,13 +17,16 @@ class ScanChatJob < ApplicationJob
       prompt_preview: question.slice(0, 200)
     })
 
-    result = agent.stream(context) do |event|
-      next unless event.type == :token
+    agent = CveScanner::ChatAgent.new(
+      on_event: ->(event) {
+        next unless event.type == :token
 
-      token = event.payload[:content].to_s
-      accumulated << token
-      ScanChannel.broadcast(scan_id, {type: "llm_token", role: "ChatAgent", token: token})
-    end
+        token = event.payload[:content].to_s
+        accumulated << token
+        ScanChannel.broadcast(scan_id, {type: "llm_token", role: "ChatAgent", token: token})
+      }
+    )
+    result = agent.stream(context)
 
     raw = (result.is_a?(Array) ? result.first : result)&.dig(:output).to_s.strip
     content = raw.empty? ? accumulated : raw

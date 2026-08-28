@@ -8,70 +8,31 @@ module PhronomyExamples
       module Codec
         module_function
 
-        def dump_domain(value)
-          JSON.generate(value.to_h)
-        rescue JSON::GeneratorError, TypeError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def load_agent_root(json)
-          Phronomy::Agent::AgentRoot.from_h(JSON.parse(json))
-        rescue JSON::ParserError, KeyError, ArgumentError, TypeError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def load_journal_record(json)
-          Phronomy::Agent::JournalRecord.from_h(JSON.parse(json))
-        rescue JSON::ParserError, KeyError, ArgumentError, TypeError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def load_execution(json)
-          Phronomy::Agent::AgentExecution.from_h(JSON.parse(json))
-        rescue JSON::ParserError, KeyError, ArgumentError, TypeError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def dump_workflow(snapshot)
-          JSON.generate(normalize_workflow(snapshot))
-        rescue JSON::GeneratorError, TypeError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def load_workflow(json)
-          JSON.parse(json)
-        rescue JSON::ParserError => e
-          raise Phronomy::Persistence::SerializationError, e.message
-        end
-
-        def normalize_workflow(value)
-          case value
-          when nil, true, false, String, Integer
-            value
-          when Float
-            unless value.finite?
-              raise Phronomy::Persistence::SerializationError,
-                    "Workflow state does not support non-finite Float values"
-            end
-
-            value
-          when Array
-            value.map { |item| normalize_workflow(item) }
-          when Hash
-            value.each_with_object({}) do |(key, item), normalized|
-              unless key.is_a?(String) || key.is_a?(Symbol)
-                raise Phronomy::Persistence::SerializationError,
-                      "Workflow state Hash keys must be String or Symbol"
-              end
-
-              normalized[key.to_s] = normalize_workflow(item)
-            end
-          else
+        def dump_record(record)
+          unless record.is_a?(Phronomy::Persistence::DurableRecord)
             raise Phronomy::Persistence::SerializationError,
-                  "unsupported Workflow durable value: #{value.class}"
+              "backend expected Phronomy::Persistence::DurableRecord"
           end
+
+          JSON.generate(
+            "record_type" => record.record_type,
+            "format_version" => record.format_version,
+            "payload" => record.payload
+          )
+        rescue JSON::GeneratorError, TypeError => e
+          raise Phronomy::Persistence::SerializationError, e.message
         end
-        private_class_method :normalize_workflow
+
+        def load_record(json)
+          value = JSON.parse(json)
+          Phronomy::Persistence::DurableRecord.new(
+            record_type: value.fetch("record_type"),
+            format_version: value.fetch("format_version"),
+            payload: value.fetch("payload")
+          )
+        rescue JSON::ParserError, KeyError, ArgumentError, TypeError => e
+          raise Phronomy::Persistence::SerializationError, e.message
+        end
       end
     end
   end

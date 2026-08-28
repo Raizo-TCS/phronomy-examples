@@ -500,6 +500,11 @@ if ! verify_phronomy_dependency; then
   exit 1
 fi
 
+header "Current Phronomy main API/architecture preflight"
+if ! python3 "$BASE_DIR/scripts/verify_current_api.py"; then
+  exit 1
+fi
+
 if ! verify_removed_api_contract; then
   exit 1
 fi

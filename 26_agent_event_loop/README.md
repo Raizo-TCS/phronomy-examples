@@ -22,7 +22,7 @@ Workflow entry
   → Agent#invoke_async
   → return immediately
   → Agent :done event
-  → Workflow#signal(thread_id:, event:, payload:)
+  → Workflow#signal(workflow_instance_id:, event:, payload:)
   → Workflow transition
 ```
 

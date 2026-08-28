@@ -29,27 +29,30 @@ puts
 print "Response: "
 
 tokens_received = []
-StreamingAgent.new.stream(query) do |event|
-  case event.type
-  when :token
-    content = event.payload[:content]
-    tokens_received << content if content
-    print content if content
-    $stdout.flush
-  when :tool_call
-    puts "\n[Tool call: #{event.payload[:tool_call].name}]"
-  when :tool_result
-    puts "[Tool result received]"
-  when :done
-    puts
-    puts
-    puts "--- Usage ---"
-    puts "Input tokens:  #{event.payload[:usage].input}"
-    puts "Output tokens: #{event.payload[:usage].output}"
-  when :error
-    puts "\nError: #{event.payload[:error].message}"
-  end
-end
+agent = StreamingAgent.new(
+  on_event: ->(event) {
+    case event.type
+    when :token
+      content = event.payload[:content]
+      tokens_received << content if content
+      print content if content
+      $stdout.flush
+    when :tool_call
+      puts "\n[Tool call: #{event.payload[:tool_call].name}]"
+    when :tool_result
+      puts "[Tool result received]"
+    when :done
+      puts
+      puts
+      puts "--- Usage ---"
+      puts "Input tokens:  #{event.payload[:usage].input}"
+      puts "Output tokens: #{event.payload[:usage].output}"
+    when :error
+      puts "\nError: #{event.payload[:error].message}"
+    end
+  }
+)
+agent.stream(query)
 
 OutputValidator.validate(
   "streaming produced non-empty token output",

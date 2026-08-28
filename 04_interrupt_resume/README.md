@@ -47,19 +47,32 @@ needs to stop and ask a human must start with `invoke_async` and observe
 `:approval_required` through the Agent listener (or arrange another independent
 approval path).
 
-The example registers the listener when the live Agent is created:
+The example registers the listener when the live Agent is created. It also
+observes the original Task's terminal boundary through the same application
+Queue. This matters for real LLMs: if the model does not request the expected
+tool, the Agent may complete normally and no `:approval_required` event will ever
+arrive. Waiting only on an approval Queue would then block indefinitely.
 
 ```ruby
-approval_requests = Queue.new
+approval_outcomes = Queue.new
 agent = ReleaseAgent.new(
   on_event: ->(event) {
-    approval_requests << event.payload.fetch(:request) if
-      event.type == :approval_required
+    next unless event.type == :approval_required
+
+    approval_outcomes << [:approval_required, event.payload.fetch(:request)]
   }
 )
 
 original_task = agent.invoke_async("Publish version 2.4.0 to production.")
-request = approval_requests.pop
+original_task.on_complete do |result, error|
+  approval_outcomes << [:terminal, result, error]
+end
+
+outcome_type, outcome_value, outcome_error = approval_outcomes.pop
+raise outcome_error if outcome_type == :terminal && outcome_error
+raise "Agent completed without requesting approval" if outcome_type == :terminal
+
+request = outcome_value
 ```
 
 If the application still holds the live Agent instance, approval is simply an

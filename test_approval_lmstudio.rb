@@ -44,7 +44,7 @@ end
 # ---------------------------------------------------------------------------
 # Flow
 # ---------------------------------------------------------------------------
-approval_requests = Queue.new
+approval_outcomes = Queue.new
 agent = FileManagerAgent.new(
   on_event: ->(event) {
     next unless event.type == :approval_required
@@ -57,7 +57,7 @@ agent = FileManagerAgent.new(
       puts "    arguments  : #{item.arguments.inspect}"
       puts "    facts      : #{item.facts.inspect}"
     end
-    approval_requests << request
+    approval_outcomes << [:approval_required, request]
   }
 )
 
@@ -68,11 +68,25 @@ end
 puts "=== Tool Approval API Smoke Test ==="
 puts
 
-# Step 1: start asynchronously. Approval suspension is nonterminal, so the
-# original Task must remain pending while the application handles the request.
+# Step 1: start asynchronously. Approval suspension is nonterminal. Observe both
+# the approval event and the original Task terminal boundary so a model that
+# skips the expected tool call fails explicitly instead of blocking forever.
 puts "Step 1: invoke_async('Please delete /tmp/old_data.txt')"
 original_task = agent.invoke_async("Please delete /tmp/old_data.txt")
-approval_request = approval_requests.pop
+original_task.on_complete do |result, error|
+  approval_outcomes << [:terminal, result, error]
+end
+
+outcome_type, outcome_value, outcome_error = approval_outcomes.pop
+if outcome_type == :terminal
+  raise outcome_error if outcome_error
+
+  puts "UNEXPECTED: agent completed without requesting tool approval"
+  puts "Output: #{outcome_value&.fetch(:output, nil)}"
+  exit 1
+end
+
+approval_request = outcome_value
 execution_id = approval_request.execution_id
 approval_request_id = approval_request.id
 

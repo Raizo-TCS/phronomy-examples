@@ -148,18 +148,34 @@ class ReleaseAgent < Phronomy::Agent::Base
 end
 
 # Agent suspension is not terminal completion. The Task returned by invoke_async
-# remains pending while approval is required, so the approval request arrives
-# through the Agent's lifecycle listener.
-approval_requests = Queue.new
+# remains pending while approval is required. Wait for either the nonterminal
+# approval event or an unexpected terminal completion so a model that does not
+# request the tool cannot leave the application blocked on an approval-only queue.
+approval_outcomes = Queue.new
 release_agent = ReleaseAgent.new(
   on_event: ->(event) {
     next unless event.type == :approval_required
 
-    approval_requests << event.payload.fetch(:request)
+    approval_outcomes << [:approval_required, event.payload.fetch(:request)]
   }
 )
 original_task = release_agent.invoke_async("Publish version 2.4.0 to production.")
-request = approval_requests.pop
+original_task.on_complete do |result, error|
+  approval_outcomes << [:terminal, result, error]
+end
+
+outcome_type, outcome_value, outcome_error = approval_outcomes.pop
+if outcome_type == :terminal
+  raise outcome_error if outcome_error
+
+  raise(
+    "Expected the approval-required tool call to suspend the Agent execution, " \
+    "but the Agent completed without requesting approval. " \
+    "Output: #{outcome_value&.fetch(:output, nil).inspect}"
+  )
+end
+
+request = outcome_value
 item = request.items.first
 execution_id = request.execution_id
 

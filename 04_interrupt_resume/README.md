@@ -7,6 +7,19 @@ This example intentionally shows **two different HITL boundaries**.
 The mail workflow reaches `wait_state :awaiting_approval` and remains there until
 the application sends the `:approve` event with `Workflow#send_event`.
 
+The asynchronous draft generation uses the normal completion pattern:
+
+```text
+DraftAgent#invoke_async
+  → Phronomy::Task
+  → Task#on_complete
+  → Workflow#signal(:draft_completed)
+  → wait_state :awaiting_approval
+```
+
+The Task represents only terminal completion. Business-process waiting remains a
+Workflow concern.
+
 Use this when the approval is part of the **business process state machine**.
 
 ## B. Agent tool approval
@@ -45,22 +58,11 @@ agent.approve(
 )
 ```
 
-`live_for_execution` is a Runtime-local lookup:
-
-```text
-execution_id
-  ↓
-Runtime
-  ↓
-process-local ActivationRegistry
-  ↓
-existing live Agent instance
-```
-
-It does **not** reload Agent or Execution state from Persistence. After process
-restart, or from another Ruby process/service replica, the live Activation may
-not exist and `ExecutionRehydrationRequiredError` is raised until durable
-execution rehydration is implemented.
+`live_for_execution` is a Runtime-local lookup. It returns the existing live
+Agent owner; it does **not** reload Agent or Execution state from Persistence.
+After process restart, or from another Ruby process/service replica, the live
+owner may not exist and `ExecutionRehydrationRequiredError` is raised until
+durable execution rehydration is available.
 
 `execution_id` is also **not an authorization token**. A web/API application
 must authorize the caller against its own application identity and approval

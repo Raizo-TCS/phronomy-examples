@@ -8,8 +8,9 @@
 # score is below the threshold (and the iteration cap has not been reached),
 # it rewrites the text and re-evaluates.
 #
-# Each Agent call is started in an entry action and signals a Workflow event
-# when done. The transition actions apply the Agent result to the context.
+# Each Agent call is started in an entry action. Agent#invoke_async returns a
+# Task; Task completion is converted into a Workflow event. Transition actions
+# apply the Agent result to the context.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -39,7 +40,13 @@ class ImproverAgent < Phronomy::Agent::Base
   instructions "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text."
 end
 
-# workflow is captured by reference in the Agent event blocks.
+def event_payload!(event)
+  payload = event.payload || {}
+  raise payload[:error] if payload[:error]
+  payload
+end
+
+# workflow is captured by reference in the Task completion callbacks.
 workflow = nil
 workflow = Phronomy::Workflow.define(MyState) do
   initial :evaluate
@@ -50,20 +57,20 @@ workflow = Phronomy::Workflow.define(MyState) do
     iterations = state.iterations
     prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
 
-    agent = EvaluatorAgent.new(
-      on_event: ->(event) {
-        next unless event.type == :done
+    agent = EvaluatorAgent.new
+    task = agent.invoke_async(prompt).map do |result|
+      score = result.fetch(:output).scan(/\d+/).first.to_i.clamp(0, 10)
+      puts "[Iteration #{iterations}] Score: #{score}"
+      {score: score}
+    end
 
-        score = event.payload[:output].scan(/\d+/).first.to_i.clamp(0, 10)
-        puts "[Iteration #{iterations}] Score: #{score}"
-        workflow.signal(
-          workflow_instance_id: workflow_instance_id,
-          event: :evaluation_completed,
-          payload: {score: score}
-        )
-      }
-    )
-    agent.invoke_async(prompt)
+    task.on_complete do |payload, error|
+      workflow.signal(
+        workflow_instance_id: workflow_instance_id,
+        event: :evaluation_completed,
+        payload: error ? {error: error} : payload
+      )
+    end
 
     state
   }
@@ -73,21 +80,21 @@ workflow = Phronomy::Workflow.define(MyState) do
     workflow_instance_id = state.workflow_instance_id
     iterations = state.iterations
 
-    agent = ImproverAgent.new(
-      on_event: ->(event) {
-        next unless event.type == :done
-
-        workflow.signal(
-          workflow_instance_id: workflow_instance_id,
-          event: :improvement_completed,
-          payload: {
-            text: event.payload[:output].strip,
-            iterations: iterations + 1
-          }
-        )
+    agent = ImproverAgent.new
+    task = agent.invoke_async(state.text).map do |result|
+      {
+        text: result.fetch(:output).strip,
+        iterations: iterations + 1
       }
-    )
-    agent.invoke_async(state.text)
+    end
+
+    task.on_complete do |payload, error|
+      workflow.signal(
+        workflow_instance_id: workflow_instance_id,
+        event: :improvement_completed,
+        payload: error ? {error: error} : payload
+      )
+    end
 
     state
   }
@@ -98,11 +105,13 @@ workflow = Phronomy::Workflow.define(MyState) do
     on: :evaluation_completed,
     to: :__finish__,
     guard: ->(ctx, event) {
-      event.payload[:score] >= 7 || ctx.iterations >= 3
+      payload = event_payload!(event)
+      payload.fetch(:score) >= 7 || ctx.iterations >= 3
     },
     action: ->(ctx, event) {
-      puts "[Done] Final score: #{event.payload[:score]}"
-      ctx.merge(score: event.payload[:score])
+      score = event_payload!(event).fetch(:score)
+      puts "[Done] Final score: #{score}"
+      ctx.merge(score: score)
     }
   )
 
@@ -111,7 +120,9 @@ workflow = Phronomy::Workflow.define(MyState) do
     from: :evaluate,
     on: :evaluation_completed,
     to: :improve,
-    action: ->(ctx, event) { ctx.merge(score: event.payload[:score]) }
+    action: ->(ctx, event) {
+      ctx.merge(score: event_payload!(event).fetch(:score))
+    }
   )
 
   # After improvement, re-evaluate with updated text and iteration count.
@@ -120,9 +131,10 @@ workflow = Phronomy::Workflow.define(MyState) do
     on: :improvement_completed,
     to: :evaluate,
     action: ->(ctx, event) {
+      payload = event_payload!(event)
       ctx.merge(
-        text: event.payload[:text],
-        iterations: event.payload[:iterations]
+        text: payload.fetch(:text),
+        iterations: payload.fetch(:iterations)
       )
     }
   )

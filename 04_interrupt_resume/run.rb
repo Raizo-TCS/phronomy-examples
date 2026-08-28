@@ -32,6 +32,12 @@ class DraftAgent < Phronomy::Agent::Base
   instructions "Write a polite business email including a subject and body."
 end
 
+def event_payload!(event)
+  payload = event.payload || {}
+  raise payload[:error] if payload[:error]
+  payload
+end
+
 SEND_NODE = lambda do |state|
   puts
   puts "[WORKFLOW] Email sent."
@@ -46,18 +52,18 @@ mail_workflow = Phronomy::Workflow.define(MailState) do
   entry :draft, lambda { |state|
     workflow_instance_id = state.workflow_instance_id
 
-    agent = DraftAgent.new(
-      on_event: lambda { |event|
-        next unless event.type == :done
+    agent = DraftAgent.new
+    task = agent.invoke_async("Topic: #{state.topic}").map do |result|
+      {draft: result.fetch(:output).strip}
+    end
 
-        mail_workflow.signal(
-          workflow_instance_id: workflow_instance_id,
-          event: :draft_completed,
-          payload: {draft: event.payload[:output].strip}
-        )
-      }
-    )
-    agent.invoke_async("Topic: #{state.topic}")
+    task.on_complete do |payload, error|
+      mail_workflow.signal(
+        workflow_instance_id: workflow_instance_id,
+        event: :draft_completed,
+        payload: error ? {error: error} : payload
+      )
+    end
 
     nil
   }
@@ -69,7 +75,9 @@ mail_workflow = Phronomy::Workflow.define(MailState) do
     from: :draft,
     on: :draft_completed,
     to: :awaiting_approval,
-    action: ->(ctx, event) { ctx.merge(draft: event.payload[:draft]) }
+    action: ->(ctx, event) {
+      ctx.merge(draft: event_payload!(event).fetch(:draft))
+    }
   )
   transition from: :awaiting_approval, on: :approve, to: :send
   transition from: :send, to: :__finish__

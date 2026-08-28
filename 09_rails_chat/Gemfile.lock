@@ -1,5 +1,7 @@
-PATH
-  remote: /home/raizo-tcs/ruby_ai_agent_framework/phronomy
+GIT
+  remote: https://github.com/Raizo-TCS/phronomy.git
+  revision: 11951ae12809102194bf64c190518993739b7099
+  ref: 11951ae12809102194bf64c190518993739b7099
   specs:
     phronomy (0.22.0)
       mcp (~> 1.0)

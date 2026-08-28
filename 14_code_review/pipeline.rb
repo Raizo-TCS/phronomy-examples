@@ -220,7 +220,7 @@ def event_payload!(event)
   payload
 end
 
-def signal_completion(workflow, thread_id:, event:, operation:, key:)
+def signal_completion(workflow, workflow_instance_id:, event:, operation:, key:)
   operation.on_complete do |value, error|
     workflow.signal(
       workflow_instance_id: workflow_instance_id,
@@ -244,7 +244,7 @@ def build_pipeline
       operation = start_parallel_reviews(snapshot)
       signal_completion(
         workflow,
-        thread_id: state.workflow_instance_id,
+        workflow_instance_id: state.workflow_instance_id,
         event: :reviews_completed,
         operation: operation,
         key: :reviews
@@ -259,7 +259,7 @@ def build_pipeline
       operation = start_improvement(state.merge({}))
       signal_completion(
         workflow,
-        thread_id: state.workflow_instance_id,
+        workflow_instance_id: state.workflow_instance_id,
         event: :improvement_completed,
         operation: operation,
         key: :improved_code
@@ -277,7 +277,7 @@ def build_pipeline
       end
       signal_completion(
         workflow,
-        thread_id: state.workflow_instance_id,
+        workflow_instance_id: state.workflow_instance_id,
         event: :evaluation_completed,
         operation: operation,
         key: :quality_scores

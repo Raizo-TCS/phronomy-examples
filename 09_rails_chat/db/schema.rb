@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_16_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_07_000000) do
   create_table "phronomy_agents", id: false, force: :cascade do |t|
     t.string "agent_id", null: false
     t.integer "revision", null: false
@@ -36,6 +36,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_180000) do
     t.index ["execution_id"], name: "idx_phronomy_executions_execution_id", unique: true
   end
 
+  create_table "phronomy_handoff_states", id: false, force: :cascade do |t|
+    t.string "active_agent_id", null: false
+    t.string "main_agent_id", null: false
+    t.integer "revision", null: false
+    t.text "state_json", null: false
+    t.index ["main_agent_id"], name: "idx_phronomy_handoff_states_main_agent_id", unique: true
+  end
+
   create_table "phronomy_journal_heads", id: false, force: :cascade do |t|
     t.string "agent_id", null: false
     t.integer "position", null: false
@@ -49,6 +57,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_180000) do
     t.integer "sequence", null: false
     t.index ["agent_id", "record_id"], name: "idx_phronomy_journal_records_record_id", unique: true
     t.index ["agent_id", "sequence"], name: "idx_phronomy_journal_records_sequence", unique: true
+  end
+
+  create_table "phronomy_team_executions", id: false, force: :cascade do |t|
+    t.boolean "active", null: false
+    t.text "execution_json", null: false
+    t.integer "revision", null: false
+    t.string "team_execution_id", null: false
+    t.string "team_id", null: false
+    t.index ["team_execution_id"], name: "idx_phronomy_team_executions_team_execution_id", unique: true
+    t.index ["team_id"], name: "idx_phronomy_team_executions_one_active", unique: true, where: "active = 1"
+  end
+
+  create_table "phronomy_teams", id: false, force: :cascade do |t|
+    t.integer "revision", null: false
+    t.text "root_json", null: false
+    t.string "team_id", null: false
+    t.index ["team_id"], name: "idx_phronomy_teams_team_id", unique: true
   end
 
   create_table "phronomy_workflow_states", id: false, force: :cascade do |t|

@@ -1,0 +1,52 @@
+name: Current Phronomy API examples
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  current-api:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.3", "3.4"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Install SQLite bundle
+        run: cd 30_sqlite_persistence && bundle install
+      - name: Check APIs, run CLI stubs, and validate SQLite persistence
+        run: bash scripts/verify_offline.sh
+
+  rails:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ["09_rails_chat", "15_rails_secure_chat", "18_rails_agent_job", "20_cve_scanner"]
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.example }}/Gemfile
+      RAILS_ENV: test
+      PHRONOMY_MODEL: gpt-4o-mini
+      PHRONOMY_BASE_URL: https://example.test/v1
+      PHRONOMY_API_KEY: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+      - name: Migrate and eager load the application
+        run: |
+          cd "${{ matrix.example }}"
+          bundle exec rails db:create db:migrate zeitwerk:check
+      - name: Render persisted chat history
+        if: matrix.example == '09_rails_chat' || matrix.example == '15_rails_secure_chat'
+        run: |
+          cd "${{ matrix.example }}"
+          bundle exec rails runner ../scripts/verify_chat_history.rb

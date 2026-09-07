@@ -23,7 +23,10 @@ module PhronomyExamples
           agents: AgentRepository.new(connection_pool: connection_pool),
           journals: JournalRepository.new(connection_pool: connection_pool),
           executions: ExecutionRepository.new(connection_pool: connection_pool),
-          workflow_states: WorkflowStateRepository.new(connection_pool: connection_pool)
+          workflow_states: WorkflowStateRepository.new(connection_pool: connection_pool),
+          handoff_states: HandoffStateRepository.new(connection_pool: connection_pool),
+          teams: TeamRepository.new(connection_pool: connection_pool),
+          team_executions: TeamExecutionRepository.new(connection_pool: connection_pool)
         )
       end
 
@@ -74,3 +77,6 @@ require_relative "active_record_postgresql_persistence/journal_repository"
 require_relative "active_record_postgresql_persistence/execution_repository"
 require_relative "active_record_postgresql_persistence/workflow_state_repository"
 require_relative "active_record_postgresql_persistence/transaction_view"
+require_relative "active_record_postgresql_persistence/handoff_state_repository"
+require_relative "active_record_postgresql_persistence/team_repository"
+require_relative "active_record_postgresql_persistence/team_execution_repository"

@@ -25,6 +25,9 @@ The example implements:
 - `journals`
 - `executions`
 - `workflow_states`
+- `handoff_states`
+- `teams`
+- `team_executions`
 - `transaction`
 - `assert_agent_watermark!`
 
@@ -96,25 +99,12 @@ conflicts into the portable errors:
 
 ## Durable representation
 
-Phronomy domain records use their public codecs:
-
-- `AgentRoot#to_h` / `.from_h`
-- `JournalRecord#to_h` / `.from_h`
-- `AgentExecution#to_h` / `.from_h`
-
-Workflow state uses a deliberately narrow JSON-compatible domain:
-
-- `nil`
-- String
-- Integer
-- finite Float
-- `true` / `false`
-- recursive Array
-- recursive Hash with String/Symbol keys
-
-Unsupported values raise `Phronomy::Persistence::SerializationError`.
-
-No `Marshal` or arbitrary Ruby-object serializer is used.
+Except for content bytes, the raw backend stores opaque
+`Phronomy::Persistence::DurableRecord` envelopes. Phronomy owns domain encoding,
+decoding, and compatibility validation. Identity, revision, journal position,
+and active-execution metadata arrive as separate repository arguments. The
+backend's Codec serializes the envelope and does not inspect domain payloads.
+No Marshal or arbitrary Ruby-object serializer is used.
 
 ## Install
 
@@ -151,7 +141,7 @@ bundle exec rspec
 
 The suite includes:
 
-- all six authoritative Persistence shared examples
+- all nine authoritative Persistence shared examples
 - transaction/watermark tests
 - two-connection/thread competition for Agent CAS
 - Execution CAS
@@ -159,7 +149,7 @@ The suite includes:
 - Workflow CAS
 - active Execution admission
 - transactional `assert_idle!` + admission serialization
-- fresh-pool durability/reload for all five durable repositories
+- fresh-pool durability/reload for all eight durable repositories
 - unsupported Workflow serialization
 
 SQLite is a single-writer database. Therefore these concurrency tests prove
@@ -259,3 +249,21 @@ The SQLite and PostgreSQL implementations remain intentionally separate in this
 phase. Only after both concrete backends have been exercised should common
 implementation code be considered for extraction, and only when extraction does
 not hide transaction or locking semantics.
+
+## Coordination repositories and upgrades
+
+`handoff_states` uses a main-Agent anchor and compare-and-swap revisions.
+`teams` stores Team roots. `team_executions` admits one active run per Team,
+retains terminal results, and rejects reactivation of a terminal run. Both Agent
+and Team execution repositories support owner-scoped cursor pagination.
+All eight repositories participate in the same transaction and transaction view.
+The backend stores opaque DurableRecord envelopes and indexes only the metadata
+passed separately by Phronomy; it does not reconstruct execution semantics.
+
+`SQLiteSchema.apply!` creates the three additional
+coordination tables when opening an older database. Existing records are retained.
+Example 09 uses its dedicated Rails migration instead.
+
+Shared SQL regressions cover concurrent initial saves/CAS/admission, terminal
+protection, pagination, and reconnecting all three coordination repositories.
+Phronomy's authoritative contract verifies rollback across all eight repositories.

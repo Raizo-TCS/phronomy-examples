@@ -4,12 +4,24 @@ on:
   push:
     paths:
       - "30_sqlite_persistence/**"
+      - "09_rails_chat/db/**"
+      - "17_multi_agent_handoff/**"
+      - "21_team_coordinator/**"
+      - "spec/**"
+      - "shared/llm_config.rb"
       - "Gemfile.phronomy"
+      - "shared/persistence_coordination_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
   pull_request:
     paths:
       - "30_sqlite_persistence/**"
+      - "09_rails_chat/db/**"
+      - "17_multi_agent_handoff/**"
+      - "21_team_coordinator/**"
+      - "spec/**"
+      - "shared/llm_config.rb"
       - "Gemfile.phronomy"
+      - "shared/persistence_coordination_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
 
 jobs:

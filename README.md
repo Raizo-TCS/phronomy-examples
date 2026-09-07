@@ -1,7 +1,7 @@
 # Phronomy Examples
 
 These examples target the reviewed Phronomy `main` baseline
-`11951ae12809102194bf64c190518993739b7099` through the shared `Gemfile.phronomy` dependency.
+`6b400194cdb4febd6c7a073cfecbbd0c5bd116aa` through the shared `Gemfile.phronomy` dependency.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM
@@ -254,3 +254,30 @@ bundle exec ruby -e '
   puts spec.full_gem_path
 '
 ```
+
+## Offline regression gate
+
+Run `bash scripts/verify_offline.sh` after installing the root and SQLite bundles.
+It checks removed APIs, all Ruby syntax, executable Handoff/Team/parallel/Workflow
+samples with HTTP stubs, and the real SQLite Persistence contract. PostgreSQL
+is checked separately by `scripts/verify_postgresql_persistence.sh` and its CI job.
+The full verifier also runs these CLI regression tests before the live demos.
+
+`bash scripts/verify_examples.sh --preflight-only` checks all seven loaded
+Phronomy dependencies, removed APIs, active documentation and architecture
+without starting Rails or calling an LLM. The full verifier follows the same
+environment settings as `shared/llm_config.rb`; configure local LLM endpoints
+explicitly. If a Rails verification port is already occupied, the check fails
+without stopping its current owner. Cleanup stops only servers started by the
+verifier.
+
+Chat examples 09 and 15 share a transcript reader that preserves literal user
+text, including numbers and JSON, and hides assistant tool-call envelopes with
+no displayable content. CI also migrates each app and renders saved conversations
+through its real controller and view. To run that check inside either app:
+`RAILS_ENV=test bundle exec rails runner ../scripts/verify_chat_history.rb`
+(prepare the test database with `RAILS_ENV=test bundle exec rails db:prepare`).
+
+Existing `09_rails_chat` databases require the new coordination-table migration:
+`cd 09_rails_chat && bundle exec rails db:migrate`. The migration adds tables;
+it does not rewrite existing Agent, Journal, Content, or Workflow records.

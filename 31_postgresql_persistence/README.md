@@ -25,7 +25,7 @@ semantics.
 
 ## What Phase B proves
 
-The backend implements the same public Persistence SPI and the same five durable
+The backend implements the same public Persistence SPI and the same eight durable
 repositories as the SQLite reference:
 
 - `contents`
@@ -33,6 +33,9 @@ repositories as the SQLite reference:
 - `journals`
 - `executions`
 - `workflow_states`
+- `handoff_states`
+- `teams`
+- `team_executions`
 - `transaction`
 - `assert_agent_watermark!`
 
@@ -164,7 +167,7 @@ URL shown above.
 
 ## Test coverage
 
-The RSpec suite runs all six authoritative shared examples from Phronomy:
+The RSpec suite runs all nine authoritative shared examples from Phronomy:
 
 ```ruby
 require "phronomy/testing/persistence_contract"
@@ -183,7 +186,7 @@ and adds PostgreSQL-specific tests for:
 - atomic Execution admission;
 - common Journal/Execution Agent-row lock order;
 - deliberate opposite multi-Agent deadlock classification;
-- fresh-pool durability for all five durable repositories;
+- fresh-pool durability for all eight durable repositories;
 - terminated-session and unavailable-endpoint storage failure classification.
 
 The database-specific tests use separate ActiveRecord connections and
@@ -196,7 +199,7 @@ of inferring contention from sleeps.
 bundle exec ruby run.rb
 ```
 
-The demo writes all five durable repository types, disconnects the first
+The demo writes the original Agent/Workflow repository types, disconnects the first
 ActiveRecord pool, constructs a fresh pool against the same PostgreSQL database,
 and reloads the stored values.
 
@@ -253,3 +256,27 @@ be reviewed for extraction. Codec duplication may be a reasonable candidate.
 Transaction setup, lock strategy, CAS SQL, admission, and backend-specific error
 handling should remain concrete unless extraction makes their semantics clearer,
 not less visible.
+
+## Coordination repositories and upgrades
+
+`handoff_states` uses a main-Agent anchor and compare-and-swap revisions.
+`teams` stores Team roots. `team_executions` admits one active run per Team,
+retains terminal results, and rejects reactivation of a terminal run. Both Agent
+and Team execution repositories support owner-scoped cursor pagination.
+All eight repositories participate in the same transaction and transaction view.
+The backend stores opaque DurableRecord envelopes and indexes only the metadata
+passed separately by Phronomy; it does not reconstruct execution semantics.
+
+`PostgreSQLSchema.apply!` creates the three additional
+coordination tables when opening an older database. Existing records are retained.
+Example 09 uses its dedicated Rails migration instead.
+
+Shared SQL regressions cover concurrent initial saves/CAS/admission, terminal
+protection, pagination, and reconnecting all three coordination repositories.
+Phronomy's authoritative contract verifies rollback across all eight repositories.
+
+Team execution admission and idle checks lock `phronomy_teams.team_id` before
+subordinate Team execution rows, just as Agent admission locks an Agent row.
+Different Team rows can progress independently. Initial Handoff/Team conflicts
+use `ON CONFLICT DO NOTHING` so a caller can handle an expected conflict without
+leaving the surrounding PostgreSQL transaction aborted.

@@ -60,7 +60,8 @@ Run the Rails migration before starting the application:
 bundle exec rails db:create db:migrate
 ```
 
-`db/migrate/20260816180000_create_phronomy_persistence_tables.rb` provisions
+The initial migration and
+`db/migrate/20260907000000_add_phronomy_coordination_repositories.rb` provision
 the durable tables required by the SQLite reference backend:
 
 ```text
@@ -70,10 +71,12 @@ phronomy_journal_heads
 phronomy_journal_records
 phronomy_executions
 phronomy_workflow_states
+phronomy_handoff_states
+phronomy_teams
+phronomy_team_executions
 ```
 
-The checked-in `db/schema.rb` reflects exactly those six current Persistence
-tables. Rails 8.1 loads `schema.rb` as the base when migrating an empty
+The checked-in `db/schema.rb` reflects exactly these nine tables for the eight Persistence repositories. Rails 8.1 loads `schema.rb` as the base when migrating an empty
 database, so the schema file is the authoritative definition of what a fresh
 `db:create db:migrate` produces.
 

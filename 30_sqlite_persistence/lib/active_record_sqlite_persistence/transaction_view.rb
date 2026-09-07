@@ -43,6 +43,9 @@ module PhronomyExamples
           journals = JournalRepository.new(connection_pool: connection_pool, connection: connection)
           executions = ExecutionRepository.new(connection_pool: connection_pool, connection: connection)
           workflow_states = WorkflowStateRepository.new(connection_pool: connection_pool, connection: connection)
+          handoff_states = HandoffStateRepository.new(connection_pool: connection_pool, connection: connection)
+          teams = TeamRepository.new(connection_pool: connection_pool, connection: connection)
+          team_executions = TeamExecutionRepository.new(connection_pool: connection_pool, connection: connection)
           watermark = Watermark.new(connection_pool: connection_pool, connection: connection)
 
           persistence.build_transaction_view(
@@ -51,6 +54,9 @@ module PhronomyExamples
             journals: journals,
             executions: executions,
             workflow_states: workflow_states,
+            handoff_states: handoff_states,
+            teams: teams,
+            team_executions: team_executions,
             watermark: watermark
           )
         end

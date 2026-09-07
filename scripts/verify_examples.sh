@@ -14,29 +14,31 @@
 #   cd phronomy-examples
 #   bash scripts/verify_examples.sh
 #   bash scripts/verify_examples.sh --syntax-only
+#   bash scripts/verify_examples.sh --preflight-only
 #
 # Before verification:
-#   ./scripts/update_phronomy.sh
+#   Install the seven bundles using the committed lockfiles.
 
 set -euo pipefail
 
 WITH_LLM=true
+PREFLIGHT_ONLY=false
 for arg in "$@"; do
-  [[ "$arg" == "--syntax-only" ]] && WITH_LLM=false
+  case "$arg" in
+    --syntax-only) WITH_LLM=false ;;
+    --preflight-only) PREFLIGHT_ONLY=true ;;
+    *) echo "Unknown option: $arg" >&2; exit 2 ;;
+  esac
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 BROWSER_TESTS_DIR="$SCRIPT_DIR/browser_tests"
 
-export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BOLD='\033[1m'; NC='\033[0m'
 
-export PHRONOMY_MODEL="${PHRONOMY_MODEL:-openai/gpt-oss-20b}"
-export PHRONOMY_BASE_URL="${PHRONOMY_BASE_URL:-http://192.168.122.1:1234/v1}"
-export PHRONOMY_API_KEY="${PHRONOMY_API_KEY:-lm-studio}"
-export PHRONOMY_PROVIDER="${PHRONOMY_PROVIDER:-openai}"
+# Model/provider settings follow shared/llm_config.rb, including OPENAI_API_KEY
+# fallback. Local-server URLs must be explicitly configured by the caller.
 
 declare -A EXAMPLE_TIMEOUTS
 EXAMPLE_TIMEOUTS["05_multi_agent"]=360
@@ -49,24 +51,16 @@ EXAMPLE_ARGS["27_issue_analyzer"]="--dry-run"
 PASS=0; FAIL=0; SKIP=0
 FAILURES=()
 SERVER_PIDS=()
+source "$SCRIPT_DIR/verification_processes.sh"
 
 pass()  { echo -e "  ${GREEN}[PASS]${NC} $1"; PASS=$((PASS + 1)); }
 fail()  { echo -e "  ${RED}[FAIL]${NC} $1"; FAIL=$((FAIL + 1)); FAILURES+=("$1"); }
 skip()  { echo -e "  ${YELLOW}[SKIP]${NC} $1"; SKIP=$((SKIP + 1)); }
 header(){ echo -e "\n${BOLD}=== $1 ===${NC}"; }
 
-free_port() {
-  local port="$1"
-  lsof -ti :"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-}
-
-cleanup() {
-  for pid in "${SERVER_PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
-  done
-  wait 2>/dev/null || true
-}
-trap cleanup EXIT INT TERM
+trap verification_cleanup_servers EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 verify_phronomy_dependency() {
   header "Phronomy dependency preflight"
@@ -78,6 +72,7 @@ verify_phronomy_dependency() {
     "$BASE_DIR/18_rails_agent_job/Gemfile"
     "$BASE_DIR/20_cve_scanner/Gemfile"
     "$BASE_DIR/30_sqlite_persistence/Gemfile"
+    "$BASE_DIR/31_postgresql_persistence/Gemfile"
   )
 
   local expected_version=""
@@ -370,6 +365,11 @@ verify_rails() {
     return
   fi
 
+  if ! (cd "$dir" && verification_require_free_port "$port"); then
+    fail "port $port is unavailable; verification server was not started"
+    return
+  fi
+
   local migrate_out
   if migrate_out=$(cd "$dir" && RAILS_ENV=development bundle exec rails db:create db:migrate 2>&1); then
     pass "db:create db:migrate"
@@ -386,18 +386,18 @@ verify_rails() {
     return
   fi
 
-  free_port "$port"
   local log_file
   log_file="$(mktemp "${TMPDIR:-/tmp}/rails-${name}-XXXXXX.log")"
 
-  (cd "$dir" && env PORT="$port" RAILS_ENV=development $extra_env bundle exec rails server \
+  (cd "$dir" && exec env PORT="$port" RAILS_ENV=development $extra_env bundle exec rails server --binding 127.0.0.1 \
       >> "$log_file" 2>&1) &
   local server_pid=$!
   SERVER_PIDS+=("$server_pid")
 
   local up=false
   for _ in $(seq 1 40); do
-    if curl -sf "http://localhost:$port/up" > /dev/null 2>&1; then
+    kill -0 "$server_pid" 2>/dev/null || break
+    if curl -sf "http://127.0.0.1:$port/up" > /dev/null 2>&1 && kill -0 "$server_pid" 2>/dev/null; then
       up=true
       break
     fi
@@ -406,13 +406,13 @@ verify_rails() {
 
   if [[ "$up" != "true" ]]; then
     fail "server did not start within 40s (log: $log_file)"
-    kill "$server_pid" 2>/dev/null || true
+    verification_stop_server "$server_pid"
     return
   fi
   pass "server started (PID $server_pid)"
 
   local http_code
-  http_code=$(curl -so /dev/null -w "%{http_code}" "http://localhost:$port/up")
+  http_code=$(curl -so /dev/null -w "%{http_code}" "http://127.0.0.1:$port/up")
   if [[ "$http_code" == "200" ]]; then
     pass "GET /up → 200"
   else
@@ -421,9 +421,7 @@ verify_rails() {
 
   run_playwright_test "$name" "$port" "$extra_env"
 
-  kill "$server_pid" 2>/dev/null || true
-  wait "$server_pid" 2>/dev/null || true
-  SERVER_PIDS=("${SERVER_PIDS[@]/$server_pid}")
+  verification_stop_server "$server_pid"
   pass "server stopped"
 }
 
@@ -518,6 +516,20 @@ if ! verify_event_loop_example_contract; then
 fi
 
 if ! verify_standalone_smoke_tests; then
+  exit 1
+fi
+
+if $PREFLIGHT_ONLY; then
+  echo "Dependency, source, documentation and architecture preflight passed."
+  echo "CLI execution, Rails, LLM and database tests were not run in this mode."
+  exit 0
+fi
+
+header "Executable coordination API regressions (HTTP stubs)"
+if (cd "$BASE_DIR" && bundle exec rspec spec --format progress); then
+  pass "current Handoff, Team, parallel and Workflow examples"
+else
+  fail "current example API regression tests"
   exit 1
 fi
 

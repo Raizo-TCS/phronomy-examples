@@ -1,20 +1,16 @@
 # frozen_string_literal: true
 
+require "ostruct"
+require Rails.root.join("../shared/transcript_messages").expand_path.to_s
+
 class ConversationsController < ApplicationController
   def index
     @agent_id = session[:agent_id]
     @user_id  = session[:user_id]
     if @agent_id
       agent = SecureChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
-      @messages = agent.transcript.filter_map do |record|
-        next unless %i[user assistant].include?(record.role)
-        content_raw = PhronomyStore.persistence.contents.fetch_text(record.content_ref)
-        content_text = begin
-          JSON.parse(content_raw)["content"] || content_raw
-        rescue JSON::ParserError
-          content_raw
-        end
-        OpenStruct.new(role: record.role.to_s, content: content_text)
+      @messages = PhronomyExamples::TranscriptMessages.read(agent).map do |message|
+        OpenStruct.new(message)
       end
     else
       @messages = []

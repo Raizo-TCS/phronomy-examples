@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Persistence
       class TeamRepository < ConnectionAccess
         def create(team_id:, team_revision:, record:)
           key = String(team_id)
@@ -10,27 +10,23 @@ module PhronomyExamples
           raise Phronomy::Persistence::ConflictError, "team_id must not be empty" if key.empty?
           raise Phronomy::Persistence::ConflictError, "team_revision must be non-negative" if revision.negative?
 
-          with_write_connection do |connection|
-            execute_sql(
+          inserted = with_write_connection do |connection|
+            exec_query_sql(
               connection,
               "INSERT INTO phronomy_teams (team_id, revision, root_json) VALUES (" \
               "#{quote_value(connection, key)}, #{revision}, " \
-              "#{quote_value(connection, Codec.dump_record(record))})"
+              "#{quote_value(connection, Codec.dump_record(record))}) " \
+              "ON CONFLICT (team_id) DO NOTHING RETURNING team_id"
             )
           end
+          if inserted.empty?
+            raise Phronomy::Persistence::ConflictError, "Team already exists: #{key}"
+          end
           record.copy
-        rescue ActiveRecord::RecordNotUnique
-          raise Phronomy::Persistence::ConflictError, "Team already exists: #{key}"
         end
 
         def load(team_id)
-          row = with_read_connection do |connection|
-            select_one_sql(
-              connection,
-              "SELECT root_json FROM phronomy_teams " \
-              "WHERE team_id = #{quote_value(connection, team_id)}"
-            )
-          end
+          row = with_read_connection { |connection| load_row_on(connection, team_id) }
           unless row
             raise Phronomy::Persistence::NotFoundError, "Team not found: #{team_id}"
           end
@@ -45,26 +41,25 @@ module PhronomyExamples
               "Team revision must advance exactly once"
           end
 
-          affected = with_write_connection do |connection|
-            update_sql(
+          outcome = with_write_connection do |connection|
+            affected = update_sql(
               connection,
-              "UPDATE phronomy_teams SET " \
-              "revision = #{next_value}, " \
+              "UPDATE phronomy_teams SET revision = #{next_value}, " \
               "root_json = #{quote_value(connection, Codec.dump_record(record))} " \
               "WHERE team_id = #{quote_value(connection, team_id)} " \
               "AND revision = #{expected}"
             )
+            if affected == 1
+              :ok
+            elsif load_row_on(connection, team_id)
+              :conflict
+            else
+              :not_found
+            end
           end
-          return record.copy if affected == 1
 
-          exists = with_read_connection do |connection|
-            !select_one_sql(
-              connection,
-              "SELECT 1 FROM phronomy_teams " \
-              "WHERE team_id = #{quote_value(connection, team_id)} LIMIT 1"
-            ).nil?
-          end
-          if exists
+          return record.copy if outcome == :ok
+          if outcome == :conflict
             raise Phronomy::Persistence::ConflictError,
               "stale Team revision for #{team_id}"
           end
@@ -73,12 +68,19 @@ module PhronomyExamples
 
         def delete(team_id)
           with_write_connection do |connection|
-            delete_sql(
-              connection,
-              "DELETE FROM phronomy_teams WHERE team_id = #{quote_value(connection, team_id)}"
-            )
+            delete_sql(connection, "DELETE FROM phronomy_teams WHERE team_id = #{quote_value(connection, team_id)}")
           end
           nil
+        end
+
+        private
+
+        def load_row_on(connection, team_id)
+          select_one_sql(
+            connection,
+            "SELECT revision, root_json FROM phronomy_teams " \
+            "WHERE team_id = #{quote_value(connection, team_id)}"
+          )
         end
       end
     end

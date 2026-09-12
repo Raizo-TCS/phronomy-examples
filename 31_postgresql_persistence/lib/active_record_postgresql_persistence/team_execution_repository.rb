@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Persistence
       class TeamExecutionRepository < ConnectionAccess
         def create_active(team_execution_id:, team_id:, execution_revision:, record:)
           execution_key = String(team_execution_id)
@@ -13,6 +13,7 @@ module PhronomyExamples
           raise Phronomy::Persistence::ConflictError, "execution_revision must be non-negative" if revision.negative?
 
           with_write_connection do |connection|
+            lock_team_row!(connection, team_key)
             if execution_exists_on?(connection, execution_key)
               raise Phronomy::Persistence::ConflictError,
                 "Execution already exists: #{execution_key}"
@@ -21,32 +22,34 @@ module PhronomyExamples
               raise Phronomy::AgentBusyError,
                 "Team already has an active execution: #{team_key}"
             end
-            execute_sql(
+
+            inserted = exec_query_sql(
               connection,
               "INSERT INTO phronomy_team_executions " \
               "(team_execution_id, team_id, revision, active, execution_json) VALUES (" \
               "#{quote_value(connection, execution_key)}, " \
-              "#{quote_value(connection, team_key)}, #{revision}, 1, " \
-              "#{quote_value(connection, Codec.dump_record(record))})"
+              "#{quote_value(connection, team_key)}, #{revision}, TRUE, " \
+              "#{quote_value(connection, Codec.dump_record(record))}) " \
+              "ON CONFLICT DO NOTHING RETURNING team_execution_id"
             )
+            if inserted.empty?
+              if execution_exists_on?(connection, execution_key)
+                raise Phronomy::Persistence::ConflictError,
+                  "Execution already exists: #{execution_key}"
+              end
+              if active_for_team_on?(connection, team_key)
+                raise Phronomy::AgentBusyError,
+                  "Team already has an active execution: #{team_key}"
+              end
+              raise Phronomy::Persistence::ConflictError,
+                "Execution admission constraint conflict: #{execution_key}"
+            end
           end
           record.copy
-        rescue ActiveRecord::RecordNotUnique => e
-          if active_for_team?(team_key)
-            raise Phronomy::AgentBusyError,
-              "Team already has an active execution: #{team_key}"
-          end
-          raise Phronomy::Persistence::ConflictError, e.message
         end
 
         def load(team_execution_id)
-          row = with_read_connection do |connection|
-            select_one_sql(
-              connection,
-              "SELECT execution_json FROM phronomy_team_executions " \
-              "WHERE team_execution_id = #{quote_value(connection, team_execution_id)}"
-            )
-          end
+          row = with_read_connection { |connection| execution_row_on(connection, team_execution_id) }
           unless row
             raise Phronomy::Persistence::NotFoundError,
               "Execution not found: #{team_execution_id}"
@@ -67,11 +70,11 @@ module PhronomyExamples
           end
 
           outcome = with_write_connection do |connection|
-            stored = select_one_sql(
-              connection,
-              "SELECT team_id, active FROM phronomy_team_executions " \
-              "WHERE team_execution_id = #{quote_value(connection, team_execution_id)}"
-            )
+            stored = execution_row_on(connection, team_execution_id)
+            next :not_found unless stored
+            stored_team_id = stored.fetch("team_id")
+            lock_team_row!(connection, stored_team_id)
+            stored = execution_row_on(connection, team_execution_id)
             next :not_found unless stored
             next :identity_conflict unless stored.fetch("team_id") == team_id.to_s
             if active && !ActiveRecord::Type::Boolean.new.cast(stored.fetch("active"))
@@ -83,25 +86,35 @@ module PhronomyExamples
 
             affected = update_sql(
               connection,
-              "UPDATE phronomy_team_executions SET " \
-              "revision = #{next_value}, active = #{active ? 1 : 0}, " \
+              "UPDATE phronomy_team_executions SET revision = #{next_value}, " \
+              "active = #{sql_boolean(active)}, " \
               "execution_json = #{quote_value(connection, Codec.dump_record(record))} " \
               "WHERE team_execution_id = #{quote_value(connection, team_execution_id)} " \
               "AND revision = #{expected}"
             )
-            affected == 1 ? :ok : :conflict
+            if affected == 1
+              :ok
+            elsif execution_row_on(connection, team_execution_id)
+              :conflict
+            else
+              :not_found
+            end
           end
 
           case outcome
           when :ok then record.copy
-          when :not_found
-            raise Phronomy::Persistence::NotFoundError, "Execution not found: #{team_execution_id}"
-          when :identity_conflict
-            raise Phronomy::Persistence::ConflictError, "Execution Team identity mismatch: #{team_execution_id}"
           when :agent_busy
-            raise Phronomy::AgentBusyError, "Team already has an active execution: #{team_id}"
+            raise Phronomy::AgentBusyError,
+              "Team already has an active execution: #{team_id}"
+          when :identity_conflict
+            raise Phronomy::Persistence::ConflictError,
+              "Execution Team identity mismatch for #{team_execution_id}"
+          when :conflict
+            raise Phronomy::Persistence::ConflictError,
+              "stale Execution revision for #{team_execution_id}"
           else
-            raise Phronomy::Persistence::ConflictError, "stale Execution revision for #{team_execution_id}"
+            raise Phronomy::Persistence::NotFoundError,
+              "Execution not found: #{team_execution_id}"
           end
         end
 
@@ -110,8 +123,8 @@ module PhronomyExamples
             select_all_sql(
               connection,
               "SELECT execution_json FROM phronomy_team_executions " \
-              "WHERE team_id = #{quote_value(connection, team_id)} AND active = 1 " \
-              "ORDER BY team_execution_id ASC"
+              "WHERE team_id = #{quote_value(connection, team_id)} " \
+              "AND active IS TRUE ORDER BY team_execution_id ASC"
             )
           end
           rows.map { |row| Codec.load_record(row.fetch("execution_json")) }.freeze
@@ -131,7 +144,10 @@ module PhronomyExamples
         end
 
         def assert_idle!(team_id)
-          busy = with_write_connection { |connection| active_for_team_on?(connection, team_id) }
+          busy = with_write_connection do |connection|
+            lock_team_row!(connection, team_id)
+            active_for_team_on?(connection, team_id)
+          end
           if busy
             raise Phronomy::AgentBusyError,
               "Team already has an active execution: #{team_id}"
@@ -141,13 +157,18 @@ module PhronomyExamples
 
         def delete(team_execution_id)
           with_write_connection do |connection|
-            delete_sql(connection, "DELETE FROM phronomy_team_executions WHERE team_execution_id = #{quote_value(connection, team_execution_id)}")
+            row = execution_row_on(connection, team_execution_id)
+            if row
+              lock_team_row(connection, row.fetch("team_id"))
+              delete_sql(connection, "DELETE FROM phronomy_team_executions WHERE team_execution_id = #{quote_value(connection, team_execution_id)}")
+            end
           end
           nil
         end
 
         def delete_for_team(team_id)
           with_write_connection do |connection|
+            lock_team_row(connection, team_id)
             delete_sql(connection, "DELETE FROM phronomy_team_executions WHERE team_id = #{quote_value(connection, team_id)}")
           end
           nil
@@ -162,13 +183,17 @@ module PhronomyExamples
           ).nil?
         end
 
-        def active_for_team?(team_id)
-          with_read_connection { |connection| active_for_team_on?(connection, team_id) }
+        def execution_row_on(connection, team_execution_id)
+          select_one_sql(
+            connection,
+            "SELECT team_id, revision, active, execution_json FROM phronomy_team_executions " \
+            "WHERE team_execution_id = #{quote_value(connection, team_execution_id)}"
+          )
         end
 
         def active_for_team_on?(connection, team_id, excluding_team_execution_id: nil)
           query = +"SELECT 1 FROM phronomy_team_executions " \
-                   "WHERE team_id = #{quote_value(connection, team_id)} AND active = 1"
+                   "WHERE team_id = #{quote_value(connection, team_id)} AND active IS TRUE"
           if excluding_team_execution_id
             query << " AND team_execution_id <> #{quote_value(connection, excluding_team_execution_id)}"
           end

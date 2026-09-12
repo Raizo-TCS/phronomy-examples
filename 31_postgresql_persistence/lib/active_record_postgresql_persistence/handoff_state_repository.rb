@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Persistence
       class HandoffStateRepository < ConnectionAccess
         def load(main_agent_id)
           row = with_read_connection do |connection|
@@ -27,12 +27,17 @@ module PhronomyExamples
 
           if expected.nil?
             with_write_connection do |connection|
-              execute_sql(
+              inserted = exec_query_sql(
                 connection,
                 "INSERT INTO phronomy_handoff_states (main_agent_id, revision, active_agent_id, state_json) VALUES (" \
                 "#{quote_value(connection, main_agent_id)}, #{next_value}, #{quote_value(connection, active_agent_id)}, " \
-                "#{quote_value(connection, Codec.dump_record(record))})"
+                "#{quote_value(connection, Codec.dump_record(record))}) " \
+                "ON CONFLICT (main_agent_id) DO NOTHING RETURNING revision"
               )
+              if inserted.empty?
+                raise Phronomy::Persistence::ConflictError,
+                  "Handoff state already exists: #{main_agent_id}"
+              end
             end
             return record.copy
           end

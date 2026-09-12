@@ -12,29 +12,6 @@ require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
-persistence = Phronomy::Persistence::InMemory.new
-triage = TriageAgent.new(persistence: persistence)
-billing = BillingAgent.new(persistence: persistence)
-tech = TechSupportAgent.new(persistence: persistence)
-
-handoffs = [
-  Phronomy::Agent::Handoff.new(
-    source_agent: triage,
-    target_agent: billing,
-    description: "Transfer billing, invoice, payment, refund, or charge-dispute requests."
-  ),
-  Phronomy::Agent::Handoff.new(
-    source_agent: triage,
-    target_agent: tech,
-    description: "Transfer software errors, crashes, bugs, and technical-support requests."
-  )
-]
-
-runner = Phronomy::Agent::HandoffRunner.new(
-  main_agent: triage,
-  handoffs: handoffs
-)
-
 puts "=== 17 Multi-Agent Handoff ===\n\n"
 
 SCENARIOS = [
@@ -58,8 +35,12 @@ SCENARIOS.each.with_index(1) do |scenario, i|
 
   result = OutputValidator.validate(
     "handoff scenario #{i}: agent produces response",
-    check: ->(r) { r[:output].to_s.length >= 20 }
-  ) { runner.invoke(scenario[:input]) }
+    check: ->(r) { r[:output].length >= 20 }
+  ) do
+    # These are independent conversations. A runner reused across calls would
+    # deliberately keep its current specialist as the active Agent.
+    HandoffDemo.build_runner.invoke(scenario[:input])
+  end
 
   puts "→ Handled by: #{result[:agent].class.name}"
   puts "Response: #{result[:output]}"

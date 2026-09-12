@@ -25,7 +25,8 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
           end
 
           tx =
-            PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.new(
+            PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.build(
+              persistence: persistence,
               connection_pool: persistence.connection_pool,
               connection: target_connection
             )
@@ -37,7 +38,7 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
       e
     end
 
-    expect(error).not_to be_nil
+    expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
     expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
     expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)
@@ -60,7 +61,7 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
       e
     end
 
-    expect(error).not_to be_nil
+    expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
     expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
     expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)

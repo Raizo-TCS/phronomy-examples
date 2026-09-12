@@ -5,12 +5,14 @@ on:
     paths:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
+      - "shared/persistence_coordination_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
   pull_request:
     paths:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
+      - "shared/persistence_coordination_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
 

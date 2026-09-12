@@ -127,6 +127,19 @@ module PhronomyExamples
           rows.map { |row| Codec.load_record(row.fetch("execution_json")) }.freeze
         end
 
+        def list(agent_id, after: nil, limit: 100)
+          raise ArgumentError, "limit must be a positive Integer" unless limit.is_a?(Integer) && limit.positive?
+
+          rows = with_read_connection do |connection|
+            query = +"SELECT execution_json FROM phronomy_executions " \
+                     "WHERE agent_id = #{quote_value(connection, agent_id)}"
+            query << " AND execution_id > #{quote_value(connection, after)}" if after
+            query << " ORDER BY execution_id ASC LIMIT #{limit}"
+            select_all_sql(connection, query)
+          end
+          rows.map { |row| Codec.load_record(row.fetch("execution_json")) }.freeze
+        end
+
         def assert_idle!(agent_id)
           busy = with_write_connection do |connection|
             lock_agent_row!(connection, agent_id)

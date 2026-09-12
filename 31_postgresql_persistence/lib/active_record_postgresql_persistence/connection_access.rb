@@ -77,6 +77,24 @@ module PhronomyExamples
                 "Agent not found: #{agent_id}"
         end
 
+        # Team rows are the admission/idle-check lock anchors for Team executions.
+        def lock_team_row(connection, team_id)
+          select_one_sql(
+            connection,
+            "SELECT team_id FROM phronomy_teams " \
+            "WHERE team_id = #{quote_value(connection, team_id)} " \
+            "FOR UPDATE"
+          )
+        end
+
+        def lock_team_row!(connection, team_id)
+          row = lock_team_row(connection, team_id)
+          return row if row
+
+          raise Phronomy::Persistence::NotFoundError,
+                "Team not found: #{team_id}"
+        end
+
         def sql_boolean(value)
           value ? "TRUE" : "FALSE"
         end

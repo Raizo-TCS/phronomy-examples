@@ -260,7 +260,7 @@ def build_pipeline
     state :evaluate
     entry :evaluate, lambda { |state|
       snapshot = state.merge({})
-      operation = Phronomy::Runtime.instance.offload.submit do
+      operation = Phronomy::Blocking.call_async do
         Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
           [build_quality_scores(snapshot), nil]
         end

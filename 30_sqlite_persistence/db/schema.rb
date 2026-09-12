@@ -16,6 +16,9 @@ module PhronomyExamples
           create_journals(connection)
           create_executions(connection)
           create_workflow_states(connection)
+          create_handoff_states(connection)
+          create_teams(connection)
+          create_team_executions(connection)
         end
       end
 
@@ -151,6 +154,74 @@ module PhronomyExamples
         )
       end
       private_class_method :create_workflow_states
+
+      def create_handoff_states(connection)
+        unless connection.table_exists?(:phronomy_handoff_states)
+          connection.create_table(:phronomy_handoff_states, id: false) do |table|
+            table.string :main_agent_id, null: false
+            table.integer :revision, null: false
+            table.string :active_agent_id, null: false
+            table.text :state_json, null: false
+          end
+        end
+
+        add_unique_index(
+          connection,
+          :phronomy_handoff_states,
+          :main_agent_id,
+          "idx_phronomy_handoff_states_main_agent_id"
+        )
+      end
+      private_class_method :create_handoff_states
+
+      def create_teams(connection)
+        unless connection.table_exists?(:phronomy_teams)
+          connection.create_table(:phronomy_teams, id: false) do |table|
+            table.string :team_id, null: false
+            table.integer :revision, null: false
+            table.text :root_json, null: false
+          end
+        end
+
+        add_unique_index(
+          connection,
+          :phronomy_teams,
+          :team_id,
+          "idx_phronomy_teams_team_id"
+        )
+      end
+      private_class_method :create_teams
+
+      def create_team_executions(connection)
+        unless connection.table_exists?(:phronomy_team_executions)
+          connection.create_table(:phronomy_team_executions, id: false) do |table|
+            table.string :team_execution_id, null: false
+            table.string :team_id, null: false
+            table.integer :revision, null: false
+            table.string :status, null: false
+            table.boolean :active, null: false
+            table.text :execution_json, null: false
+          end
+        end
+
+        add_unique_index(
+          connection,
+          :phronomy_team_executions,
+          :team_execution_id,
+          "idx_phronomy_team_executions_team_execution_id"
+        )
+        index_name = "idx_phronomy_team_executions_one_active"
+        return if connection.index_exists?(:phronomy_team_executions, :team_id, name: index_name)
+
+        connection.add_index(
+          :phronomy_team_executions,
+          :team_id,
+          unique: true,
+          where: "active = 1",
+          name: index_name
+        )
+      end
+      private_class_method :create_team_executions
 
       def add_unique_index(connection, table, columns, name)
         return if connection.index_exists?(table, columns, name: name)

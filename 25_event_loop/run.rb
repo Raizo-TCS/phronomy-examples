@@ -4,8 +4,8 @@
 # 25 EventLoop / FSMSession execution model
 #
 # The current Phronomy model is **EventLoop-first**. Application code does not
-# select a scheduler backend and does not use `Runtime#spawn` for logical async
-# control flow.
+# select a scheduler backend or use removed runtime task/scheduler APIs for
+# logical async control flow.
 
 require_relative "../shared/output_validator"
 require "phronomy"

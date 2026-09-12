@@ -34,6 +34,8 @@ end
 # Team: coordinator decomposes the topic, two workers share the writing load
 # ---------------------------------------------------------------------------
 class BlogWritingTeam < Phronomy::MultiAgent::TeamCoordinator
+  team_definition id: "example-21-blog-writing-team", version: 1
+
   coordinator_model        LLMConfig::MODEL
   coordinator_provider     LLMConfig::PROVIDER
   coordinator_instructions <<~INST
@@ -50,8 +52,13 @@ class BlogWritingTeam < Phronomy::MultiAgent::TeamCoordinator
 
   aggregate do |assignments|
     {
-      sections: assignments.map { |a|
-        {worker: a[:worker], description: a[:task][:description], content: a[:result]}
+      "sections" => assignments.map { |assignment|
+        task = assignment[:task] || assignment["task"]
+        {
+          "worker" => assignment[:worker] || assignment["worker"],
+          "description" => task[:description] || task["description"],
+          "content" => assignment[:result] || assignment["result"]
+        }
       }
     }
   end
@@ -68,25 +75,31 @@ puts "[Coordinator] Planning blog sections...\n\n"
 
 result = OutputValidator.validate(
   "team coordinator produces 4+ blog sections",
-  check: ->(r) { r[:sections].size >= 4 && r[:sections].all? { |s| s[:content].to_s.length >= 50 } }
+  check: ->(r) { r["sections"].size >= 4 && r["sections"].all? { |section| section["content"].to_s.length >= 50 } }
 ) {
   team = BlogWritingTeam.new
   team.stream(TOPIC) do |event|
     label = event[:type] == :task_completed ? "\u2713" : "\u2717"
-    desc  = event[:task][:description].split(".").first
-    snippet = (event[:result] || event[:error]&.message || "").gsub(/\s+/, " ").slice(0, 80)
+    desc  = event.fetch(:task).fetch(:description).split(".").first
+    error = event[:error]
+    error_message = if error.is_a?(Hash)
+      error["message"]
+    else
+      error&.message
+    end
+    snippet = (event[:result] || error_message || "").gsub(/\s+/, " ").slice(0, 80)
     puts "#{label} [Worker #{event[:worker]}] #{desc}"
     puts "  #{snippet}..."
     puts
   end
 }
 
-puts "\n=== Final Blog Post: #{result[:sections].size} sections ===\n\n"
+puts "\n=== Final Blog Post: #{result.fetch("sections").size} sections ===\n\n"
 
-result[:sections].each_with_index do |s, i|
-  puts "--- Section #{i + 1} [Worker #{s[:worker]}] ---"
-  puts s[:description]
+result.fetch("sections").each_with_index do |section, i|
+  puts "--- Section #{i + 1} [Worker #{section["worker"]}] ---"
+  puts section["description"]
   puts
-  puts s[:content]
+  puts section["content"]
   puts
 end

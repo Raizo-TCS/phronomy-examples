@@ -3,7 +3,7 @@
 
 # 17 Multi-Agent Handoff
 #
-# Demonstrates Phronomy::MultiAgent::Runner and explicit Handoff edges.
+# Demonstrates Phronomy::Agent::HandoffRunner and explicit Handoff edges.
 # A TriageAgent receives all user queries and may transfer responsibility to
 # BillingAgent or TechSupportAgent through framework-generated handoff tools.
 
@@ -12,24 +12,25 @@ require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
-triage = TriageAgent.new
-billing = BillingAgent.new
-tech = TechSupportAgent.new
+persistence = Phronomy::Persistence::InMemory.new
+triage = TriageAgent.new(persistence: persistence)
+billing = BillingAgent.new(persistence: persistence)
+tech = TechSupportAgent.new(persistence: persistence)
 
 handoffs = [
-  Phronomy::MultiAgent::Handoff.new(
+  Phronomy::Agent::Handoff.new(
     source_agent: triage,
     target_agent: billing,
     description: "Transfer billing, invoice, payment, refund, or charge-dispute requests."
   ),
-  Phronomy::MultiAgent::Handoff.new(
+  Phronomy::Agent::Handoff.new(
     source_agent: triage,
     target_agent: tech,
     description: "Transfer software errors, crashes, bugs, and technical-support requests."
   )
 ]
 
-runner = Phronomy::MultiAgent::Runner.new(
+runner = Phronomy::Agent::HandoffRunner.new(
   main_agent: triage,
   handoffs: handoffs
 )
@@ -57,7 +58,7 @@ SCENARIOS.each.with_index(1) do |scenario, i|
 
   result = OutputValidator.validate(
     "handoff scenario #{i}: agent produces response",
-    check: ->(r) { r[:output].length >= 20 }
+    check: ->(r) { r[:output].to_s.length >= 20 }
   ) { runner.invoke(scenario[:input]) }
 
   puts "→ Handled by: #{result[:agent].class.name}"

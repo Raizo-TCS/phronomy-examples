@@ -8,14 +8,19 @@ class ChatController < ApplicationController
   end
 
   # POST /chat/send
-  # Enqueues the streaming agent job and returns immediately (202 Accepted).
-  # The client receives tokens via ActionCable once the job starts.
+  # Both display modes return immediately (202 Accepted).
+  # The selected job publishes through the same ActionCable protocol.
   def send_message
     input      = params.require(:message)
     session_id = session[:chat_id] ||= SecureRandom.hex(8)
     stream_key = "agent_#{session_id}"
 
-    AgentStreamingJob.perform_later("DemoAgent", input, stream: stream_key)
+    job_class = case params.fetch(:display_mode, "streaming")
+    when "result" then AgentResultJob
+    when "streaming" then AgentStreamingJob
+    else raise ActionController::BadRequest, "unsupported display_mode"
+    end
+    job_class.perform_later("DemoAgent", input, stream: stream_key)
 
     head :accepted
   end

@@ -18,7 +18,7 @@ and tracing into one application flow.
 | Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Persistent Knowledge | `knowledge:` | Reviewer criteria / improvement policy become Journal context candidates |
 | Prompt template | `Agent::Context::Instruction::PromptTemplate` | Builds the improvement request |
-| Synchronous-work boundary | `Runtime#offload` | The direct RubyLLM quality-judge call is isolated from EventLoop by the bounded OffloadPool |
+| Synchronous-work boundary | `Phronomy::Blocking.call_async` | The direct RubyLLM quality-judge call is isolated from EventLoop by the bounded OffloadPool |
 | Tracing | `Phronomy::Tracing::Base` | Captures major pipeline stages |
 
 `Phronomy::Testing::Eval` is intentionally **not** used by this production-style

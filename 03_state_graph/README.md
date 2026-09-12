@@ -61,3 +61,12 @@ Initial text: "Ruby is ok."
 
 Final text: "Ruby is an elegant, expressive language ..."
 ```
+
+## Role and responsibility
+
+This is a basic composition example: the application explicitly chooses the
+completion event and payload for each Task. Several Tasks may be connected to
+the same event name or to different names; reusing a name does not itself wait
+for all Tasks. State transitions remain defined in the application Workflow.
+No TaskEntry DSL, automatic business correlation or callback persistence is used.
+For richer application integration, see [18 Rails streaming](../18_rails_agent_job/README.md).

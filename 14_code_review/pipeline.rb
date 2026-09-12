@@ -160,18 +160,12 @@ end
 def start_improvement(snapshot)
   agent = load_or_create_improver(snapshot)
   user_prompt = build_improvement_prompt(snapshot)
-  result_task = Phronomy::Task.deferred(name: "example-14-improvement")
 
   puts "
 [ImproverAgent] Generating improvements..."
   operation = agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
 
-  operation.on_complete do |result, error|
-    if error
-      result_task.fail(error)
-      next
-    end
-
+  operation.map do |result|
     value = result&.dig(:output).to_s
     puts value
 
@@ -182,14 +176,10 @@ def start_improvement(snapshot)
       puts "[OutputFilter] Warning: #{e.message}"
     end
 
-    result_task.complete(value)
+    value
   end
-
-  result_task
 rescue => error
-  result_task ||= Phronomy::Task.deferred(name: "example-14-improvement")
-  result_task.fail(error)
-  result_task
+  Phronomy::Task.failed(error, name: "example-14-improvement")
 end
 
 def build_quality_scores(state)
@@ -270,7 +260,7 @@ def build_pipeline
     state :evaluate
     entry :evaluate, lambda { |state|
       snapshot = state.merge({})
-      operation = Phronomy::Runtime.instance.offload.submit do
+      operation = Phronomy::Blocking.call_async do
         Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
           [build_quality_scores(snapshot), nil]
         end

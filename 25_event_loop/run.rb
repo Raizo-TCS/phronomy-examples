@@ -3,9 +3,9 @@
 
 # 25 EventLoop / FSMSession execution model
 #
-# The Runtime owns one EventLoop control plane. Application code should use
-# public async APIs and completion events rather than scheduling arbitrary
-# Runtime work.
+# The current Phronomy model is **EventLoop-first**. Application code does not
+# select a scheduler backend or use removed runtime task/scheduler APIs for
+# logical async control flow.
 
 require_relative "../shared/output_validator"
 require "phronomy"
@@ -64,7 +64,7 @@ fetch_workflow = Phronomy::Workflow.define(FetchState) do
     # This block stands in for a genuinely blocking external operation. The
     # worker belongs to Phronomy's bounded OffloadPool. The Workflow
     # entry itself returns immediately and never waits on the EventLoop thread.
-    operation = Phronomy::Runtime.instance.offload.submit do
+    operation = Phronomy::Blocking.call_async do
       sleep 0.05
       "Content for #{url}: blocking I/O completed outside FSM dispatch."
     end

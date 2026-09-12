@@ -3,9 +3,9 @@
 # Single source of truth for the Phronomy dependency used by every bundle in
 # this repository.
 #
-# Default: the reviewed, merged framework commit. The gem version alone does
-# not identify the unreleased durable coordination contract used here.
-# Local framework development: set PHRONOMY_PATH to a compatible checkout.
+# Default: use the released gem from RubyGems.org.
+# Local framework development: set PHRONOMY_PATH to a checkout of the same
+# release tag.
 #
 #   PHRONOMY_PATH=../phronomy bundle install
 #
@@ -14,5 +14,5 @@ phronomy_path = ENV["PHRONOMY_PATH"]
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", "~> 0.24.1"
+  gem "phronomy", "~> 0.25.0"
 end

@@ -1,20 +1,30 @@
 <%# app/views/chat/index.html.erb — Agent streaming chat demo %>
 <div id="chat-container" style="max-width:700px;margin:2rem auto;font-family:sans-serif">
   <h1>Phronomy AgentJob Streaming Demo</h1>
-  <p style="color:#555">Tokens are broadcast via ActionCable as the LLM generates them.</p>
+  <p style="color:#555">Choose the display mode and send a prompt. Tokens are broadcast via ActionCable.</p>
 
   <div id="messages" style="border:1px solid #ddd;padding:1rem;min-height:200px;
        border-radius:4px;background:#fafafa;white-space:pre-wrap;font-size:0.95rem">
     <em style="color:#aaa">Ask anything…</em>
   </div>
 
-  <form id="chat-form" style="margin-top:1rem;display:flex;gap:0.5rem">
-    <input id="message-input" type="text" placeholder="Your message" autocomplete="off"
-           style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:1rem">
-    <button type="submit"
-            style="padding:0.5rem 1rem;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem">
-      Send
-    </button>
+  <form id="chat-form" style="margin-top:1rem;display:grid;gap:0.75rem">
+    <label style="display:grid;gap:0.35rem;font-size:0.92rem;color:#333">
+      Display mode
+      <select id="display-mode" name="display_mode"
+              style="padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;background:#fff">
+        <option value="streaming" selected>Streaming</option>
+        <option value="result">Result</option>
+      </select>
+    </label>
+    <div style="display:flex;gap:0.5rem">
+      <input id="message-input" type="text" placeholder="Your message" autocomplete="off"
+             style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:1rem">
+      <button type="submit"
+              style="padding:0.5rem 1rem;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem">
+        Send
+      </button>
+    </div>
   </form>
 
   <p id="status" style="color:#888;font-size:0.85rem;margin-top:0.5rem"></p>
@@ -56,10 +66,12 @@
       statusEl.textContent = "Done.";
       document.getElementById("message-input").disabled = false;
       document.querySelector("button[type=submit]").disabled = false;
+      document.getElementById("display-mode").disabled = false;
     } else if (msg.type === "error") {
       statusEl.textContent = `Error: ${msg.message}`;
       document.getElementById("message-input").disabled = false;
       document.querySelector("button[type=submit]").disabled = false;
+      document.getElementById("display-mode").disabled = false;
     }
   });
 
@@ -67,6 +79,7 @@
   document.getElementById("chat-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const input = document.getElementById("message-input");
+    const displayMode = document.getElementById("display-mode");
     const text  = input.value.trim();
     if (!text) return;
 
@@ -74,6 +87,7 @@
     document.getElementById("status").textContent   = "Thinking…";
     document.getElementById("message-input").disabled = true;
     document.querySelector("button[type=submit]").disabled = true;
+    document.getElementById("display-mode").disabled = true;
 
     buffer = "";
     input.value = "";
@@ -84,7 +98,7 @@
         "Content-Type": "application/x-www-form-urlencoded",
         "X-CSRF-Token": document.querySelector("meta[name='csrf-token']")?.content || ""
       },
-      body: new URLSearchParams({ message: text })
+      body: new URLSearchParams({ message: text, display_mode: displayMode.value })
     });
   });
 </script>

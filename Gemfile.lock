@@ -48,6 +48,12 @@ GEM
     multipart-post (2.4.1)
     net-http (0.9.1)
       uri (>= 0.11.1)
+    phronomy (0.26.0)
+      json (< 3)
+      mcp (~> 1.0)
+      ruby_llm (>= 1.15, < 2)
+      state_machines (~> 0.6)
+      zeitwerk (>= 2.6, < 3)
     public_suffix (7.0.5)
     regexp_parser (2.12.0)
     rexml (3.4.4)
@@ -97,7 +103,7 @@ PLATFORMS
   x86_64-linux-gnu
 
 DEPENDENCIES
-  phronomy!
+  phronomy (~> 0.26.0)
   rspec (~> 3.13)
   simplecov
   simplecov-lcov
@@ -126,7 +132,7 @@ CHECKSUMS
   mcp (1.5.1) sha256=883ddd0f59e5bf43805e300158c7ecc4b6a559d126d584d41bd241355545bedf
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
-  phronomy (0.25.0)
+  phronomy (0.26.0) sha256=9ae2aa881fb5917a79e066b0d1ad7b9d340e76b3c76028d2ef7077e6bded8c7c
   public_suffix (7.0.5) sha256=1a8bb08f1bbea19228d3bed6e5ed908d1cb4f7c2726d18bd9cadf60bc676f623
   regexp_parser (2.12.0) sha256=35a916a1d63190ab5c9009457136ae5f3c0c7512d60291d0d1378ba18ce08ebb
   rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142

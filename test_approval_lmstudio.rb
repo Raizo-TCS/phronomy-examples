@@ -69,7 +69,7 @@ puts "=== Tool Approval API Smoke Test ==="
 puts
 
 # Step 1: start asynchronously. Approval suspension is nonterminal. Observe both
-# the approval event and the original Task terminal boundary so a model that
+# the approval event and the original TaskResult terminal boundary so a model that
 # skips the expected tool call fails explicitly instead of blocking forever.
 puts "Step 1: invoke_async('Please delete /tmp/old_data.txt')"
 original_task = agent.invoke_async("Please delete /tmp/old_data.txt")
@@ -101,7 +101,7 @@ end
 puts
 
 if original_task.done?
-  puts "UNEXPECTED: original Agent Task settled while approval was still pending"
+  puts "UNEXPECTED: original Agent TaskResult settled while approval was still pending"
   exit 1
 end
 
@@ -124,7 +124,7 @@ final = owner.approve(
 original_result = original_task.wait_result
 
 unless original_result[:execution_id] == final[:execution_id]
-  puts "UNEXPECTED: approval result and original Task refer to different executions"
+  puts "UNEXPECTED: approval result and original TaskResult refer to different executions"
   exit 1
 end
 

@@ -11,13 +11,13 @@ The asynchronous draft generation uses the normal completion pattern:
 
 ```text
 DraftAgent#invoke_async
-  → Phronomy::Task
-  → Task#on_complete
+  → Phronomy::TaskResult
+  → TaskResult#on_complete
   → Workflow#signal(:draft_completed)
   → wait_state :awaiting_approval
 ```
 
-The Task represents only terminal completion. Business-process waiting remains a
+The TaskResult represents only terminal completion. Business-process waiting remains a
 Workflow concern.
 
 Use this when the approval is part of the **business process state machine**.
@@ -34,11 +34,11 @@ Agent approval suspension has an important completion contract:
 
 ```text
 ReleaseAgent#invoke_async
-  → original Phronomy::Task remains pending
+  → original Phronomy::TaskResult remains pending
   → Agent emits :approval_required
   → application receives ToolApprovalRequest
   → approve / approve_async resumes the same execution
-  → terminal result settles both the original Task and the accepted approval Task
+  → terminal result settles both the original TaskResult and the accepted approval TaskResult
 ```
 
 Suspension is therefore **not** a terminal result returned by `Agent#invoke`.
@@ -48,7 +48,7 @@ needs to stop and ask a human must start with `invoke_async` and observe
 approval path).
 
 The example registers the listener when the live Agent is created. It also
-observes the original Task's terminal boundary through the same application
+observes the original TaskResult's terminal boundary through the same application
 Queue. This matters for real LLMs: if the model does not request the expected
 tool, the Agent may complete normally and no `:approval_required` event will ever
 arrive. Waiting only on an approval Queue would then block indefinitely.

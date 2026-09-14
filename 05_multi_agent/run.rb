@@ -24,7 +24,7 @@ require_relative "agents"
 task = "Write a technical blog post about Ruby 3.4 new features."
 
 puts "=== Multi-Agent Example ==="
-puts "Task: #{task}"
+puts "TaskResult: #{task}"
 puts
 puts "[config] Model:              #{LLMConfig::MODEL}"
 puts "[config] max_output_tokens is the Phronomy context-budget output reserve."

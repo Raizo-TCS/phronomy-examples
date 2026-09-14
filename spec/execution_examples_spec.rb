@@ -34,7 +34,7 @@ RSpec.describe "Example execution boundaries" do
       end
       workflow_output = workflow_answer == "yes" ? "Workflow approved=true" : "Draft was not sent."
       approved = tool_answer == "yes"
-      expected = /#{Regexp.escape(workflow_output)}.*Original Task done:  false.*Tool approved:       #{approved}.*Execution rejected:  #{!approved}.*Original Task done:  true/m
+      expected = /#{Regexp.escape(workflow_output)}.*Original TaskResult done:  false.*Tool approved:       #{approved}.*Execution rejected:  #{!approved}.*Original TaskResult done:  true/m
       expect { run_example("04_interrupt_resume", workflow_answer, tool_answer) }.to output(expected).to_stdout
       expect(stub.calls.length).to eq(approved ? 3 : 2)
     end

@@ -43,7 +43,7 @@ bundle exec ruby 05_multi_agent/run.rb
 
 ```
 === Multi-Agent Example ===
-Task: Write a technical blog post about Ruby 3.4 new features.
+TaskResult: Write a technical blog post about Ruby 3.4 new features.
 
   [ResearchTool] topic=Ruby 3.4 new features
   [WriteTool] writing article...

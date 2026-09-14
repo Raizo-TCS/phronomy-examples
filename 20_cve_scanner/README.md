@@ -10,7 +10,7 @@ Long-running work is split by responsibility:
 ```text
 Workflow EventLoop / FSMSession
   ├─ Agent reasoning
-  │    └─ Agent#stream_async → completion Task → Workflow#signal
+  │    └─ Agent#stream_async → completion TaskResult → Workflow#signal
   │
   └─ synchronous application work that must stay off EventLoop
        ├─ shell commands
@@ -33,7 +33,7 @@ mechanism.
 - `Phronomy::Workflow.define`
 - `Workflow#signal`
 - Agent `stream_async`
-- `Phronomy::Task` completion handles
+- `Phronomy::TaskResult` completion handles
 - `Runtime#offload`
 - Tool approval / operator wait states
 - follow-up and remediation loops represented as FSM state

@@ -1,7 +1,9 @@
 # Phronomy Examples
 
-These examples target the reviewed Phronomy `main` baseline
-`6b400194cdb4febd6c7a073cfecbbd0c5bd116aa` through the shared `Gemfile.phronomy` dependency.
+These examples use the TaskResult/Execution core at merged commit
+`d9f8962fe064b4a7c8fd82fa6444e52f184b4d6e` through the shared `Gemfile.phronomy` dependency.
+All seven lockfiles must use that revision. For local development, explicitly
+set `PHRONOMY_PATH` to a compatible core checkout.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM
@@ -65,11 +67,11 @@ Runtime
   ├─ EventLoop-driven timers
   └─ metrics / shutdown lifecycle
 
-Task = completion handle, not an execution backend
+TaskResult = completion handle, not an execution backend
 ```
 
 Application code composes public APIs such as `invoke_async`, `stream_async`,
-`Workflow#signal`, `Task#on_complete`, `Task#map`, and cancellation tokens. It
+`Workflow#signal`, `TaskResult#on_complete`, `TaskResult#map`, and cancellation tokens. It
 does not schedule arbitrary Runtime tasks, select a scheduler/backend, or post
 internal Event objects directly.
 
@@ -143,6 +145,7 @@ usable without a PostgreSQL server.
 | `25_event_loop` | EventLoop/FSMSession + OffloadPool completion events |
 | `26_agent_event_loop` | Agent async events → Workflow signal; timeout |
 | `23_bounded_parallel` | Bounded child-Agent fan-out |
+| `32_async_composition` | Basic and asynchronously evaluated majority voting with Execution and TaskResult |
 
 ### Multi-agent
 
@@ -152,7 +155,7 @@ usable without a PostgreSQL server.
 | `17_multi_agent_handoff` | Handoff |
 | `21_team_coordinator` | Stateful worker assignment |
 | `22_shared_state` | Shared Agent state |
-| `23_bounded_parallel` | FanOut FSMSession / parallel Orchestrator pattern |
+| `23_bounded_parallel` | Execution-backed bounded Orchestrator pattern |
 
 ### MCP and integrations
 

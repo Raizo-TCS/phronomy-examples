@@ -93,6 +93,8 @@ verify_phronomy_dependency() {
       cd "$bundle_dir" &&
         BUNDLE_GEMFILE="$gemfile" bundle exec ruby -e '
           require "phronomy"
+          abort "Core lacks TaskResult/Execution; select the implemented core revision" unless
+            Phronomy.const_defined?(:TaskResult, false) && Phronomy.const_defined?(:Execution, false)
           spec = Gem.loaded_specs.fetch("phronomy")
           puts "#{Phronomy::VERSION}\t#{File.realpath(spec.full_gem_path)}"
         '

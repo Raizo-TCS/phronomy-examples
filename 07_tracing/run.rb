@@ -38,7 +38,7 @@ def event_payload!(event)
   payload
 end
 
-app = nil  # declared first so the Task completion callback can capture it by reference
+app = nil  # declared first so the TaskResult completion callback can capture it by reference
 
 GENERATE_NODE_WITH_TRACE = ->(state) {
   workflow_instance_id = state.workflow_instance_id

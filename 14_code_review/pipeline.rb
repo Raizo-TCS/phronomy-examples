@@ -80,7 +80,7 @@ def review_texts(state)
 end
 
 # Starts every reviewer/chunk Agent invocation without creating application
-# Threads. The returned Task is only a completion handle; child Agent execution
+# Threads. The returned TaskResult is only a completion handle; child Agent execution
 # is coordinated by Phronomy's EventLoop/FSMSession runtime.
 def start_parallel_reviews(state)
   texts = review_texts(state)
@@ -88,7 +88,7 @@ def start_parallel_reviews(state)
     texts.each_with_index.map { |text, index| [key, agent_class, text, index] }
   end
 
-  result_task = Phronomy::Task.deferred(name: "example-14-parallel-reviews")
+  result_task = Phronomy::TaskResult.deferred(name: "example-14-parallel-reviews")
   outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
   mutex = Mutex.new
   remaining = jobs.length
@@ -179,7 +179,7 @@ def start_improvement(snapshot)
     value
   end
 rescue => error
-  Phronomy::Task.failed(error, name: "example-14-improvement")
+  Phronomy::TaskResult.failed(error, name: "example-14-improvement")
 end
 
 def build_quality_scores(state)

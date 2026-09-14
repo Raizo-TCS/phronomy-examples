@@ -147,7 +147,7 @@ class ReleaseAgent < Phronomy::Agent::Base
   tools(PublishReleaseTool => "publish_release")
 end
 
-# Agent suspension is not terminal completion. The Task returned by invoke_async
+# Agent suspension is not terminal completion. The TaskResult returned by invoke_async
 # remains pending while approval is required. Wait for either the nonterminal
 # approval event or an unexpected terminal completion so a model that does not
 # request the tool cannot leave the application blocked on an approval-only queue.
@@ -185,10 +185,10 @@ puts "Approval id:         #{request.id}"
 puts "Tool:                #{item.tool_name}"
 puts "Safe arguments:      #{item.arguments.inspect}"
 puts "Approval facts:      #{item.facts.inspect}"
-puts "Original Task done:  #{original_task.done?}"
+puts "Original TaskResult done:  #{original_task.done?}"
 puts
 
-raise "Original Agent Task settled before approval" if original_task.done?
+raise "Original Agent TaskResult settled before approval" if original_task.done?
 
 # This is intentionally a second, independent decision. Workflow approval above
 # must never implicitly authorize a tool side effect.
@@ -216,7 +216,7 @@ resumed = owner.approve(
   approved: approved
 )
 
-# The original invoke_async Task observes the same logical execution and must
+# The original invoke_async TaskResult observes the same logical execution and must
 # settle to the same terminal result after approval/rejection resolution.
 original_result = original_task.wait_result
 raise "approval/original execution mismatch" unless
@@ -225,5 +225,5 @@ raise "approval/original execution mismatch" unless
 puts "Resolved live owner: #{owner.class} (same object=#{owner.equal?(release_agent)})"
 puts "Tool approved:       #{approved}"
 puts "Execution rejected:  #{!!resumed[:rejected]}"
-puts "Original Task done:  #{original_task.done?}"
+puts "Original TaskResult done:  #{original_task.done?}"
 puts "Agent output:        #{resumed[:output]}"

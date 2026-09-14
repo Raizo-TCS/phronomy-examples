@@ -9,7 +9,7 @@
 # it rewrites the text and re-evaluates.
 #
 # Each Agent call is started in an entry action. Agent#invoke_async returns a
-# Task; Task completion is converted into a Workflow event. Transition actions
+# TaskResult; TaskResult completion is converted into a Workflow event. Transition actions
 # apply the Agent result to the context.
 
 require_relative "../shared/llm_config"
@@ -46,7 +46,7 @@ def event_payload!(event)
   payload
 end
 
-# workflow is captured by reference in the Task completion callbacks.
+# workflow is captured by reference in the TaskResult completion callbacks.
 workflow = nil
 workflow = Phronomy::Workflow.define(MyState) do
   initial :evaluate

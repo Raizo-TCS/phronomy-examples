@@ -5,6 +5,7 @@ root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$root_dir"
 
 python3 scripts/verify_current_api.py
+bundle exec ruby scripts/assert_composition_api.rb
 bundle exec ruby -e '
   require "rbconfig"
   files = Dir.glob("**/*.rb").reject { |path| path.split("/").include?("vendor") }

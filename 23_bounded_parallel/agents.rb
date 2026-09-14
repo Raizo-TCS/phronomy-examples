@@ -36,19 +36,18 @@ class ReviewOrchestrator < Phronomy::MultiAgent::Orchestrator
   provider LLMConfig::PROVIDER
   instructions "Coordinate product-review analysis tasks."
 
-  # Fan-out: run SentimentAgent on every review with at most 3 concurrent threads.
+  # Fan-out: run SentimentAgent on every review with at most 3 active Agent invocations.
   # on_error: :skip means a failed slot returns nil; the batch continues.
   def analyze_sentiments(reviews)
-    fan_out(
-      agent: SentimentAgent,
-      inputs: reviews,
+    dispatch_parallel(
+      *reviews.map { |review| {agent: SentimentAgent, input: review} },
       max_concurrency: 3,
       on_error: :skip
     )
   end
 
   # dispatch_parallel: heterogeneous agents on two different reviews.
-  # Cap at 2 concurrent threads; skip individual failures.
+  # Cap at 2 active Agent invocations; skip individual failures.
   def mixed_analysis(reviews)
     dispatch_parallel(
       {agent: SentimentAgent, input: reviews[0]},

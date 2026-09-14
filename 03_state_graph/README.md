@@ -10,8 +10,8 @@ if the score is below the threshold (and the iteration cap has not been
 reached), rewrites the text and re-evaluates — up to three times.
 
 Agent execution remains independent from Workflow state. Each entry starts an
-Agent with `invoke_async`, transforms its successful Task value with `Task#map`,
-and converts terminal Task completion into an explicit `Workflow#signal` event.
+Agent with `invoke_async`, transforms its successful TaskResult value with `TaskResult#map`,
+and converts terminal TaskResult completion into an explicit `Workflow#signal` event.
 Lifecycle events are not used because this example needs only terminal
 completion.
 
@@ -24,7 +24,7 @@ completion.
 | `transition` with `guard:` | Lambda-based conditional routing |
 | `Phronomy::Agent::Base` | `EvaluatorAgent` and `ImproverAgent` subclasses |
 | `Agent#invoke_async` | Starts Agent execution without blocking the Workflow entry |
-| `Task#map` / `Task#on_complete` | Transforms and observes terminal completion |
+| `TaskResult#map` / `TaskResult#on_complete` | Transforms and observes terminal completion |
 | `Workflow#signal` | Re-enters the Workflow through an explicit event |
 
 ## State Fields
@@ -65,7 +65,7 @@ Final text: "Ruby is an elegant, expressive language ..."
 ## Role and responsibility
 
 This is a basic composition example: the application explicitly chooses the
-completion event and payload for each Task. Several Tasks may be connected to
+completion event and payload for each TaskResult. Several Tasks may be connected to
 the same event name or to different names; reusing a name does not itself wait
 for all Tasks. State transitions remain defined in the application Workflow.
 No TaskEntry DSL, automatic business correlation or callback persistence is used.

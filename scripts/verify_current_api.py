@@ -21,6 +21,10 @@ def ruby_files():
 
 for path in ruby_files():
     text = path.read_text(encoding="utf-8")
+    if re.search(r"Phronomy::Task\b", text):
+        fail(path, "removed Phronomy::Task name remains; use Phronomy::TaskResult")
+    if re.search(r"\bfan_out(?:_async)?\s*\(", text):
+        fail(path, "removed fan_out API remains; use Execution or dispatch_parallel")
     if "Phronomy::Agent::Context::Capability::Base" in text:
         fail(path, "legacy Capability::Base spelling remains; use Phronomy::Tool::Base")
     if "Phronomy::Agent::Runner" in text:

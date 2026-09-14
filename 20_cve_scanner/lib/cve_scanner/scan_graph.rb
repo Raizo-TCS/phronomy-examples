@@ -6,11 +6,11 @@ module CveScanner
   MAX_LOOP_ITERATIONS = 10
 
   def self.completed_task(value, name: "cve-scanner-completed")
-    Phronomy::Task.completed(value, name: name)
+    Phronomy::TaskResult.completed(value, name: name)
   end
 
   def self.failed_task(error, name: "cve-scanner-failed")
-    Phronomy::Task.failed(error, name: name)
+    Phronomy::TaskResult.failed(error, name: name)
   end
 
   # Compatibility/injection seam used by this application and its tests.
@@ -40,14 +40,14 @@ module CveScanner
 
     return operation if operation.respond_to?(:on_complete)
 
-    Phronomy::Task.completed(operation, name: "cve-scanner-stub-#{role}")
+    Phronomy::TaskResult.completed(operation, name: "cve-scanner-stub-#{role}")
   rescue => error
-    Phronomy::Task.failed(error, name: "cve-scanner-agent-#{role}")
+    Phronomy::TaskResult.failed(error, name: "cve-scanner-agent-#{role}")
   end
 
   def self.start_agent_json_operation(agent_class, prompt, scan_id:, role:)
     if ENV["CVE_SCANNER_MOCK_LLM"].present?
-      return Phronomy::Task.completed(
+      return Phronomy::TaskResult.completed(
         mock_agent_response(agent_class, prompt, scan_id: scan_id, role: role),
         name: "cve-scanner-mock-#{role}"
       )
@@ -93,7 +93,7 @@ module CveScanner
       parse_agent_json_result(result, accumulated, scan_id: scan_id, role: role)
     end
   rescue => error
-    Phronomy::Task.failed(error, name: "cve-scanner-agent-#{role}")
+    Phronomy::TaskResult.failed(error, name: "cve-scanner-agent-#{role}")
   end
 
   def self.parse_agent_json_result(result, accumulated, scan_id:, role:)
@@ -395,7 +395,7 @@ module CveScanner
       vuln_status = best_available_status(state)
       message = "Check loop limit reached (#{MAX_LOOP_ITERATIONS}). Using best available assessment."
       ScanChannel.broadcast(scan_id, {type: "log", message: message}) if scan_id
-      return Phronomy::Task.completed(
+      return Phronomy::TaskResult.completed(
         state.merge(
           check_decision: "done",
           check_iteration: iteration,
@@ -458,14 +458,14 @@ module CveScanner
   end
 
   def self.node_evaluate_checks_async(state, scan_id:)
-    return Phronomy::Task.completed(state, name: "cve-scanner-evaluate-noop") if state.check_decision == "done" && state.approved_checks.empty?
+    return Phronomy::TaskResult.completed(state, name: "cve-scanner-evaluate-noop") if state.check_decision == "done" && state.approved_checks.empty?
 
     if state.approved_checks.empty?
       if state.check_iteration >= MAX_LOOP_ITERATIONS
         vuln_status = best_available_status(state)
         message = "Check loop limit reached (#{MAX_LOOP_ITERATIONS}). Using best available assessment."
         ScanChannel.broadcast(scan_id, {type: "log", message: message}) if scan_id
-        return Phronomy::Task.completed(
+        return Phronomy::TaskResult.completed(
           state.merge(
             check_decision: "done",
             vulnerability_status: vuln_status,
@@ -474,7 +474,7 @@ module CveScanner
           name: "cve-scanner-evaluate-limit"
         )
       end
-      return Phronomy::Task.completed(state.merge(check_decision: "need_more"), name: "cve-scanner-evaluate-empty")
+      return Phronomy::TaskResult.completed(state.merge(check_decision: "need_more"), name: "cve-scanner-evaluate-empty")
     end
 
     ScanChannel.broadcast(scan_id, {type: "agent_step", node: "evaluate_checks", message: "Analyst evaluating command outputs..."}) if scan_id
@@ -512,7 +512,7 @@ module CveScanner
     if iteration >= MAX_LOOP_ITERATIONS
       message = "Remediation loop limit reached (#{MAX_LOOP_ITERATIONS})."
       ScanChannel.broadcast(scan_id, {type: "log", message: message}) if scan_id
-      return Phronomy::Task.completed(
+      return Phronomy::TaskResult.completed(
         state.merge(
           remediation_decision: "complete",
           remediation_iteration: iteration,
@@ -570,7 +570,7 @@ module CveScanner
   end
 
   def self.node_evaluate_remediation_async(state, scan_id:)
-    return Phronomy::Task.completed(state.merge(remediation_decision: "complete"), name: "cve-scanner-remediation-noop") if state.approved_remediations.empty?
+    return Phronomy::TaskResult.completed(state.merge(remediation_decision: "complete"), name: "cve-scanner-remediation-noop") if state.approved_remediations.empty?
 
     ScanChannel.broadcast(
       scan_id,
@@ -609,7 +609,7 @@ module CveScanner
         {type: "followup_answer", role: "FollowupAgent", answer: farewell, decision: "done"}
       ) if scan_id
       new_history = state.followup_history + [{question: request, answer: farewell}]
-      return Phronomy::Task.completed(
+      return Phronomy::TaskResult.completed(
         state.merge(
           followup_decision: "done",
           followup_request: nil,

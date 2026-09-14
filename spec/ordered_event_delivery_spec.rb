@@ -104,7 +104,7 @@ RSpec.describe OrderedEventDelivery do
 
   it "reports worker admission failure without leaving flush pending" do
     failure = Phronomy::BackpressureError.new("pool full")
-    allow(Phronomy::Blocking).to receive(:call_async).and_return(Phronomy::Task.failed(failure))
+    allow(Phronomy::Blocking).to receive(:call_async).and_return(Phronomy::TaskResult.failed(failure))
     delivery = described_class.new { raise "must not deliver" }
     expect { delivery.publish(type: "done") }.to raise_error { |error| expect(error).to equal(failure) }
     expect { delivery.close_and_wait(timeout: 2) }.to raise_error { |error| expect(error).to equal(failure) }

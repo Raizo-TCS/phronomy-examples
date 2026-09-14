@@ -7,7 +7,7 @@
 #   :generate → :done → finish
 #
 # The entry action starts an async Agent call. Agent#invoke_async returns a
-# Phronomy::Task; Task completion is converted into an explicit Workflow event.
+# Phronomy::TaskResult; TaskResult completion is converted into an explicit Workflow event.
 # The transition action copies the Agent output into the context before the
 # :done entry runs.
 #
@@ -40,7 +40,7 @@ def event_payload!(event)
 end
 
 # app is assigned after Workflow.define so the completion callback captures it
-# by reference and can call app.signal when the Agent Task settles.
+# by reference and can call app.signal when the Agent TaskResult settles.
 app = nil
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate

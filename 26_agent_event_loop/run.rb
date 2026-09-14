@@ -9,7 +9,7 @@
 #     Agent#invoke_async -> structured on_event lifecycle events
 #
 #   Terminal completion coordination:
-#     Agent#invoke_async -> Task#on_complete -> Workflow#signal -> FSM transition
+#     Agent#invoke_async -> TaskResult#on_complete -> Workflow#signal -> FSM transition
 #
 # Also demonstrates explicit Workflow-instance correlation and timeout classification.
 
@@ -34,7 +34,7 @@ end
 puts "=== 26 Agent async events + Workflow coordination ==="
 puts
 
-puts "--- Pattern 1: invoke_async lifecycle event + Task result ---"
+puts "--- Pattern 1: invoke_async lifecycle event + TaskResult result ---"
 
 events = []
 agent = TranslationAgent.new(
@@ -56,7 +56,7 @@ puts "Journal pos.:  #{direct_result[:journal_position]}"
 puts "Events:       #{events.inspect}"
 puts
 
-puts "--- Pattern 2: Agent Task completion signals a Workflow ---"
+puts "--- Pattern 2: Agent TaskResult completion signals a Workflow ---"
 
 class TranslationState
   include Phronomy::WorkflowContext
@@ -114,7 +114,7 @@ translation_workflow = Phronomy::Workflow.define(TranslationState) do
 end
 
 workflow_result = OutputValidator.validate(
-  "Agent Task completion advances Workflow",
+  "Agent TaskResult completion advances Workflow",
   check: ->(r) { r.answer.to_s.length >= 2 }
 ) do
   translation_workflow.invoke(

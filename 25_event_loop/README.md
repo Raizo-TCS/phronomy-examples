@@ -12,7 +12,7 @@ Runtime
   │    └─ synchronous work that must stay off EventLoop
   └─ EventLoop-driven timers
 
-Task / PendingOperation = completion handles
+TaskResult / PendingOperation = completion handles
 ```
 
 ## Correct async Workflow pattern
@@ -36,7 +36,7 @@ This example demonstrates:
 - completion callbacks via `on_complete`
 - `Workflow#invoke_async`
 - `Workflow#signal`
-- external `Task#wait_result`
+- external `TaskResult#wait_result`
 - `Diagnostics.snapshot`
 
 `OffloadPool` is bounded synchronous-work isolation. It is not a scheduler for

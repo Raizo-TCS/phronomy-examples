@@ -3,7 +3,7 @@
 # 23 Bounded Parallel Dispatch
 #
 # Demonstrates the concurrency control keyword arguments added to
-# Phronomy::MultiAgent::Orchestrator#dispatch_parallel and #fan_out in v0.5.4:
+# Phronomy::MultiAgent::Orchestrator#dispatch_parallel:
 #
 #   max_concurrency: N  — cap the number of active child Agent invocations
 #   on_error: :skip     — fill failed task slots with nil; never raise
@@ -11,7 +11,7 @@
 #                         tasks complete (default)
 #
 # Scenario: a product-review pipeline that runs sentiment analysis on five
-# reviews using bounded FanOut coordination, then dispatches two different
+# reviews using Execution coordination, then dispatches two different
 # agents on selected reviews simultaneously (dispatch_parallel).
 
 require_relative "../shared/llm_config"
@@ -31,11 +31,11 @@ orchestrator = ReviewOrchestrator.new
 
 puts "=== 23 Bounded Parallel Dispatch ===\n\n"
 
-# ── Part 1: fan_out — same agent, 5 inputs, max 3 active child invocations ─────────
-puts "[1] Sentiment analysis — fan_out, max_concurrency: 3\n\n"
+# ── Part 1: dispatch_parallel — same agent, 5 inputs, max 3 active child invocations ─────────
+puts "[1] Sentiment analysis — dispatch_parallel, max_concurrency: 3\n\n"
 
 sentiments = OutputValidator.validate(
-  "fan_out returns 5 sentiment results",
+  "dispatch_parallel returns 5 sentiment results",
   check: ->(r) { r.compact.size >= 3 && r.compact.all? { |x| x[:output].length >= 5 } }
 ) { orchestrator.analyze_sentiments(REVIEWS) }
 

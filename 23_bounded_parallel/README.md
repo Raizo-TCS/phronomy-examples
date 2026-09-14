@@ -13,15 +13,15 @@ Demonstrates bounded child-Agent fan-out through
 - **`on_error: :raise`** — propagate the first child error according to the
   Orchestrator contract (default).
 
-The current implementation coordinates fan-out with a Phronomy FanOut
-FSMSession on the Runtime EventLoop. Child Agents retain their own Agent
+Orchestrator delegates fan-out and fan-in control to Phronomy::Execution.
+The existing max_concurrency limit bounds active child invocations. Child Agents retain their own Agent
 FSMSessions; unavoidable provider I/O is isolated by Phronomy's blocking-I/O
 boundary rather than by creating one application Thread per child.
 
 The scenario is a product-review pipeline. Five reviews are processed in two
 passes:
 
-1. **Part 1 (`fan_out`)** — runs `SentimentAgent` on all five reviews with at
+1. **Part 1 (`dispatch_parallel`)** — runs `SentimentAgent` on all five reviews with at
    most 3 active child invocations.
 2. **Part 2 (`dispatch_parallel`)** — runs `SentimentAgent` and
    `KeywordExtractor` on two different reviews with at most 2 active child
@@ -34,15 +34,15 @@ passes:
 | Base agent | `Phronomy::Agent::Base` | Superclass for `SentimentAgent` and `KeywordExtractor` |
 | Sentiment analysis agent | `SentimentAgent` | Classifies a review as POSITIVE, NEGATIVE, or NEUTRAL |
 | Keyword extraction agent | `KeywordExtractor` | Extracts the three most important keywords from a review |
-| Multi-agent orchestrator | `Phronomy::MultiAgent::Orchestrator` | Superclass for `ReviewOrchestrator`; provides `fan_out` and `dispatch_parallel` |
-| Homogeneous fan-out | `ReviewOrchestrator#analyze_sentiments` / `fan_out` | Runs the same Agent definition on multiple inputs with bounded active child invocations |
-| Heterogeneous fan-out | `ReviewOrchestrator#mixed_analysis` / `dispatch_parallel` | Runs different Agent definitions on different inputs through FanOut FSMSession |
+| Multi-agent orchestrator | `Phronomy::MultiAgent::Orchestrator` | Superclass for `ReviewOrchestrator`; provides `dispatch_parallel` |
+| Homogeneous fan-out | `ReviewOrchestrator#analyze_sentiments` / `dispatch_parallel` | Runs the same Agent definition on multiple inputs with bounded active child invocations |
+| Heterogeneous fan-out | `ReviewOrchestrator#mixed_analysis` / `dispatch_parallel` | Runs different Agent definitions on different inputs through the common Execution engine |
 | Output validation helper | `OutputValidator.validate` | Asserts post-conditions on fan-out results in the example script |
 
 ## How to Run
 
 ```bash
-cd /home/raizo-tcs/ruby_ai_agent_framework/phronomy-examples
+cd phronomy-examples
 bundle exec ruby 23_bounded_parallel/run.rb
 ```
 
@@ -54,7 +54,7 @@ via `shared/llm_config.rb`.
 ```text
 === 23 Bounded Parallel Dispatch ===
 
-[1] Sentiment analysis — fan_out, max_concurrency: 3
+[1] Sentiment analysis — dispatch_parallel, max_concurrency: 3
 
   Review 1: POSITIVE — customer loved the fast shipping and quality.
   Review 2: NEGATIVE — product broke after just one day of use.
@@ -73,3 +73,6 @@ Done.
 Actual wording varies by model. Any slot where the Agent fails is printed as
 `(skipped — agent returned nil)` or `(skipped)` rather than raising when the
 example selects `on_error: :skip`.
+
+For application-defined result conversion and asynchronous evaluation, see
+[32_async_composition](../32_async_composition/README.md).

@@ -33,7 +33,7 @@ via Blocking.call_async. The Rails-facing work runs inside the Rails executor.
 
 | Required property or selected policy | This example |
 |---|---|
-| Required runtime boundary | Never wait for network I/O, a Task, or queue space on EventLoop |
+| Required runtime boundary | Never wait for network I/O, a TaskResult, or queue space on EventLoop |
 | Display ordering | Serial broadcast calls in one adapter's acceptance order |
 | Buffer implementation | Process-local queue, copied plain payloads |
 | Resource setting | Up to 256 queued payloads, plus the batch currently being sent |
@@ -64,12 +64,12 @@ delivery. Agent semantic durability remains independent from notifications.
 
 ## Run and compare
 
-Use the framework checkout containing Task.completed/failed and Blocking.call_async
+Use the framework checkout containing TaskResult.completed/failed and Blocking.call_async
 via the shared PHRONOMY_PATH setting until a release containing them is selected.
 Run the Rails app normally, open the chat page and compare its two display modes.
 Both jobs use the same allowlist and keyword `stream:` as the controller.
 
-For a small Task-to-Workflow example, see [03_state_graph](../03_state_graph/README.md).
+For a small TaskResult-to-Workflow example, see [03_state_graph](../03_state_graph/README.md).
 For synchronous external work and explicit completion signals, see
 [25_event_loop](../25_event_loop/README.md). These are complementary examples, not
 requirements to copy the streaming adapter into every application.

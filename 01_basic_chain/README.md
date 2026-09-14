@@ -13,14 +13,14 @@ Workflow examples:
 
 ```text
 Agent#invoke_async
-  → Phronomy::Task
-  → Task#on_complete
+  → Phronomy::TaskResult
+  → TaskResult#on_complete
   → Workflow#signal
   → Workflow transition
 ```
 
-`Task` is only the completion handle. The Workflow continues through an explicit
-Workflow event; the Task does not become a Workflow execution primitive.
+`TaskResult` is only the completion handle. The Workflow continues through an explicit
+Workflow event; the TaskResult does not become a Workflow execution primitive.
 
 ## Phronomy Features
 
@@ -30,7 +30,7 @@ Workflow event; the Task does not become a Workflow execution primitive.
 | `Phronomy::Workflow.define` | Workflow definition API |
 | `initial` / `state` / `transition` | Assembles the pipeline |
 | `Phronomy::Agent::Base` | `CodeGeneratorAgent` drives the `:generate` node |
-| `Agent#invoke_async` / `Task#on_complete` | Observes terminal Agent completion without using lifecycle events |
+| `Agent#invoke_async` / `TaskResult#on_complete` | Observes terminal Agent completion without using lifecycle events |
 | `Workflow#signal` | Converts completion into an explicit Workflow event |
 | `invoke` | Executes the workflow with an initial state hash |
 

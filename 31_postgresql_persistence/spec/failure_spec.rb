@@ -11,7 +11,7 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     persistence.agents.create(root)
 
     error = begin
-      persistence.connection_pool.with_connection do |target_connection|
+      persistence.backend.connection_pool.with_connection do |target_connection|
         target_connection.transaction do
           pid = postgresql_backend_pid(target_connection)
 
@@ -26,8 +26,7 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
 
           tx =
             PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.build(
-              persistence: persistence,
-              connection_pool: persistence.connection_pool,
+              connection_pool: persistence.backend.connection_pool,
               connection: target_connection
             )
           tx.agents.load(root.agent_id)
@@ -39,9 +38,9 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     end
 
     expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
-    expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
+    expect(error).not_to be_a(Phronomy::Storage::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
-    expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)
+    expect(error).not_to be_a(Phronomy::Storage::NotFoundError)
   end
   it "does not relabel an unavailable PostgreSQL endpoint as an optimistic conflict" do
     const_name = :"PhronomyUnavailablePostgreSQLBase_#{SecureRandom.hex(8).upcase}"
@@ -52,9 +51,9 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     )
 
     error = begin
-      backend = PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+      backend = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
         connection_pool: record_class.connection_pool
-      )
+      ))
       backend.agents.load("connection-failure-probe")
       nil
     rescue StandardError => e
@@ -62,9 +61,9 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     end
 
     expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
-    expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
+    expect(error).not_to be_a(Phronomy::Storage::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
-    expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)
+    expect(error).not_to be_a(Phronomy::Storage::NotFoundError)
   ensure
     record_class&.connection_pool&.disconnect! rescue nil
     Object.send(:remove_const, const_name) if const_name && Object.const_defined?(const_name)

@@ -23,7 +23,7 @@ RSpec.shared_examples "a SQL coordination backend" do
     )
     expect_one_writer(results, Phronomy::AgentBusyError)
     winner = persistence.team_executions.list_active(coordination_team.team_id).fetch(0)
-    expect { persistence.team_executions.create_active(winner) }.to raise_error(Phronomy::Persistence::ConflictError)
+    expect { persistence.team_executions.create_active(winner) }.to raise_error(Phronomy::Storage::ConflictError)
     expect { persistence.team_executions.assert_idle!(coordination_team.team_id) }.to raise_error(Phronomy::AgentBusyError)
   end
 
@@ -33,7 +33,7 @@ RSpec.shared_examples "a SQL coordination backend" do
     expect_one_writer(run_concurrently(
       -> { persistence.teams.save(coordination_team.team_id, expected_revision: 0, root: updated) },
       -> { persistence.teams.save(coordination_team.team_id, expected_revision: 0, root: updated) }
-    ), Phronomy::Persistence::ConflictError)
+    ), Phronomy::Storage::ConflictError)
   end
 
   it "allows one Team terminal CAS writer and rejects terminal reactivation" do
@@ -43,12 +43,12 @@ RSpec.shared_examples "a SQL coordination backend" do
     expect_one_writer(run_concurrently(
       -> { persistence.team_executions.save(completed.team_execution_id, expected_revision: 0, execution: completed) },
       -> { persistence.team_executions.save(completed.team_execution_id, expected_revision: 0, execution: completed) }
-    ), Phronomy::Persistence::ConflictError)
+    ), Phronomy::Storage::ConflictError)
     expect(persistence.team_executions.assert_idle!(coordination_team.team_id)).to be(true)
     expect do
       persistence.team_executions.save(completed.team_execution_id, expected_revision: 1,
         execution: completed.with(status: "active", phase: "coordinator"))
-    end.to raise_error(Phronomy::Persistence::ConflictError)
+    end.to raise_error(Phronomy::Storage::ConflictError)
   end
 
   it "allows one initial Handoff writer and one later CAS writer" do
@@ -56,13 +56,13 @@ RSpec.shared_examples "a SQL coordination backend" do
     expect_one_writer(run_concurrently(
       -> { persistence.handoff_states.save(id, expected_revision: nil, state: coordination_handoff) },
       -> { persistence.handoff_states.save(id, expected_revision: nil, state: coordination_handoff) }
-    ), Phronomy::Persistence::ConflictError)
+    ), Phronomy::Storage::ConflictError)
     changed = coordination_handoff.with(phase: "stable")
     expect_one_writer(run_concurrently(
       -> { persistence.handoff_states.save(id, expected_revision: 1, state: changed) },
       -> { persistence.handoff_states.save(id, expected_revision: 1, state: changed) }
-    ), Phronomy::Persistence::ConflictError)
-    expect { persistence.handoff_states.delete(id, expected_revision: 1) }.to raise_error(Phronomy::Persistence::ConflictError)
+    ), Phronomy::Storage::ConflictError)
+    expect { persistence.handoff_states.delete(id, expected_revision: 1) }.to raise_error(Phronomy::Storage::ConflictError)
     expect(persistence.handoff_states.load(id).handoff_revision).to eq(2)
     persistence.handoff_states.delete(id, expected_revision: 2)
     expect(persistence.handoff_states.load(id)).to be_nil
@@ -86,8 +86,8 @@ RSpec.shared_examples "a SQL coordination backend" do
     persistence.teams.create(coordination_team)
     persistence.team_executions.create_active(coordination_run)
     persistence.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff)
-    persistence.connection_pool.disconnect!
-    restored = persistence.class.new(connection_pool: persistence.connection_pool)
+    persistence.backend.connection_pool.disconnect!
+    restored = Phronomy::Persistence.new(backend: persistence.backend.class.new(connection_pool: persistence.backend.connection_pool))
     expect(restored.teams.load(coordination_team.team_id).to_h).to eq(coordination_team.to_h)
     expect(restored.team_executions.load(coordination_run.team_execution_id).to_h).to eq(coordination_run.to_h)
     expect(restored.handoff_states.load(coordination_handoff.main_agent_id).to_h).to eq(coordination_handoff.to_h)
@@ -103,8 +103,8 @@ RSpec.shared_examples "a SQL coordination backend" do
         raise rollback_error, "rollback coordination writes"
       end
     end.to raise_error(rollback_error)
-    expect { persistence.teams.load(coordination_team.team_id) }.to raise_error(Phronomy::Persistence::NotFoundError)
-    expect { persistence.team_executions.load(coordination_run.team_execution_id) }.to raise_error(Phronomy::Persistence::NotFoundError)
+    expect { persistence.teams.load(coordination_team.team_id) }.to raise_error(Phronomy::Storage::NotFoundError)
+    expect { persistence.team_executions.load(coordination_run.team_execution_id) }.to raise_error(Phronomy::Storage::NotFoundError)
     expect(persistence.handoff_states.load(coordination_handoff.main_agent_id)).to be_nil
   end
 
@@ -114,11 +114,11 @@ RSpec.shared_examples "a SQL coordination backend" do
     persistence.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff)
     content_id = nil
     persistence.transaction do |tx|
-      expect { tx.teams.create(coordination_team) }.to raise_error(Phronomy::Persistence::ConflictError)
-      expect { tx.team_executions.create_active(coordination_run) }.to raise_error(Phronomy::Persistence::ConflictError)
+      expect { tx.teams.create(coordination_team) }.to raise_error(Phronomy::Storage::ConflictError)
+      expect { tx.team_executions.create_active(coordination_run) }.to raise_error(Phronomy::Storage::ConflictError)
       expect do
         tx.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff)
-      end.to raise_error(Phronomy::Persistence::ConflictError)
+      end.to raise_error(Phronomy::Storage::ConflictError)
       content_id = tx.contents.put_text("write after handled conflicts")
     end
     expect(persistence.contents.fetch_text(content_id)).to eq("write after handled conflicts")

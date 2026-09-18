@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       class ConnectionAccess
         def initialize(connection_pool:, connection: nil)
           @connection_pool = connection_pool

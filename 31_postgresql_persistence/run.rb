@@ -32,9 +32,9 @@ begin
   PhronomyExamples::Persistence::PostgreSQLSchema.apply!(first_pool)
 
   first_backend =
-    PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+    Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
       connection_pool: first_pool
-    )
+    ))
 
   root = Phronomy::Agent::AgentRoot.create(
     agent_id: "postgres-demo-agent-#{SecureRandom.uuid}",
@@ -107,9 +107,9 @@ begin
     build_pool(:PhronomyPostgreSQLDemoSecondBase, DATABASE_URL)
 
   second_backend =
-    PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+    Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
       connection_pool: second_pool
-    )
+    ))
 
   reloaded_root = second_backend.agents.load(root.agent_id)
   reloaded_execution = second_backend.executions.load(execution.execution_id)

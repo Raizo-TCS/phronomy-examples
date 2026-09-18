@@ -15,7 +15,7 @@ class ConversationsController < ApplicationController
     else
       @messages = []
     end
-  rescue Phronomy::Persistence::NotFoundError
+  rescue Phronomy::Storage::NotFoundError
     session[:agent_id] = nil
     @messages = []
   end

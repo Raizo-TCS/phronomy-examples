@@ -27,7 +27,7 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     pool.disconnect!
     LLMConfig.apply_phronomy_defaults!
 
-    restored = PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)
+    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored)] }
     loaded_edges = edges.map do |edge|
       Phronomy::Agent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
@@ -55,7 +55,7 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     pool.disconnect!
     LLMConfig.apply_phronomy_defaults!
 
-    restored = PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)
+    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     loaded = BlogWritingTeam.load(team.team_id, persistence: restored)
     expect(loaded.resume(run.team_execution_id)).to eq(result)
     expect(restored.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)

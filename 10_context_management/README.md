@@ -52,6 +52,6 @@ Run:
 bundle exec ruby 10_context_management/run.rb
 ```
 
-The example uses `Persistence::InMemory` so it is self-contained. Production
+The example uses `Persistence.in_memory` so it is self-contained. Production
 applications should provide a durable Persistence backend when process restart
 durability is required.

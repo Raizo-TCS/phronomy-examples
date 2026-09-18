@@ -47,7 +47,7 @@ class LocalLlmJudge
   end
 end
 
-IMPROVER_PERSISTENCE = Phronomy::Persistence::InMemory.new
+IMPROVER_PERSISTENCE = Phronomy::Persistence.in_memory
 CODE_OUTPUT_GUARDRAIL = CodeOutputGuardrail.new
 REVIEW_OVERHEAD_TOKENS = 200 + REVIEWER_MAX_OUTPUT_TOKENS
 
@@ -149,7 +149,7 @@ end
 def load_or_create_improver(snapshot)
   agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
   ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
-rescue Phronomy::Persistence::NotFoundError
+rescue Phronomy::Storage::NotFoundError
   ImproverAgent.create(
     agent_id: agent_id,
     knowledge: [IMPROVEMENT_POLICY],

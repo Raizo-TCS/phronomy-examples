@@ -5,7 +5,7 @@ require "phronomy"
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       CAPABILITIES = {
         atomic_all: true,
         atomic_admission: true,
@@ -38,7 +38,6 @@ module PhronomyExamples
         connection_pool.with_connection do |connection|
           connection.transaction do
             yield TransactionView.build(
-              persistence: self,
               connection_pool: connection_pool,
               connection: connection
             )
@@ -61,7 +60,7 @@ module PhronomyExamples
       def assert_sqlite_adapter!
         connection_pool.with_connection do |connection|
           return if connection.adapter_name == "SQLite"
-          raise Phronomy::Persistence::UnsupportedBackendError,
+          raise Phronomy::Storage::UnsupportedBackendError,
             "ActiveRecordSQLite requires the ActiveRecord SQLite adapter; got #{connection.adapter_name.inspect}"
         end
       end

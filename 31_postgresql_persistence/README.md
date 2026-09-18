@@ -59,7 +59,7 @@ PostgreSQL adds validation that SQLite cannot provide:
 - PostgreSQL deadlocks surface as storage/transaction failures and are not
   relabeled as optimistic conflicts;
 - an actual terminated database session is not translated into
-  `Persistence::ConflictError`.
+  `Storage::ConflictError`.
 
 ## Locking model
 
@@ -127,7 +127,7 @@ in addition to the Agent-row admission lock.
 
 ## Durable representation
 
-The backend implements Phronomy's record-oriented Persistence SPI. Except for the ContentStore, raw backend repositories persist opaque `Phronomy::Persistence::DurableRecord` envelopes. `agent_id`, revisions, Journal record IDs/positions, Execution admission metadata, and Workflow revisions are supplied separately as backend arguments; backend code does not decode Phronomy domain objects or inspect `DurableRecord#payload` to rediscover index semantics.
+The backend implements Phronomy's record-oriented Persistence SPI. Except for the ContentStore, raw backend repositories persist opaque `Phronomy::Storage::DurableRecord` envelopes. `agent_id`, revisions, Journal record IDs/positions, Execution admission metadata, and Workflow revisions are supplied separately as backend arguments; backend code does not decode Phronomy domain objects or inspect `DurableRecord#payload` to rediscover index semantics.
 
 Content bytes are stored as PostgreSQL `bytea`. The reference implementation
 uses PostgreSQL `decode(..., 'hex')` and `encode(..., 'hex')` so arbitrary binary
@@ -229,11 +229,11 @@ Portable contract failures are translated only when their meaning is known:
 
 | Condition | Result |
 |---|---|
-| missing durable record | `Persistence::NotFoundError` |
-| stale revision / Journal position | `Persistence::ConflictError` |
-| duplicate logical identity | `Persistence::ConflictError` |
+| missing durable record | `Storage::NotFoundError` |
+| stale revision / Journal position | `Storage::ConflictError` |
+| duplicate logical identity | `Storage::ConflictError` |
 | active Execution already exists for Agent | `Phronomy::AgentBusyError` |
-| unsupported Workflow value | `Persistence::SerializationError` |
+| unsupported Workflow value | `Storage::SerializationError` |
 | connection loss / server failure | database/storage exception |
 | PostgreSQL deadlock | `ActiveRecord::Deadlocked` |
 

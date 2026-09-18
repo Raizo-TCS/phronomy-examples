@@ -2,13 +2,13 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class AgentRepository < ConnectionAccess
         def create(agent_id:, agent_revision:, record:)
           key = String(agent_id)
           revision = Integer(agent_revision)
-          raise Phronomy::Persistence::ConflictError, "agent_id must not be empty" if key.empty?
-          raise Phronomy::Persistence::ConflictError, "agent_revision must be non-negative" if revision.negative?
+          raise Phronomy::Storage::ConflictError, "agent_id must not be empty" if key.empty?
+          raise Phronomy::Storage::ConflictError, "agent_revision must be non-negative" if revision.negative?
 
           inserted = with_write_connection do |connection|
             exec_query_sql(
@@ -20,7 +20,7 @@ module PhronomyExamples
             )
           end
           if inserted.empty?
-            raise Phronomy::Persistence::ConflictError, "Agent already exists: #{key}"
+            raise Phronomy::Storage::ConflictError, "Agent already exists: #{key}"
           end
           record.copy
         end
@@ -28,7 +28,7 @@ module PhronomyExamples
         def load(agent_id)
           row = with_read_connection { |connection| load_row_on(connection, agent_id) }
           unless row
-            raise Phronomy::Persistence::NotFoundError, "Agent not found: #{agent_id}"
+            raise Phronomy::Storage::NotFoundError, "Agent not found: #{agent_id}"
           end
           Codec.load_record(row.fetch("root_json"))
         end
@@ -37,7 +37,7 @@ module PhronomyExamples
           expected = Integer(expected_revision)
           next_value = Integer(next_revision)
           unless next_value == expected + 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Agent revision must advance exactly once"
           end
 
@@ -60,10 +60,10 @@ module PhronomyExamples
 
           return record.copy if outcome == :ok
           if outcome == :conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Agent revision for #{agent_id}"
           end
-          raise Phronomy::Persistence::NotFoundError, "Agent not found: #{agent_id}"
+          raise Phronomy::Storage::NotFoundError, "Agent not found: #{agent_id}"
         end
 
         def delete(agent_id)

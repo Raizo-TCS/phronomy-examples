@@ -47,7 +47,7 @@ module PhronomyExamples
       def assert_postgresql!(connection)
         return if connection.adapter_name == "PostgreSQL"
 
-        raise Phronomy::Persistence::UnsupportedBackendError,
+        raise Phronomy::Storage::UnsupportedBackendError,
               "PostgreSQLSchema requires the ActiveRecord PostgreSQL adapter"
       end
       private_class_method :assert_postgresql!

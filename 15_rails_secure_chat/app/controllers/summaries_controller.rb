@@ -28,7 +28,7 @@ class SummariesController < ApplicationController
     )
 
     render json: { summary: result.summary }
-  rescue Phronomy::Persistence::NotFoundError
+  rescue Phronomy::Storage::NotFoundError
     render json: { error: "No active conversation." }, status: :unprocessable_entity
   rescue => e
     Rails.logger.error("SummarizationGraph error: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join('\n')}")

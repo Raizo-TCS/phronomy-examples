@@ -5,6 +5,10 @@ on: [push, pull_request]
 permissions:
   contents: read
 
+# Temporary coordinated branch dependency for the Storage SPI migration.
+env:
+  PHRONOMY_PATH: ${{ github.workspace }}/vendor/phronomy
+
 jobs:
   current-api:
     runs-on: ubuntu-latest
@@ -14,10 +18,17 @@ jobs:
         ruby: ["3.2", "3.3", "3.4"]
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the matching core refactoring branch
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          ref: refactor/architecture
+          path: vendor/phronomy
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
+      - name: Install bundle against the checked-out core
+        run: bundle install
       - name: Install SQLite bundle
         run: cd 30_sqlite_persistence && bundle install
       - name: Check APIs, run CLI stubs, and validate SQLite persistence
@@ -37,10 +48,17 @@ jobs:
       PHRONOMY_API_KEY: test-only
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the matching core refactoring branch
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          ref: refactor/architecture
+          path: vendor/phronomy
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
-          bundler-cache: true
+      - name: Install bundle against the checked-out core
+        run: bundle install
       - name: Migrate and eager load the application
         run: |
           cd "${{ matrix.example }}"

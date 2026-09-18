@@ -2,19 +2,19 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       class ExecutionRepository < ConnectionAccess
         def create_active(execution_id:, agent_id:, execution_revision:, record:)
           execution_key = String(execution_id)
           agent_key = String(agent_id)
           revision = Integer(execution_revision)
-          raise Phronomy::Persistence::ConflictError, "execution_id must not be empty" if execution_key.empty?
-          raise Phronomy::Persistence::ConflictError, "agent_id must not be empty" if agent_key.empty?
-          raise Phronomy::Persistence::ConflictError, "execution_revision must be non-negative" if revision.negative?
+          raise Phronomy::Storage::ConflictError, "execution_id must not be empty" if execution_key.empty?
+          raise Phronomy::Storage::ConflictError, "agent_id must not be empty" if agent_key.empty?
+          raise Phronomy::Storage::ConflictError, "execution_revision must be non-negative" if revision.negative?
 
           with_write_connection do |connection|
             if execution_exists_on?(connection, execution_key)
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Execution already exists: #{execution_key}"
             end
             if active_for_agent_on?(connection, agent_key)
@@ -36,7 +36,7 @@ module PhronomyExamples
             raise Phronomy::AgentBusyError,
               "Agent already has an active execution: #{agent_key}"
           end
-          raise Phronomy::Persistence::ConflictError, e.message
+          raise Phronomy::Storage::ConflictError, e.message
         end
 
         def load(execution_id)
@@ -48,7 +48,7 @@ module PhronomyExamples
             )
           end
           unless row
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
               "Execution not found: #{execution_id}"
           end
           Codec.load_record(row.fetch("execution_json"))
@@ -58,11 +58,11 @@ module PhronomyExamples
           expected = Integer(expected_revision)
           next_value = Integer(next_revision)
           unless next_value == expected + 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution revision must advance exactly once"
           end
           unless active.equal?(true) || active.equal?(false)
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution active metadata must be true or false"
           end
 
@@ -92,13 +92,13 @@ module PhronomyExamples
           case outcome
           when :ok then record.copy
           when :not_found
-            raise Phronomy::Persistence::NotFoundError, "Execution not found: #{execution_id}"
+            raise Phronomy::Storage::NotFoundError, "Execution not found: #{execution_id}"
           when :identity_conflict
-            raise Phronomy::Persistence::ConflictError, "Execution Agent identity mismatch: #{execution_id}"
+            raise Phronomy::Storage::ConflictError, "Execution Agent identity mismatch: #{execution_id}"
           when :agent_busy
             raise Phronomy::AgentBusyError, "Agent already has an active execution: #{agent_id}"
           else
-            raise Phronomy::Persistence::ConflictError, "stale Execution revision for #{execution_id}"
+            raise Phronomy::Storage::ConflictError, "stale Execution revision for #{execution_id}"
           end
         end
 

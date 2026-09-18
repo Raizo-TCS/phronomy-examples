@@ -2,20 +2,20 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class ExecutionRepository < ConnectionAccess
         def create_active(execution_id:, agent_id:, execution_revision:, record:)
           execution_key = String(execution_id)
           agent_key = String(agent_id)
           revision = Integer(execution_revision)
-          raise Phronomy::Persistence::ConflictError, "execution_id must not be empty" if execution_key.empty?
-          raise Phronomy::Persistence::ConflictError, "agent_id must not be empty" if agent_key.empty?
-          raise Phronomy::Persistence::ConflictError, "execution_revision must be non-negative" if revision.negative?
+          raise Phronomy::Storage::ConflictError, "execution_id must not be empty" if execution_key.empty?
+          raise Phronomy::Storage::ConflictError, "agent_id must not be empty" if agent_key.empty?
+          raise Phronomy::Storage::ConflictError, "execution_revision must be non-negative" if revision.negative?
 
           with_write_connection do |connection|
             lock_agent_row!(connection, agent_key)
             if execution_exists_on?(connection, execution_key)
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Execution already exists: #{execution_key}"
             end
             if active_for_agent_on?(connection, agent_key)
@@ -34,14 +34,14 @@ module PhronomyExamples
             )
             if inserted.empty?
               if execution_exists_on?(connection, execution_key)
-                raise Phronomy::Persistence::ConflictError,
+                raise Phronomy::Storage::ConflictError,
                   "Execution already exists: #{execution_key}"
               end
               if active_for_agent_on?(connection, agent_key)
                 raise Phronomy::AgentBusyError,
                   "Agent already has an active execution: #{agent_key}"
               end
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Execution admission constraint conflict: #{execution_key}"
             end
           end
@@ -51,7 +51,7 @@ module PhronomyExamples
         def load(execution_id)
           row = with_read_connection { |connection| execution_row_on(connection, execution_id) }
           unless row
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
               "Execution not found: #{execution_id}"
           end
           Codec.load_record(row.fetch("execution_json"))
@@ -61,11 +61,11 @@ module PhronomyExamples
           expected = Integer(expected_revision)
           next_value = Integer(next_revision)
           unless next_value == expected + 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution revision must advance exactly once"
           end
           unless active.equal?(true) || active.equal?(false)
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution active metadata must be true or false"
           end
 
@@ -104,13 +104,13 @@ module PhronomyExamples
             raise Phronomy::AgentBusyError,
               "Agent already has an active execution: #{agent_id}"
           when :identity_conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution Agent identity mismatch for #{execution_id}"
           when :conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Execution revision for #{execution_id}"
           else
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
               "Execution not found: #{execution_id}"
           end
         end

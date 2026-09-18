@@ -15,7 +15,7 @@ class ConversationsController < ApplicationController
     else
       @messages = []
     end
-  rescue Phronomy::Persistence::NotFoundError
+  rescue Phronomy::Storage::NotFoundError
     session[:agent_id] = nil
     @messages = []
   end
@@ -36,7 +36,7 @@ class ConversationsController < ApplicationController
     agent.clear_transcript!
     session.delete(:agent_id)
     redirect_to root_path, notice: "Conversation cleared."
-  rescue Phronomy::Persistence::NotFoundError
+  rescue Phronomy::Storage::NotFoundError
     session.delete(:agent_id)
     redirect_to root_path
   end

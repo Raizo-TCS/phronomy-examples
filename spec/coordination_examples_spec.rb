@@ -67,7 +67,7 @@ RSpec.describe "Current coordination examples" do
   end
 
   it "can read a completed Team result again after Runtime restart without Provider calls" do
-    store = Phronomy::Persistence::InMemory.new
+    store = Phronomy::Persistence.in_memory
     stub = ExampleChatStub.new do |_request, index|
       case index
       when 0 then ExampleChatStub.tool("enqueue_task", description: "Write an introduction")

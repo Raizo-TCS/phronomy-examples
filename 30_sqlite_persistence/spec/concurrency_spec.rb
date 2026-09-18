@@ -36,7 +36,7 @@ RSpec.describe "ActiveRecord SQLite Persistence concurrency" do
     expect(results.count { |kind, _| kind == :ok }).to eq(1)
     errors = results.filter_map { |kind, value| value if kind == :error }
     expect(errors.length).to eq(1)
-    expect(errors.first).to be_a(Phronomy::Persistence::ConflictError)
+    expect(errors.first).to be_a(Phronomy::Storage::ConflictError)
     expect(persistence.agents.load(root.agent_id).agent_revision).to eq(1)
   end
 
@@ -67,7 +67,7 @@ RSpec.describe "ActiveRecord SQLite Persistence concurrency" do
     expect(results.count { |kind, _| kind == :ok }).to eq(1)
     errors = results.filter_map { |kind, value| value if kind == :error }
     expect(errors.length).to eq(1)
-    expect(errors.first).to be_a(Phronomy::Persistence::ConflictError)
+    expect(errors.first).to be_a(Phronomy::Storage::ConflictError)
     expect(
       persistence.executions.load(execution.execution_id).execution_revision
     ).to eq(1)
@@ -97,7 +97,7 @@ RSpec.describe "ActiveRecord SQLite Persistence concurrency" do
     expect(results.count { |kind, _| kind == :ok }).to eq(1)
     errors = results.filter_map { |kind, value| value if kind == :error }
     expect(errors.length).to eq(1)
-    expect(errors.first).to be_a(Phronomy::Persistence::ConflictError)
+    expect(errors.first).to be_a(Phronomy::Storage::ConflictError)
     expect(persistence.journals.head(root.agent_id)).to eq(1)
     expect(persistence.journals.read(root.agent_id).length).to eq(1)
   end
@@ -125,7 +125,7 @@ RSpec.describe "ActiveRecord SQLite Persistence concurrency" do
     expect(results.count { |kind, _| kind == :ok }).to eq(1)
     errors = results.filter_map { |kind, value| value if kind == :error }
     expect(errors.length).to eq(1)
-    expect(errors.first).to be_a(Phronomy::Persistence::ConflictError)
+    expect(errors.first).to be_a(Phronomy::Storage::ConflictError)
     expect(persistence.workflow_states.load(thread_id)[:revision]).to eq(1)
   end
 

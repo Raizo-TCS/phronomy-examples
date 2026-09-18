@@ -25,7 +25,7 @@ module PhronomyExamples
       def assert_sqlite!(connection)
         return if connection.adapter_name == "SQLite"
 
-        raise Phronomy::Persistence::UnsupportedBackendError,
+        raise Phronomy::Storage::UnsupportedBackendError,
               "SQLiteSchema requires the ActiveRecord SQLite adapter"
       end
       private_class_method :assert_sqlite!

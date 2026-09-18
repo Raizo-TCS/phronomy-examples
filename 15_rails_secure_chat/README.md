@@ -13,7 +13,7 @@ A Rails application showing trust boundaries around a stateful Phronomy Agent.
 | Caller metadata | `config: { user_id: }` | Propagates the supported caller identity metadata into the invocation |
 | Async summarization | `invoke_async` + `Workflow#signal` | Keeps Workflow state transitions event-driven |
 | Logical context clear | `agent.clear_transcript!` | Advances transcript generation without deleting Journal history |
-| Shared Persistence | `Persistence::InMemory` | Keeps Agent state in the Phronomy Persistence boundary for this demo |
+| Shared Persistence | `Persistence.in_memory` | Keeps Agent state in the Phronomy Persistence boundary for this demo |
 
 The security boundary is intentionally expressed through the current Filter API.
 The removed `Phronomy::Guardrail::*` hierarchy is not used.
@@ -24,7 +24,7 @@ the model.
 
 This demo intentionally has **no ActiveRecord checkpoint/message model for
 Phronomy state**. The Phronomy Agent Journal and Persistence backend are
-canonical. `Persistence::InMemory` is process-local and is cleared by a Rails
+canonical. `Persistence.in_memory` is process-local and is cleared by a Rails
 process restart. Use a durable Persistence backend when restart durability is
 required.
 

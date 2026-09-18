@@ -2,20 +2,20 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class TeamExecutionRepository < ConnectionAccess
         def create_active(team_execution_id:, team_id:, execution_revision:, record:)
           execution_key = String(team_execution_id)
           team_key = String(team_id)
           revision = Integer(execution_revision)
-          raise Phronomy::Persistence::ConflictError, "team_execution_id must not be empty" if execution_key.empty?
-          raise Phronomy::Persistence::ConflictError, "team_id must not be empty" if team_key.empty?
-          raise Phronomy::Persistence::ConflictError, "execution_revision must be non-negative" if revision.negative?
+          raise Phronomy::Storage::ConflictError, "team_execution_id must not be empty" if execution_key.empty?
+          raise Phronomy::Storage::ConflictError, "team_id must not be empty" if team_key.empty?
+          raise Phronomy::Storage::ConflictError, "execution_revision must be non-negative" if revision.negative?
 
           with_write_connection do |connection|
             lock_team_row!(connection, team_key)
             if execution_exists_on?(connection, execution_key)
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Execution already exists: #{execution_key}"
             end
             if active_for_team_on?(connection, team_key)
@@ -34,14 +34,14 @@ module PhronomyExamples
             )
             if inserted.empty?
               if execution_exists_on?(connection, execution_key)
-                raise Phronomy::Persistence::ConflictError,
+                raise Phronomy::Storage::ConflictError,
                   "Execution already exists: #{execution_key}"
               end
               if active_for_team_on?(connection, team_key)
                 raise Phronomy::AgentBusyError,
                   "Team already has an active execution: #{team_key}"
               end
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Execution admission constraint conflict: #{execution_key}"
             end
           end
@@ -51,7 +51,7 @@ module PhronomyExamples
         def load(team_execution_id)
           row = with_read_connection { |connection| execution_row_on(connection, team_execution_id) }
           unless row
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
               "Execution not found: #{team_execution_id}"
           end
           Codec.load_record(row.fetch("execution_json"))
@@ -61,11 +61,11 @@ module PhronomyExamples
           expected = Integer(expected_revision)
           next_value = Integer(next_revision)
           unless next_value == expected + 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution revision must advance exactly once"
           end
           unless active.equal?(true) || active.equal?(false)
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution active metadata must be true or false"
           end
 
@@ -78,7 +78,7 @@ module PhronomyExamples
             next :not_found unless stored
             next :identity_conflict unless stored.fetch("team_id") == team_id.to_s
             if active && !ActiveRecord::Type::Boolean.new.cast(stored.fetch("active"))
-              raise Phronomy::Persistence::ConflictError, "A terminal Team execution cannot become active"
+              raise Phronomy::Storage::ConflictError, "A terminal Team execution cannot become active"
             end
             if active && active_for_team_on?(connection, team_id, excluding_team_execution_id: team_execution_id)
               next :agent_busy
@@ -107,13 +107,13 @@ module PhronomyExamples
             raise Phronomy::AgentBusyError,
               "Team already has an active execution: #{team_id}"
           when :identity_conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Execution Team identity mismatch for #{team_execution_id}"
           when :conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Execution revision for #{team_execution_id}"
           else
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
               "Execution not found: #{team_execution_id}"
           end
         end

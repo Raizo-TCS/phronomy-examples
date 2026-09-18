@@ -2,13 +2,13 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class TeamRepository < ConnectionAccess
         def create(team_id:, team_revision:, record:)
           key = String(team_id)
           revision = Integer(team_revision)
-          raise Phronomy::Persistence::ConflictError, "team_id must not be empty" if key.empty?
-          raise Phronomy::Persistence::ConflictError, "team_revision must be non-negative" if revision.negative?
+          raise Phronomy::Storage::ConflictError, "team_id must not be empty" if key.empty?
+          raise Phronomy::Storage::ConflictError, "team_revision must be non-negative" if revision.negative?
 
           inserted = with_write_connection do |connection|
             exec_query_sql(
@@ -20,7 +20,7 @@ module PhronomyExamples
             )
           end
           if inserted.empty?
-            raise Phronomy::Persistence::ConflictError, "Team already exists: #{key}"
+            raise Phronomy::Storage::ConflictError, "Team already exists: #{key}"
           end
           record.copy
         end
@@ -28,7 +28,7 @@ module PhronomyExamples
         def load(team_id)
           row = with_read_connection { |connection| load_row_on(connection, team_id) }
           unless row
-            raise Phronomy::Persistence::NotFoundError, "Team not found: #{team_id}"
+            raise Phronomy::Storage::NotFoundError, "Team not found: #{team_id}"
           end
           Codec.load_record(row.fetch("root_json"))
         end
@@ -37,7 +37,7 @@ module PhronomyExamples
           expected = Integer(expected_revision)
           next_value = Integer(next_revision)
           unless next_value == expected + 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Team revision must advance exactly once"
           end
 
@@ -60,10 +60,10 @@ module PhronomyExamples
 
           return record.copy if outcome == :ok
           if outcome == :conflict
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Team revision for #{team_id}"
           end
-          raise Phronomy::Persistence::NotFoundError, "Team not found: #{team_id}"
+          raise Phronomy::Storage::NotFoundError, "Team not found: #{team_id}"
         end
 
         def delete(team_id)

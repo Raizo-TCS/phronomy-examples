@@ -1,3 +1,8 @@
+> Architecture refactoring snapshot: set `PHRONOMY_PATH` to the local phronomy
+> checkout with the Storage composition change applied. The published 0.26.0 gem
+> and unchanged backends use the previous SPI. Keep this example migration on a
+> separate branch until both repositories are ready for a coordinated release.
+
 # Phronomy Examples
 
 These examples use the TaskResult/Execution core at merged commit

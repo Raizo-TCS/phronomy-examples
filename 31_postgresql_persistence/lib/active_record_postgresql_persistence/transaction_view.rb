@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class TransactionView
         class Watermark < ConnectionAccess
           def assert_agent_watermark!(agent_id:, agent_revision:, journal_position:)
@@ -15,7 +15,7 @@ module PhronomyExamples
               )
               actual_revision = Integer(row.fetch("revision"))
               unless actual_revision == Integer(agent_revision)
-                raise Phronomy::Persistence::ConflictError,
+                raise Phronomy::Storage::ConflictError,
                   "Agent revision watermark mismatch for #{agent_id}: expected #{agent_revision}, current #{actual_revision}"
               end
 
@@ -26,7 +26,7 @@ module PhronomyExamples
               )
               actual_position = head ? Integer(head.fetch("position")) : 0
               unless actual_position == Integer(journal_position)
-                raise Phronomy::Persistence::ConflictError,
+                raise Phronomy::Storage::ConflictError,
                   "Journal position watermark mismatch for #{agent_id}: expected #{journal_position}, current #{actual_position}"
               end
             end
@@ -34,7 +34,7 @@ module PhronomyExamples
           end
         end
 
-        def self.build(persistence:, connection_pool:, connection:)
+        def self.build(connection_pool:, connection:)
           contents = ContentRepository.new(connection_pool: connection_pool, connection: connection)
           agents = AgentRepository.new(connection_pool: connection_pool, connection: connection)
           journals = JournalRepository.new(connection_pool: connection_pool, connection: connection)
@@ -45,7 +45,7 @@ module PhronomyExamples
           team_executions = TeamExecutionRepository.new(connection_pool: connection_pool, connection: connection)
           watermark = Watermark.new(connection_pool: connection_pool, connection: connection)
 
-          persistence.build_transaction_view(
+          Phronomy::Storage::Repositories.new(
             contents: contents,
             agents: agents,
             journals: journals,

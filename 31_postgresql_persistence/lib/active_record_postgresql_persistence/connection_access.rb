@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Persistence
+    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
       class ConnectionAccess
         def initialize(connection_pool:, connection: nil)
           @connection_pool = connection_pool
@@ -73,7 +73,7 @@ module PhronomyExamples
           row = lock_agent_row(connection, agent_id)
           return row if row
 
-          raise Phronomy::Persistence::NotFoundError,
+          raise Phronomy::Storage::NotFoundError,
                 "Agent not found: #{agent_id}"
         end
 
@@ -91,7 +91,7 @@ module PhronomyExamples
           row = lock_team_row(connection, team_id)
           return row if row
 
-          raise Phronomy::Persistence::NotFoundError,
+          raise Phronomy::Storage::NotFoundError,
                 "Team not found: #{team_id}"
         end
 

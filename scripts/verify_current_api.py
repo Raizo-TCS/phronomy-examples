@@ -49,7 +49,7 @@ for path in ruby_files():
         fail(path, "removed approval listener API remains")
     if any(part in path.parts for part in ["30_sqlite_persistence", "31_postgresql_persistence"]):
         if "::TransactionView.new(" in text:
-            fail(path, "SQL TransactionView must be created with .build(persistence:, connection_pool:, connection:)")
+            fail(path, "SQL TransactionView must be created with .build(connection_pool:, connection:)")
 
 
     # Helper methods that bridge async completion back into Workflow#signal must
@@ -90,6 +90,9 @@ for root_name in ["30_sqlite_persistence", "31_postgresql_persistence"]:
     for path in lib.rglob("*.rb"):
         text = path.read_text(encoding="utf-8")
         for stale in [
+            "< Phronomy::Persistence",
+            "Phronomy::Persistence::",
+            "build_transaction_view",
             "Codec.dump_domain",
             "Codec.load_agent_root",
             "Codec.load_journal_record",
@@ -102,7 +105,7 @@ for root_name in ["30_sqlite_persistence", "31_postgresql_persistence"]:
     codec_files = list(lib.rglob("codec.rb"))
     for path in codec_files:
         text = path.read_text(encoding="utf-8")
-        if "Phronomy::Persistence::DurableRecord" not in text:
+        if "Phronomy::Storage::DurableRecord" not in text:
             fail(path, "DurableRecord envelope codec is missing")
 
 if failures:

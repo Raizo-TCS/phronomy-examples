@@ -28,9 +28,9 @@ module SQLitePersistenceDemo
     PhronomyExamples::Persistence::SQLiteSchema.apply!(pool)
 
     backend =
-      PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
         connection_pool: pool
-      )
+      ))
 
     suffix = SecureRandom.hex(4)
     root = Phronomy::Agent::AgentRoot.create(
@@ -83,9 +83,9 @@ module SQLitePersistenceDemo
 
     connect(database_path)
     reloaded =
-      PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
         connection_pool: Record.connection_pool
-      )
+      ))
 
     loaded_root = reloaded.agents.load(root.agent_id)
     loaded_workflow = reloaded.workflow_states.load(workflow_instance_id)

@@ -61,9 +61,9 @@ A caller injects a connection pool:
 
 ```ruby
 backend =
-  PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+  Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
     connection_pool: ActiveRecord::Base.connection_pool
-  )
+  ))
 ```
 
 Example `09_rails_chat` uses exactly this constructor with its Rails primary
@@ -77,7 +77,7 @@ start instead of relying on a later deferred read-to-write upgrade.
 
 This reference backend still treats SQLite lock/busy failures as storage
 failures. It does **not** translate `SQLITE_BUSY` into
-`Phronomy::Persistence::ConflictError`.
+`Phronomy::Storage::ConflictError`.
 
 Optimistic conflicts are only the portable Phronomy precondition failures such
 as stale revisions and stale Journal positions.
@@ -94,13 +94,13 @@ of status constants.
 The repository also performs the normal semantic checks so it can translate
 conflicts into the portable errors:
 
-- duplicate `execution_id` → `Persistence::ConflictError`
+- duplicate `execution_id` → `Storage::ConflictError`
 - another active execution for the Agent → `Phronomy::AgentBusyError`
 
 ## Durable representation
 
 Except for content bytes, the raw backend stores opaque
-`Phronomy::Persistence::DurableRecord` envelopes. Phronomy owns domain encoding,
+`Phronomy::Storage::DurableRecord` envelopes. Phronomy owns domain encoding,
 decoding, and compatibility validation. Identity, revision, journal position,
 and active-execution metadata arrive as separate repository arguments. The
 backend's Codec serializes the envelope and does not inspect domain payloads.
@@ -201,7 +201,7 @@ It does not require an LLM API key.
 ```
 
 `29_unified_persistence` remains the compact architecture example and uses
-`Persistence::InMemory` intentionally.
+`Persistence.in_memory` intentionally.
 
 ## Rails integration
 
@@ -212,9 +212,9 @@ repository classes into the Rails application.
 The Rails initializer injects:
 
 ```ruby
-PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
   connection_pool: ActiveRecord::Base.connection_pool
-)
+))
 ```
 
 and Rails owns schema provisioning through its migration. The controllers keep

@@ -2,17 +2,17 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       class JournalRepository < ConnectionAccess
         def append(agent_id, expected_position:, records:, record_ids:)
           encoded = Array(records)
           ids = Array(record_ids).map(&:to_s)
           unless encoded.length == ids.length
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Journal records/record_ids length mismatch"
           end
           if ids.any?(&:empty?) || ids.uniq.length != ids.length
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Journal record_ids must be non-empty and unique"
           end
 
@@ -20,7 +20,7 @@ module PhronomyExamples
             ensure_head!(connection, agent_id)
             current_position = head_on(connection, agent_id)
             unless current_position == Integer(expected_position)
-              raise Phronomy::Persistence::ConflictError,
+              raise Phronomy::Storage::ConflictError,
                 "Journal position mismatch for #{agent_id}: expected #{expected_position}, current #{current_position}"
             end
             reject_existing_record_ids!(connection, agent_id, ids)
@@ -46,14 +46,14 @@ module PhronomyExamples
                 "AND position = #{Integer(expected_position)}"
               )
               unless affected == 1
-                raise Phronomy::Persistence::ConflictError,
+                raise Phronomy::Storage::ConflictError,
                   "Journal position changed while appending for #{agent_id}"
               end
             end
           end
           encoded.map(&:copy).freeze
         rescue ActiveRecord::RecordNotUnique => e
-          raise Phronomy::Persistence::ConflictError,
+          raise Phronomy::Storage::ConflictError,
             "duplicate Journal identity for #{agent_id}: #{e.message}"
         end
 
@@ -109,7 +109,7 @@ module PhronomyExamples
               "AND record_id = #{quote_value(connection, record_id)} LIMIT 1"
             )
             next unless row
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "duplicate Journal record_id for #{agent_id}: #{record_id}"
           end
         end

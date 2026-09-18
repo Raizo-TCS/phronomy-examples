@@ -2,7 +2,7 @@
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       class WorkflowStateRepository < ConnectionAccess
         def load(workflow_instance_id)
           row = with_read_connection do |connection|
@@ -20,7 +20,7 @@ module PhronomyExamples
           next_value = Integer(next_revision)
           expected_next = expected.nil? ? 1 : expected + 1
           unless next_value == expected_next
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "Workflow revision must advance exactly once"
           end
 
@@ -46,12 +46,12 @@ module PhronomyExamples
             )
           end
           unless affected == 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Workflow revision for #{workflow_instance_id}"
           end
           record.copy
         rescue ActiveRecord::RecordNotUnique
-          raise Phronomy::Persistence::ConflictError,
+          raise Phronomy::Storage::ConflictError,
             "Workflow state already exists: #{workflow_instance_id}"
         end
 
@@ -65,7 +65,7 @@ module PhronomyExamples
             )
           end
           unless affected == 1
-            raise Phronomy::Persistence::ConflictError,
+            raise Phronomy::Storage::ConflictError,
               "stale Workflow revision for #{workflow_instance_id}"
           end
           nil

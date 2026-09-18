@@ -75,6 +75,6 @@ RSpec.describe "ActiveRecord SQLite Persistence durability" do
         expected_revision: nil,
         snapshot: {fields: {object: Object.new}, phase: "pause"}
       )
-    end.to raise_error(Phronomy::Persistence::SerializationError)
+    end.to raise_error(Phronomy::Storage::SerializationError)
   end
 end

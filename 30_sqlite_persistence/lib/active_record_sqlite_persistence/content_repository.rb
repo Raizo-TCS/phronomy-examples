@@ -4,7 +4,7 @@ require "digest"
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
+    class ActiveRecordSQLite < Phronomy::Storage::Backend
       class ContentRepository < Phronomy::ContentStore::Base
         def initialize(connection_pool:, connection: nil)
           @access = ConnectionAccess.new(
@@ -52,7 +52,7 @@ module PhronomyExamples
           end
 
           unless row
-            raise Phronomy::Persistence::NotFoundError,
+            raise Phronomy::Storage::NotFoundError,
                   "content not found: #{content_id}"
           end
 

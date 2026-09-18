@@ -19,3 +19,9 @@ abort "The selected core lacks Storage composition; set PHRONOMY_PATH to the mat
 abort "The selected core still exposes the replaced Persistence Backend SPI" if
   Phronomy::Persistence.const_defined?(:InMemory, false) || Phronomy::Persistence.method_defined?(:build_transaction_view)
 puts "Storage/Persistence composition API preflight PASS"
+
+abort "The selected core lacks MultiAgent::HandoffRunner; set PHRONOMY_PATH to the matching refactoring checkout" unless
+  Phronomy::MultiAgent.const_defined?(:HandoffRunner, false)
+abort "The selected core still exposes Agent::HandoffRunner" if
+  Phronomy::Agent.const_defined?(:HandoffRunner, false)
+puts "MultiAgent HandoffRunner API preflight PASS"

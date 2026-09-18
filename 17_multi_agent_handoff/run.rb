@@ -3,7 +3,7 @@
 
 # 17 Multi-Agent Handoff
 #
-# Demonstrates Phronomy::Agent::HandoffRunner and explicit Handoff edges.
+# Demonstrates Phronomy::MultiAgent::HandoffRunner and explicit Handoff edges.
 # A TriageAgent receives all user queries and may transfer responsibility to
 # BillingAgent or TechSupportAgent through framework-generated handoff tools.
 

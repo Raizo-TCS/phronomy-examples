@@ -55,6 +55,6 @@ module HandoffDemo
       Phronomy::Agent::Handoff.new(source_agent: triage, target_agent: tech,
         description: "Transfer software errors, crashes, bugs, and technical-support requests.")
     ]
-    Phronomy::Agent::HandoffRunner.new(main_agent: triage, handoffs: handoffs)
+    Phronomy::MultiAgent::HandoffRunner.new(main_agent: triage, handoffs: handoffs)
   end
 end

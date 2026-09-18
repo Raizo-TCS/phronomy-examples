@@ -33,7 +33,7 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
       Phronomy::Agent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
         target_agent: owners.fetch(edge.target_agent.agent_id), description: edge.description)
     end
-    loaded = Phronomy::Agent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges)
+    loaded = Phronomy::MultiAgent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges)
     expect(loaded.invoke("Here is another invoice detail").fetch(:agent).agent_id).to eq(first.fetch(:agent).agent_id)
     expect(stub.calls.length).to eq(3)
   end

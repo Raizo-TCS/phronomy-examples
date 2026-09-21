@@ -19,7 +19,7 @@ module PhronomyExamples
                 "Execution already exists: #{execution_key}"
             end
             if active_for_team_on?(connection, team_key)
-              raise Phronomy::AgentBusyError,
+              raise Phronomy::Storage::ActiveExecutionConflictError,
                 "Team already has an active execution: #{team_key}"
             end
 
@@ -38,7 +38,7 @@ module PhronomyExamples
                   "Execution already exists: #{execution_key}"
               end
               if active_for_team_on?(connection, team_key)
-                raise Phronomy::AgentBusyError,
+                raise Phronomy::Storage::ActiveExecutionConflictError,
                   "Team already has an active execution: #{team_key}"
               end
               raise Phronomy::Storage::ConflictError,
@@ -104,7 +104,7 @@ module PhronomyExamples
           case outcome
           when :ok then record.copy
           when :agent_busy
-            raise Phronomy::AgentBusyError,
+            raise Phronomy::Storage::ActiveExecutionConflictError,
               "Team already has an active execution: #{team_id}"
           when :identity_conflict
             raise Phronomy::Storage::ConflictError,
@@ -149,7 +149,7 @@ module PhronomyExamples
             active_for_team_on?(connection, team_id)
           end
           if busy
-            raise Phronomy::AgentBusyError,
+            raise Phronomy::Storage::ActiveExecutionConflictError,
               "Team already has an active execution: #{team_id}"
           end
           true

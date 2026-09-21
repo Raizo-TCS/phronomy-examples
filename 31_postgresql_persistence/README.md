@@ -280,3 +280,19 @@ subordinate Team execution rows, just as Agent admission locks an Agent row.
 Different Team rows can progress independently. Initial Handoff/Team conflicts
 use `ON CONFLICT DO NOTHING` so a caller can handle an expected conflict without
 leaving the surrounding PostgreSQL transaction aborted.
+
+## Storage constraint notification migration
+
+This backend requires a core revision providing
+`Phronomy::Storage::ActiveExecutionConflictError` (ADR-043). For source checkout
+verification, set `PHRONOMY_PATH` to that updated core before resolving the bundle
+and running the specs. Apply the core update before this backend update.
+
+Raw execution repository calls now raise that Storage-owned `ConflictError`
+subtype for an existing nonterminal execution. Domain calls through
+`Phronomy::Persistence` continue to raise `Phronomy::AgentBusyError`, with the
+storage exception retained as `cause`. Direct raw callers must update their
+rescue; duplicate IDs and revision conflicts remain ordinary `ConflictError`.
+SQL, indexes, schemas, lock/transaction boundaries and record formats are unchanged.
+The shared `a Persistence backend` suite checks both raw notification and rollback;
+existing domain, transaction, concurrency and failure specs still apply.

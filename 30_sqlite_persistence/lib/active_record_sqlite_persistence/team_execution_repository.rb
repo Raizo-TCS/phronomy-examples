@@ -18,7 +18,7 @@ module PhronomyExamples
                 "Execution already exists: #{execution_key}"
             end
             if active_for_team_on?(connection, team_key)
-              raise Phronomy::AgentBusyError,
+              raise Phronomy::Storage::ActiveExecutionConflictError,
                 "Team already has an active execution: #{team_key}"
             end
             execute_sql(
@@ -33,7 +33,7 @@ module PhronomyExamples
           record.copy
         rescue ActiveRecord::RecordNotUnique => e
           if active_for_team?(team_key)
-            raise Phronomy::AgentBusyError,
+            raise Phronomy::Storage::ActiveExecutionConflictError,
               "Team already has an active execution: #{team_key}"
           end
           raise Phronomy::Storage::ConflictError, e.message
@@ -99,7 +99,7 @@ module PhronomyExamples
           when :identity_conflict
             raise Phronomy::Storage::ConflictError, "Execution Team identity mismatch: #{team_execution_id}"
           when :agent_busy
-            raise Phronomy::AgentBusyError, "Team already has an active execution: #{team_id}"
+            raise Phronomy::Storage::ActiveExecutionConflictError, "Team already has an active execution: #{team_id}"
           else
             raise Phronomy::Storage::ConflictError, "stale Execution revision for #{team_execution_id}"
           end
@@ -133,7 +133,7 @@ module PhronomyExamples
         def assert_idle!(team_id)
           busy = with_write_connection { |connection| active_for_team_on?(connection, team_id) }
           if busy
-            raise Phronomy::AgentBusyError,
+            raise Phronomy::Storage::ActiveExecutionConflictError,
               "Team already has an active execution: #{team_id}"
           end
           true

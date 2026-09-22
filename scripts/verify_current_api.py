@@ -29,7 +29,7 @@ for path in ruby_files():
         fail(path, "legacy Capability::Base spelling remains; use Phronomy::Tool::Base")
     if "Phronomy::Agent::Runner" in text:
         fail(path, "removed Agent::Runner namespace remains")
-    for removed in ["Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner", "Phronomy::MultiAgent::Handoff", "Phronomy::MultiAgent::HandoffPolicy"]:
+    for removed in ["Phronomy::Agent::SharedState", "Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner", "Phronomy::MultiAgent::Handoff", "Phronomy::MultiAgent::HandoffPolicy"]:
         if re.search(rf"{re.escape(removed)}\b", text):
             fail(path, f"removed coordination API remains: {removed}")
     if re.search(r"class\s+\w+\s*<\s*Phronomy::MultiAgent::TeamCoordinator", text):

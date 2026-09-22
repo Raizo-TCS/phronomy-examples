@@ -25,3 +25,9 @@ abort "The selected core lacks MultiAgent::HandoffRunner; set PHRONOMY_PATH to t
 abort "The selected core still exposes Agent::HandoffRunner" if
   Phronomy::Agent.const_defined?(:HandoffRunner, false)
 puts "MultiAgent HandoffRunner API preflight PASS"
+
+abort "The selected core lacks MultiAgent::SharedState; set PHRONOMY_PATH to the matching refactoring checkout" unless
+  Phronomy::MultiAgent.const_defined?(:SharedState, false)
+abort "The selected core still exposes Agent::SharedState" if
+  Phronomy::Agent.const_defined?(:SharedState, false)
+puts "MultiAgent SharedState API preflight PASS"

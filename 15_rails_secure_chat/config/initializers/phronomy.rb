@@ -3,18 +3,12 @@
 # Phronomy configuration initializer for 15_rails_secure_chat.
 # Demonstrates NIST AI RMF trustworthy-AI enhancements.
 
+require_relative "../../../shared/llm_config"
+
+LLM_MODEL = LLMConfig::MODEL
+
 Phronomy.configure do |config|
-  config.default_model = "openai/gpt-oss-20b"
-end
-
-# LLM provider settings (LM Studio compatible).
-LLM_MODEL    = "openai/gpt-oss-20b"
-LLM_BASE_URL = "http://192.168.122.1:1234/v1"
-LLM_API_KEY  = "lm-studio"
-
-RubyLLM.configure do |c|
-  c.openai_api_key  = LLM_API_KEY
-  c.openai_api_base = LLM_BASE_URL
+  config.default_model = LLM_MODEL
 end
 
 # Feature D: TTL in seconds.
@@ -28,5 +22,5 @@ module PhronomyStore
     attr_reader :persistence
   end
 
-  @persistence = Phronomy::Persistence::InMemory.new
+  @persistence = Phronomy::Persistence.in_memory
 end

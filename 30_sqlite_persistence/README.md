@@ -1,6 +1,6 @@
 # 30 — SQLite Persistence reference backend
 
-This example implements the public `Phronomy::Persistence` Backend SPI with a
+This example composes `Phronomy::Persistence` over neutral Storage SPI 2 with a
 real durable database:
 
 ```text
@@ -18,7 +18,7 @@ server.
 
 ## Scope
 
-The example implements:
+The composed Persistence facade exposes:
 
 - `contents`
 - `agents`
@@ -41,8 +41,7 @@ and advertises all required capabilities:
 }
 ```
 
-The backend depends only on Phronomy's public Persistence SPI and public durable
-domain codecs. It does not access Runtime, EventLoop, FSMSession, live
+The physical driver depends on the neutral Storage SPI. Domain codecs belong to core repositories. It does not access Runtime, EventLoop, FSMSession, live
 Activation objects, or other execution internals.
 
 ## Why ActiveRecord but not Rails?
@@ -61,9 +60,9 @@ A caller injects a connection pool:
 
 ```ruby
 backend =
-  PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+  Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
     connection_pool: ActiveRecord::Base.connection_pool
-  )
+  ))
 ```
 
 Example `09_rails_chat` uses exactly this constructor with its Rails primary
@@ -77,7 +76,7 @@ start instead of relying on a later deferred read-to-write upgrade.
 
 This reference backend still treats SQLite lock/busy failures as storage
 failures. It does **not** translate `SQLITE_BUSY` into
-`Phronomy::Persistence::ConflictError`.
+`Phronomy::Storage::ConflictError`.
 
 Optimistic conflicts are only the portable Phronomy precondition failures such
 as stale revisions and stale Journal positions.
@@ -94,13 +93,13 @@ of status constants.
 The repository also performs the normal semantic checks so it can translate
 conflicts into the portable errors:
 
-- duplicate `execution_id` → `Persistence::ConflictError`
+- duplicate `execution_id` → `Storage::ConflictError`
 - another active execution for the Agent → `Phronomy::AgentBusyError`
 
 ## Durable representation
 
 Except for content bytes, the raw backend stores opaque
-`Phronomy::Persistence::DurableRecord` envelopes. Phronomy owns domain encoding,
+`Phronomy::Storage::DurableRecord` envelopes. Phronomy owns domain encoding,
 decoding, and compatibility validation. Identity, revision, journal position,
 and active-execution metadata arrive as separate repository arguments. The
 backend's Codec serializes the envelope and does not inspect domain payloads.
@@ -201,7 +200,7 @@ It does not require an LLM API key.
 ```
 
 `29_unified_persistence` remains the compact architecture example and uses
-`Persistence::InMemory` intentionally.
+`Persistence.in_memory` intentionally.
 
 ## Rails integration
 
@@ -212,9 +211,9 @@ repository classes into the Rails application.
 The Rails initializer injects:
 
 ```ruby
-PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
   connection_pool: ActiveRecord::Base.connection_pool
-)
+))
 ```
 
 and Rails owns schema provisioning through its migration. The controllers keep
@@ -267,3 +266,35 @@ Example 09 uses its dedicated Rails migration instead.
 Shared SQL regressions cover concurrent initial saves/CAS/admission, terminal
 protection, pagination, and reconnecting all three coordination repositories.
 Phronomy's authoritative contract verifies rollback across all eight repositories.
+
+## Refactor 35: neutral Storage SPI 2
+
+Apply the matching core update and set PHRONOMY_PATH before resolving dependencies.
+The core requires spi_version 2 and neutral atomic_resources, record_cas,
+stream_cas, conditional_unique, guarded_checks and nested_savepoints capabilities.
+Public Persistence retains its existing eight domain repositories and three
+capability names. Raw Backend exposes a View with Records, Streams and Blobs.
+
+The driver is shared in ../shared/storage. Domain resources and existing table
+names are wired separately in ../shared/persistence_storage_mapping.rb. The
+physical driver has no domain resource-ID switch, domain codec, active-state
+interpretation, content digest or Agent watermark API. Table/index definitions,
+record type/version/payload and content bytes are unchanged.
+
+UniqueConstraintError carries a resource ID and named constraint. Domain wrappers
+translate only their active-owner constraint to AgentBusyError. Parent guards,
+CAS and partial unique indexes remain atomic. NoRows and revision/head conditions
+are checked after locking their stable anchors. Required missing parents raise
+NotFoundError consistently across drivers.
+
+Nested transactions use same-connection savepoints. Catch errors outside the
+inner scope if the outer transaction should continue. A failed physical scope
+rejects further operations and successful commit; do not catch and ignore an
+operation error inside it. ActiveRecord::Rollback propagates. Non-local return,
+break and throw cause TransactionError and rollback. Bound views/handles expire
+at scope exit and reject cross-thread use; cached root handles join the current
+transaction. Complete stream batches are validated before writes.
+
+Run the shipped neutral/domain contracts and the database-specific tests against
+the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
+locking, deadlock, connection-failure and fresh-pool tests remain a release gate.

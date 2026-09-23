@@ -1,9 +1,28 @@
+> Refactor 45 snapshot: use `PHRONOMY_PATH` to select a core checkout with the
+> RubyLLM 2.0 migration applied. These examples and the core must be updated together.
+> The published 0.26.0 gem does not contain this candidate. Complete old in-flight
+> Tool executions before upgrading; see the core migration guide.
+
 # Phronomy Examples
 
-These examples use the TaskResult/Execution core at merged commit
-`d9f8962fe064b4a7c8fd82fa6444e52f184b4d6e` through the shared `Gemfile.phronomy` dependency.
-All seven lockfiles must use that revision. For local development, explicitly
-set `PHRONOMY_PATH` to a compatible core checkout.
+All seven bundles target the RubyLLM 2.0 core candidate. Export `PHRONOMY_PATH`
+as an absolute path, then run `scripts/update_phronomy.sh` before verification.
+The portable lockfiles use a sibling `phronomy` checkout; Bundler updates that
+source to your explicit path. No publishing or version bump is included here.
+
+## LLM token settings
+
+`shared/llm_config.rb` configures RubyLLM and its model registry. Use
+`PHRONOMY_MODEL`, `PHRONOMY_PROVIDER`, `PHRONOMY_API_KEY` (or OPENAI_API_KEY)
+and optionally `PHRONOMY_BASE_URL` for a local Chat Completions endpoint.
+`PHRONOMY_CONTEXT_WINDOW` supplies model input metadata to the registry;
+unavailable local metadata remains unknown instead of falling back to 8192.
+It is not a Phronomy Agent DSL override. Code-review chunking needs known metadata.
+
+Agent `max_output_tokens` controls generation only. The old output-reserve setting
+and `LLMConfig.apply_phronomy_defaults!` have been removed. Cloud OpenAI uses
+RubyLLM 2's default Responses protocol; custom OpenAI-compatible endpoints use
+RubyLLM's `:chat_completions` protocol setting.
 
 The repository is organized to show not only what can be built with Phronomy,
 but also the architectural boundaries that distinguish it from a thin LLM

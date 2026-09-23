@@ -31,7 +31,7 @@ class SecureChatAgent < Phronomy::Agent::Base
   agent_definition id: "example-15-secure-chat-agent", version: 2
 
   model LLM_MODEL
-  provider :openai
+  provider LLMConfig::PROVIDER
   instructions "You are a helpful, concise assistant. Answer in the same language as the user."
 
   # Framework-provided prompt-injection defense-in-depth plus application

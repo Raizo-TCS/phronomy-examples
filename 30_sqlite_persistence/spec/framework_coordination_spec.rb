@@ -25,15 +25,14 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     main_id = runner.main_agent.agent_id
     Phronomy.reset_runtime!
     pool.disconnect!
-    LLMConfig.apply_phronomy_defaults!
 
-    restored = PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)
+    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored)] }
     loaded_edges = edges.map do |edge|
       Phronomy::Agent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
         target_agent: owners.fetch(edge.target_agent.agent_id), description: edge.description)
     end
-    loaded = Phronomy::Agent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges)
+    loaded = Phronomy::MultiAgent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges)
     expect(loaded.invoke("Here is another invoice detail").fetch(:agent).agent_id).to eq(first.fetch(:agent).agent_id)
     expect(stub.calls.length).to eq(3)
   end
@@ -53,9 +52,8 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     calls_before = stub.calls.length
     Phronomy.reset_runtime!
     pool.disconnect!
-    LLMConfig.apply_phronomy_defaults!
 
-    restored = PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)
+    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     loaded = BlogWritingTeam.load(team.team_id, persistence: restored)
     expect(loaded.resume(run.team_execution_id)).to eq(result)
     expect(restored.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)

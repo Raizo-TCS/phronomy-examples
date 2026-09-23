@@ -29,8 +29,8 @@ for path in ruby_files():
         fail(path, "legacy Capability::Base spelling remains; use Phronomy::Tool::Base")
     if "Phronomy::Agent::Runner" in text:
         fail(path, "removed Agent::Runner namespace remains")
-    for removed in ["Phronomy::MultiAgent::Runner", "Phronomy::MultiAgent::Handoff", "Phronomy::MultiAgent::HandoffPolicy"]:
-        if removed in text:
+    for removed in ["Phronomy::Agent::SharedState", "Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner", "Phronomy::MultiAgent::Handoff", "Phronomy::MultiAgent::HandoffPolicy"]:
+        if re.search(rf"{re.escape(removed)}\b", text):
             fail(path, f"removed coordination API remains: {removed}")
     if re.search(r"class\s+\w+\s*<\s*Phronomy::MultiAgent::TeamCoordinator", text):
         if not re.search(r"^\s*team_definition\s+id:", text, re.M):
@@ -49,7 +49,7 @@ for path in ruby_files():
         fail(path, "removed approval listener API remains")
     if any(part in path.parts for part in ["30_sqlite_persistence", "31_postgresql_persistence"]):
         if "::TransactionView.new(" in text:
-            fail(path, "SQL TransactionView must be created with .build(persistence:, connection_pool:, connection:)")
+            fail(path, "SQL TransactionView must be created with .build(connection_pool:, connection:)")
 
 
     # Helper methods that bridge async completion back into Workflow#signal must
@@ -77,33 +77,17 @@ for path in ruby_files():
     ):
         fail(path, "per-operation event block remains")
 
-for root_name in ["30_sqlite_persistence", "31_postgresql_persistence"]:
-    lib = ROOT / root_name / "lib"
-    adapter_name = "sqlite" if root_name.startswith("30_") else "postgresql"
-    backend_path = lib / f"active_record_{adapter_name}_persistence.rb"
-    view_path = lib / f"active_record_{adapter_name}_persistence" / "transaction_view.rb"
-    for path in [backend_path, view_path]:
-        text = path.read_text(encoding="utf-8")
-        for repository in ["contents", "agents", "journals", "executions", "workflow_states", "handoff_states", "teams", "team_executions"]:
-            if not re.search(rf"\b{repository}\s*:", text):
-                fail(path, f"mandatory repository missing: {repository}")
-    for path in lib.rglob("*.rb"):
-        text = path.read_text(encoding="utf-8")
-        for stale in [
-            "Codec.dump_domain",
-            "Codec.load_agent_root",
-            "Codec.load_journal_record",
-            "Codec.load_execution",
-            "Codec.dump_workflow",
-            "Codec.load_workflow",
-        ]:
-            if stale in text:
-                fail(path, f"backend-owned domain codec remains: {stale}")
-    codec_files = list(lib.rglob("codec.rb"))
-    for path in codec_files:
-        text = path.read_text(encoding="utf-8")
-        if "Phronomy::Persistence::DurableRecord" not in text:
-            fail(path, "DurableRecord envelope codec is missing")
+for path in (ROOT / "shared" / "storage").glob("*.rb"):
+    text = path.read_text(encoding="utf-8")
+    for stale in ["Phronomy::Agent", "Phronomy::MultiAgent", "Phronomy::Workflow", "Phronomy::ContentStore",
+                  "assert_agent_watermark", "phronomy_agents", "phronomy_executions", "phronomy_teams"]:
+        if stale in text:
+            fail(path, f"domain dependency in neutral SQL driver: {stale}")
+for root_name, dialect in [("30_sqlite_persistence", "sqlite"), ("31_postgresql_persistence", "postgresql")]:
+    path = ROOT / root_name / "lib" / f"active_record_{dialect}_persistence.rb"
+    text = path.read_text(encoding="utf-8")
+    if "< PhronomyExamples::Storage::Backend" not in text or "StorageMapping.resources" not in text:
+        fail(path, "SPI 2 resource composition missing")
 
 if failures:
     print("Current Phronomy API preflight FAILED", file=sys.stderr)

@@ -26,9 +26,9 @@ module PostgreSQLPersistenceSpecSupport
     @postgresql_record_classes << const_name
 
     [
-      PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
         connection_pool: pool
-      ),
+      )),
       pool
     ]
   end
@@ -102,14 +102,8 @@ module PostgreSQLPersistenceSpecSupport
   end
 
   def with_bound_postgresql_transaction(persistence)
-    persistence.connection_pool.with_connection do |connection|
-      connection.transaction do
-        tx =
-          PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.build(
-            persistence: persistence,
-            connection_pool: persistence.connection_pool,
-            connection: connection
-          )
+    persistence.backend.connection_pool.with_connection do |connection|
+      persistence.transaction do |tx|
         yield tx, connection
       end
     end
@@ -123,7 +117,7 @@ module PostgreSQLPersistenceSpecSupport
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
 
     loop do
-      blocker_count = persistence.connection_pool.with_connection do |connection|
+      blocker_count = persistence.backend.connection_pool.with_connection do |connection|
         Integer(
           connection.select_value(
             "SELECT cardinality(pg_blocking_pids(#{Integer(backend_pid)}))"

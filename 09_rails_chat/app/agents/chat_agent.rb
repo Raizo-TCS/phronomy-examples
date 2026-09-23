@@ -4,7 +4,7 @@ class ChatAgent < Phronomy::Agent::Base
   agent_definition id: "example-09-chat-agent", version: 2
 
   model LLM_MODEL
-  provider :openai
+  provider LLMConfig::PROVIDER
   tools(CurrentTimeTool => nil)
   instructions "You are a helpful, concise assistant. Answer in the same language as the user."
 end

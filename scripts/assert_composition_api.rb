@@ -13,3 +13,26 @@ abort "The selected core lacks the integrated Execution entrances" unless
   Phronomy::Execution.respond_to?(:run_async) && Phronomy::Execution.respond_to?(:run)
 
 puts "TaskResult/Execution API preflight PASS"
+
+abort "The selected core lacks Storage composition; set PHRONOMY_PATH to the matching refactoring checkout" unless
+  Phronomy.const_defined?(:Storage, false) && Phronomy::Persistence.respond_to?(:in_memory)
+abort "The selected core still exposes the replaced Persistence Backend SPI" if
+  Phronomy::Persistence.const_defined?(:InMemory, false) || Phronomy::Persistence.method_defined?(:build_transaction_view)
+puts "Storage/Persistence composition API preflight PASS"
+
+abort "The selected core lacks MultiAgent::HandoffRunner; set PHRONOMY_PATH to the matching refactoring checkout" unless
+  Phronomy::MultiAgent.const_defined?(:HandoffRunner, false)
+abort "The selected core still exposes Agent::HandoffRunner" if
+  Phronomy::Agent.const_defined?(:HandoffRunner, false)
+puts "MultiAgent HandoffRunner API preflight PASS"
+
+abort "The selected core lacks MultiAgent::SharedState; set PHRONOMY_PATH to the matching refactoring checkout" unless
+  Phronomy::MultiAgent.const_defined?(:SharedState, false)
+abort "The selected core still exposes Agent::SharedState" if
+  Phronomy::Agent.const_defined?(:SharedState, false)
+puts "MultiAgent SharedState API preflight PASS"
+
+abort "The selected core does not support Storage SPI 2" unless
+  Phronomy::Storage::Backend::REQUIRED_CAPABILITIES[:spi_version] == 2 &&
+  Phronomy::Storage::View.method_defined?(:records)
+puts "Neutral Storage SPI 2 preflight PASS"

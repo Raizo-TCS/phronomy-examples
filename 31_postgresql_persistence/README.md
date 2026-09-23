@@ -17,16 +17,14 @@ implementation.
     server DB / true multi-writer / row-level locking
 ```
 
-It deliberately remains a **separate concrete backend** from
-`30_sqlite_persistence`. No generic ActiveRecord persistence base class is
-introduced yet. The two implementations should only be commonized later if the
-actual duplication can be extracted without hiding transaction or locking
-semantics.
+SQLite and PostgreSQL share a neutral physical driver with explicit dialect
+choices. Each entry point supplies its adapter and the separate resource/table
+composition. PostgreSQL parent locks and bytea encoding remain explicit.
 
 ## What Phase B proves
 
-The backend implements the same public Persistence SPI and the same eight durable
-repositories as the SQLite reference:
+The composed Persistence facade exposes the same eight domain repositories
+as the SQLite reference:
 
 - `contents`
 - `agents`
@@ -39,7 +37,7 @@ repositories as the SQLite reference:
 - `transaction`
 - `assert_agent_watermark!`
 
-It advertises the same required capabilities:
+The domain facade advertises these retained capabilities:
 
 ```ruby
 {
@@ -59,7 +57,7 @@ PostgreSQL adds validation that SQLite cannot provide:
 - PostgreSQL deadlocks surface as storage/transaction failures and are not
   relabeled as optimistic conflicts;
 - an actual terminated database session is not translated into
-  `Persistence::ConflictError`.
+  `Storage::ConflictError`.
 
 ## Locking model
 
@@ -119,21 +117,21 @@ an expected contract outcome it uses PostgreSQL primitives such as:
 INSERT ... ON CONFLICT DO NOTHING RETURNING ...
 ```
 
-and then raises the appropriate portable Phronomy error without poisoning the
-transaction first.
+and then raises the appropriate portable Phronomy error. SPI 2 still marks the
+operation scope failed; recover outside an explicit savepoint.
 
 The partial unique index on active Executions remains a hard database invariant
 in addition to the Agent-row admission lock.
 
 ## Durable representation
 
-The backend implements Phronomy's record-oriented Persistence SPI. Except for the ContentStore, raw backend repositories persist opaque `Phronomy::Persistence::DurableRecord` envelopes. `agent_id`, revisions, Journal record IDs/positions, Execution admission metadata, and Workflow revisions are supplied separately as backend arguments; backend code does not decode Phronomy domain objects or inspect `DurableRecord#payload` to rediscover index semantics.
+Records and Streams persist opaque `Phronomy::Storage::DurableRecord` envelopes. `agent_id`, revisions, Journal record IDs/positions, Execution admission metadata, and Workflow revisions are supplied separately as backend arguments; backend code does not decode Phronomy domain objects or inspect `DurableRecord#payload` to rediscover index semantics.
 
 Content bytes are stored as PostgreSQL `bytea`. The reference implementation
 uses PostgreSQL `decode(..., 'hex')` and `encode(..., 'hex')` so arbitrary binary
 content does not depend on Ruby string quoting behavior.
 
-No `Marshal`, Runtime object serialization, private Phronomy API, or backend-owned Agent/Workflow domain codec is used.
+No `Marshal`, Runtime object serialization, backend-owned Agent/Workflow domain codec is used.
 
 ## Start PostgreSQL locally
 
@@ -229,11 +227,11 @@ Portable contract failures are translated only when their meaning is known:
 
 | Condition | Result |
 |---|---|
-| missing durable record | `Persistence::NotFoundError` |
-| stale revision / Journal position | `Persistence::ConflictError` |
-| duplicate logical identity | `Persistence::ConflictError` |
+| missing durable record | `Storage::NotFoundError` |
+| stale revision / Journal position | `Storage::ConflictError` |
+| duplicate logical identity | `Storage::ConflictError` |
 | active Execution already exists for Agent | `Phronomy::AgentBusyError` |
-| unsupported Workflow value | `Persistence::SerializationError` |
+| unsupported Workflow value | `Storage::SerializationError` |
 | connection loss / server failure | database/storage exception |
 | PostgreSQL deadlock | `ActiveRecord::Deadlocked` |
 
@@ -278,5 +276,37 @@ Phronomy's authoritative contract verifies rollback across all eight repositorie
 Team execution admission and idle checks lock `phronomy_teams.team_id` before
 subordinate Team execution rows, just as Agent admission locks an Agent row.
 Different Team rows can progress independently. Initial Handoff/Team conflicts
-use `ON CONFLICT DO NOTHING` so a caller can handle an expected conflict without
-leaving the surrounding PostgreSQL transaction aborted.
+use `ON CONFLICT DO NOTHING`. Catch such conflicts outside an explicit inner
+savepoint; the failed SPI scope cannot continue.
+
+## Refactor 35: neutral Storage SPI 2
+
+Apply the matching core update and set PHRONOMY_PATH before resolving dependencies.
+The core requires spi_version 2 and neutral atomic_resources, record_cas,
+stream_cas, conditional_unique, guarded_checks and nested_savepoints capabilities.
+Public Persistence retains its existing eight domain repositories and three
+capability names. Raw Backend exposes a View with Records, Streams and Blobs.
+
+The driver is shared in ../shared/storage. Domain resources and existing table
+names are wired separately in ../shared/persistence_storage_mapping.rb. The
+physical driver has no domain resource-ID switch, domain codec, active-state
+interpretation, content digest or Agent watermark API. Table/index definitions,
+record type/version/payload and content bytes are unchanged.
+
+UniqueConstraintError carries a resource ID and named constraint. Domain wrappers
+translate only their active-owner constraint to AgentBusyError. Parent guards,
+CAS and partial unique indexes remain atomic. NoRows and revision/head conditions
+are checked after locking their stable anchors. Required missing parents raise
+NotFoundError consistently across drivers.
+
+Nested transactions use same-connection savepoints. Catch errors outside the
+inner scope if the outer transaction should continue. A failed physical scope
+rejects further operations and successful commit; do not catch and ignore an
+operation error inside it. ActiveRecord::Rollback propagates. Non-local return,
+break and throw cause TransactionError and rollback. Bound views/handles expire
+at scope exit and reject cross-thread use; cached root handles join the current
+transaction. Complete stream batches are validated before writes.
+
+Run the shipped neutral/domain contracts and the database-specific tests against
+the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
+locking, deadlock, connection-failure and fresh-pool tests remain a release gate.

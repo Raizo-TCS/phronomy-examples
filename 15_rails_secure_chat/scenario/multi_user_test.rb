@@ -7,7 +7,7 @@
 # and captures screenshots at each key step as evidence.
 #
 # Current architecture:
-#   - SecureChatAgent.create/load via Persistence::InMemory (PhronomyStore)
+#   - SecureChatAgent.create/load via Persistence.in_memory (PhronomyStore)
 #   - SummarizationGraph uses invoke_async + :summary_done signal
 #   - No ActiveRecord checkpoint/message model for Phronomy state
 #   - session[:agent_id] is the conversation handle

@@ -35,7 +35,7 @@ ABSTRACTION_CRITERIA = (
   "(4) parameters of the same method should be at similar abstraction levels."
 ).freeze
 
-REVIEWER_MAX_OUTPUT_TOKENS = [512, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.15).to_i].min
+REVIEWER_MAX_OUTPUT_TOKENS = 512
 
 module ReviewKnowledge
   def review_knowledge
@@ -50,7 +50,6 @@ class SecurityReviewerAgent < Phronomy::Agent::Base
   agent_definition id: "example-14-security-reviewer-agent", version: 2
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  context_window LLMConfig::CONTEXT_WINDOW
   instructions <<~INST
     You are a security code review expert specialising in Ruby.
     When given Ruby source code, identify security vulnerabilities.
@@ -70,7 +69,6 @@ class PerformanceReviewerAgent < Phronomy::Agent::Base
   agent_definition id: "example-14-performance-reviewer-agent", version: 2
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  context_window LLMConfig::CONTEXT_WINDOW
   instructions <<~INST
     You are a performance code review expert specialising in Ruby.
     When given Ruby source code, identify performance problems.
@@ -90,7 +88,6 @@ class ReadabilityReviewerAgent < Phronomy::Agent::Base
   agent_definition id: "example-14-readability-reviewer-agent", version: 2
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  context_window LLMConfig::CONTEXT_WINDOW
   instructions <<~INST
     You are a code quality and readability expert specialising in Ruby.
     When given Ruby source code, identify readability problems.
@@ -110,7 +107,6 @@ class AbstractionConsistencyReviewerAgent < Phronomy::Agent::Base
   agent_definition id: "example-14-abstraction-consistency-reviewer-agent", version: 2
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  context_window LLMConfig::CONTEXT_WINDOW
   instructions <<~INST
     You are a software design expert specialising in abstraction-level consistency in Ruby.
     Examine whether elements that appear at the same structural level share a

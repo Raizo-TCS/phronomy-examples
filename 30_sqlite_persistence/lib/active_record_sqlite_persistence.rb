@@ -1,85 +1,15 @@
 # frozen_string_literal: true
 
-require "active_record"
-require "phronomy"
+require_relative "../../shared/storage/backend"
+require_relative "../../shared/persistence_storage_mapping"
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordSQLite < Phronomy::Persistence
-      CAPABILITIES = {
-        atomic_all: true,
-        atomic_admission: true,
-        optimistic_revision: true
-      }.freeze
-
-      attr_reader :connection_pool
-
+    class ActiveRecordSQLite < PhronomyExamples::Storage::Backend
       def initialize(connection_pool:)
-        @connection_pool = connection_pool
-        assert_sqlite_adapter!
-
-        super(
-          contents: ContentRepository.new(connection_pool: connection_pool),
-          agents: AgentRepository.new(connection_pool: connection_pool),
-          journals: JournalRepository.new(connection_pool: connection_pool),
-          executions: ExecutionRepository.new(connection_pool: connection_pool),
-          workflow_states: WorkflowStateRepository.new(connection_pool: connection_pool),
-          handoff_states: HandoffStateRepository.new(connection_pool: connection_pool),
-          teams: TeamRepository.new(connection_pool: connection_pool),
-          team_executions: TeamExecutionRepository.new(connection_pool: connection_pool)
-        )
-      end
-
-      def capabilities
-        CAPABILITIES
-      end
-
-      def transaction
-        connection_pool.with_connection do |connection|
-          connection.transaction do
-            yield TransactionView.build(
-              persistence: self,
-              connection_pool: connection_pool,
-              connection: connection
-            )
-          end
-        end
-      end
-
-      def assert_agent_watermark!(agent_id:, agent_revision:, journal_position:)
-        transaction do |tx|
-          tx.assert_agent_watermark!(
-            agent_id: agent_id,
-            agent_revision: agent_revision,
-            journal_position: journal_position
-          )
-        end
-      end
-
-      private
-
-      def assert_sqlite_adapter!
-        connection_pool.with_connection do |connection|
-          return if connection.adapter_name == "SQLite"
-          raise Phronomy::Persistence::UnsupportedBackendError,
-            "ActiveRecordSQLite requires the ActiveRecord SQLite adapter; got #{connection.adapter_name.inspect}"
-        end
+        super(connection_pool: connection_pool, resources: StorageMapping.resources,
+          mappings: StorageMapping.mappings, dialect: :sqlite)
       end
     end
   end
 end
-
-require_relative "active_record_sqlite_persistence/codec"
-require_relative "active_record_sqlite_persistence/connection_access"
-require_relative "active_record_sqlite_persistence/content_repository"
-require_relative "active_record_sqlite_persistence/agent_repository"
-require_relative "active_record_sqlite_persistence/journal_repository"
-require_relative "active_record_sqlite_persistence/execution_repository"
-require_relative "active_record_sqlite_persistence/workflow_state_repository"
-require_relative "active_record_sqlite_persistence/handoff_state_repository"
-require_relative "active_record_sqlite_persistence/team_repository"
-require_relative "active_record_sqlite_persistence/team_execution_repository"
-require_relative "active_record_sqlite_persistence/transaction_view"
-require_relative "active_record_sqlite_persistence/handoff_state_repository"
-require_relative "active_record_sqlite_persistence/team_repository"
-require_relative "active_record_sqlite_persistence/team_execution_repository"

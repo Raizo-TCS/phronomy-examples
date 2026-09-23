@@ -10,7 +10,7 @@
 require_relative "../shared/llm_config"
 require "phronomy"
 
-persistence = Phronomy::Persistence::InMemory.new
+persistence = Phronomy::Persistence.in_memory
 
 Phronomy.configure do |config|
   config.persistence = persistence

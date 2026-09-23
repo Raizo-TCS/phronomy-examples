@@ -23,7 +23,7 @@ provider-specific materialization
 - imported conversation history is recorded as Agent context.
 - `knowledge:` and `add_knowledge` create persistent Knowledge candidates.
 - `#transcript` is the current logical transcript projection.
-- a deliberately constrained `context_window` exercises Context Policy under a
+- an explicit `PHRONOMY_CONTEXT_WINDOW` registry value (4096 by default in this demo) exercises Context Policy under a
   bounded token budget while the canonical Agent state remains intact.
 - `result[:messages]` is the current logical transcript materialization returned
   for application convenience; it is **not** the exact per-call
@@ -52,6 +52,6 @@ Run:
 bundle exec ruby 10_context_management/run.rb
 ```
 
-The example uses `Persistence::InMemory` so it is self-contained. Production
+The example uses `Persistence.in_memory` so it is self-contained. Production
 applications should provide a durable Persistence backend when process restart
 durability is required.

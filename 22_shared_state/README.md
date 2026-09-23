@@ -1,6 +1,6 @@
 # 22 Shared State — Collaborative Code Review Team
 
-Demonstrates `Agent::SharedState` — the "Shared state" coordination pattern
+Demonstrates `MultiAgent::SharedState` — the "Shared state" coordination pattern
 (Anthropic multi-agent blog, Pattern 5).
 
 Three specialist reviewer agents collaborate through a shared `KnowledgeStore` to
@@ -22,7 +22,7 @@ instruction overrides, and a custom aggregation step.
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Agent::SharedState` | Base class for the review team |
+| `Phronomy::MultiAgent::SharedState` | Base class for the review team |
 | `coordination` DSL | Defines the shared-store protocol given to every member |
 | `member` DSL | Declares `StructureAnalyst`, `SecurityAuditor`, `QualityReviewer` |
 | `member instruction:` option | Adds a per-agent focus hint without changing the agent's own instructions |
@@ -50,6 +50,16 @@ Both tools refuse to operate until `DirectoryAccess.ask_user!` has been approved
 `ReadFileTool` also rejects path-traversal attempts outside the approved directory.
 
 ## How to Run
+
+Use the matching `refactor/architecture` core checkout. This example uses the
+Experimental `Phronomy::MultiAgent::SharedState` API; the previous Agent namespace
+has been removed without an alias. Set the local core path before resolving the
+bundle:
+
+```bash
+export PHRONOMY_PATH=/absolute/path/to/phronomy
+bundle install
+```
 
 ```bash
 # Review the bundled sample files in 22_shared_state/data/
@@ -105,7 +115,7 @@ Total findings   : 6
 2. Implement `ListFilesTool` and `ReadFileTool` as
    `Phronomy::Tool::Base` subclasses; guard both with
    `DirectoryAccess` approval and reject path traversal in `ReadFileTool`.
-3. Create `CodeReviewTeam < Phronomy::Agent::SharedState` using:
+3. Create `CodeReviewTeam < Phronomy::MultiAgent::SharedState` using:
    - `coordination` — shared-store protocol sent to every member
    - `member StructureAnalyst`
    - `member SecurityAuditor, instruction: "..."` — per-agent focus hint

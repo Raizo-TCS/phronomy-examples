@@ -17,7 +17,7 @@ require_relative "tracer"
 
 MIN_LINES = 20
 BATCH_OVERHEAD_TOKENS = 500 + REVIEWER_MAX_OUTPUT_TOKENS
-MAX_CHUNK_CHARS = ((LLMConfig::CONTEXT_WINDOW - BATCH_OVERHEAD_TOKENS) * 1.5 * 0.75).to_i
+MAX_CHUNK_CHARS = ((LLMConfig.input_token_limit! - BATCH_OVERHEAD_TOKENS) * 1.5 * 0.75).to_i
 
 LIB_ROOT = File.expand_path("../../phronomy/lib", __dir__)
 

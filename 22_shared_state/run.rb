@@ -2,7 +2,7 @@
 
 # 22 Shared State -- Collaborative Code Review Team
 #
-# Three specialist agents collaborate via Phronomy::Agent::SharedState to
+# Three specialist agents collaborate via Phronomy::MultiAgent::SharedState to
 # produce a multi-perspective review. Each member has its own Agent identity,
 # while the team exposes shared-store tools for explicit coordination.
 
@@ -58,7 +58,7 @@ class QualityReviewer < Phronomy::Agent::Base
   INST
 end
 
-class CodeReviewTeam < Phronomy::Agent::SharedState
+class CodeReviewTeam < Phronomy::MultiAgent::SharedState
   coordination <<~COORD
     You are part of a collaborative code review team sharing a knowledge store.
     Two tools coordinate your work:

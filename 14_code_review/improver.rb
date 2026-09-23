@@ -3,7 +3,7 @@
 require "phronomy"
 require_relative "../shared/llm_config"
 
-IMPROVER_MAX_OUTPUT_TOKENS = [1024, (LLMConfig::EFFECTIVE_CONTEXT_WINDOW * 0.25).to_i].min
+IMPROVER_MAX_OUTPUT_TOKENS = 1024
 IMPROVE_OVERHEAD_TOKENS = 150 + 150 + 200 + IMPROVER_MAX_OUTPUT_TOKENS
 
 # Persistent Knowledge is application content written to the Agent Journal.
@@ -36,7 +36,6 @@ class ImproverAgent < Phronomy::Agent::Base
 
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  context_window LLMConfig::CONTEXT_WINDOW
   instructions { |input| "Fix the #{input[:priority]} issues and return the improved code in a ```ruby ... ``` block." }
   max_output_tokens IMPROVER_MAX_OUTPUT_TOKENS
   max_iterations 1

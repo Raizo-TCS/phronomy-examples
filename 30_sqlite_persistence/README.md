@@ -1,6 +1,6 @@
 # 30 — SQLite Persistence reference backend
 
-This example implements the public `Phronomy::Persistence` Backend SPI with a
+This example composes `Phronomy::Persistence` over neutral Storage SPI 2 with a
 real durable database:
 
 ```text
@@ -18,7 +18,7 @@ server.
 
 ## Scope
 
-The example implements:
+The composed Persistence facade exposes:
 
 - `contents`
 - `agents`
@@ -41,8 +41,7 @@ and advertises all required capabilities:
 }
 ```
 
-The backend depends only on Phronomy's public Persistence SPI and public durable
-domain codecs. It does not access Runtime, EventLoop, FSMSession, live
+The physical driver depends on the neutral Storage SPI. Domain codecs belong to core repositories. It does not access Runtime, EventLoop, FSMSession, live
 Activation objects, or other execution internals.
 
 ## Why ActiveRecord but not Rails?
@@ -268,42 +267,34 @@ Shared SQL regressions cover concurrent initial saves/CAS/admission, terminal
 protection, pagination, and reconnecting all three coordination repositories.
 Phronomy's authoritative contract verifies rollback across all eight repositories.
 
-## Storage constraint notification migration
+## Refactor 35: neutral Storage SPI 2
 
-This backend requires a core revision providing
-`Phronomy::Storage::ActiveExecutionConflictError` (ADR-043). For source checkout
-verification, set `PHRONOMY_PATH` to that updated core before resolving the bundle
-and running the specs. Apply the core update before this backend update.
+Apply the matching core update and set PHRONOMY_PATH before resolving dependencies.
+The core requires spi_version 2 and neutral atomic_resources, record_cas,
+stream_cas, conditional_unique, guarded_checks and nested_savepoints capabilities.
+Public Persistence retains its existing eight domain repositories and three
+capability names. Raw Backend exposes a View with Records, Streams and Blobs.
 
-Raw execution repository calls now raise that Storage-owned `ConflictError`
-subtype for an existing nonterminal execution. Domain calls through
-`Phronomy::Persistence` continue to raise `Phronomy::AgentBusyError`, with the
-storage exception retained as `cause`. Direct raw callers must update their
-rescue; duplicate IDs and revision conflicts remain ordinary `ConflictError`.
-SQL, indexes, schemas, lock/transaction boundaries and record formats are unchanged.
-The shared `a Persistence backend` suite checks both raw notification and rollback;
-existing domain, transaction, concurrency and failure specs still apply.
+The driver is shared in ../shared/storage. Domain resources and existing table
+names are wired separately in ../shared/persistence_storage_mapping.rb. The
+physical driver has no domain resource-ID switch, domain codec, active-state
+interpretation, content digest or Agent watermark API. Table/index definitions,
+record type/version/payload and content bytes are unchanged.
 
-## Refactor 34 transaction migration
+UniqueConstraintError carries a resource ID and named constraint. Domain wrappers
+translate only their active-owner constraint to AgentBusyError. Parent guards,
+CAS and partial unique indexes remain atomic. NoRows and revision/head conditions
+are checked after locking their stable anchors. Required missing parents raise
+NotFoundError consistently across drivers.
 
-Explicit nested `backend.transaction` or `persistence.transaction` calls on the
-same backend and synchronous execution context now use savepoints on the same
-connection. A failed inner block rolls back only its changes and re-raises the
-same exception. Catch outside that inner block if the outer scope should continue.
-A successful inner block is still rolled back if the outer block fails.
+Nested transactions use same-connection savepoints. Catch errors outside the
+inner scope if the outer transaction should continue. A failed physical scope
+rejects further operations and successful commit; do not catch and ignore an
+operation error inside it. ActiveRecord::Rollback propagates. Non-local return,
+break and throw cause TransactionError and rollback. Bound views/handles expire
+at scope exit and reject cross-thread use; cached root handles join the current
+transaction. Complete stream batches are validated before writes.
 
-Previously ActiveRecord joined nested scopes, so catching the inner exception
-could leave its writes pending in the outer transaction. Code depending on those
-writes must change. `ActiveRecord::Rollback` also propagates from this API after
-rollback; it is no longer silently consumed as it is by ActiveRecord itself.
-
-Journal append validates and serializes the complete input batch before writing.
-This prevents an invalid later record from leaving partial rows and an unchanged
-head. It does not make arbitrary database failures safe to catch and ignore in
-the same scope. Let database errors escape, or establish an explicit inner
-transaction before the operation and catch outside it.
-
-Schemas, durable record formats, public method signatures, parent-row lock order
-and transaction-bound connection access are unchanged. Use normal block completion
-or exceptions; non-local exits (`return`, `break`, `throw`) are not portable commit
-controls. Run the matching core contract suite with this adapter.
+Run the shipped neutral/domain contracts and the database-specific tests against
+the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
+locking, deadlock, connection-failure and fresh-pool tests remain a release gate.

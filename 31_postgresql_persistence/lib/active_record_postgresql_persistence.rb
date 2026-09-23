@@ -1,89 +1,15 @@
 # frozen_string_literal: true
 
-require "active_record"
-require "phronomy"
+require_relative "../../shared/storage/backend"
+require_relative "../../shared/persistence_storage_mapping"
 
 module PhronomyExamples
   module Persistence
-    class ActiveRecordPostgreSQL < Phronomy::Storage::Backend
-      CAPABILITIES = {
-        atomic_all: true,
-        atomic_admission: true,
-        optimistic_revision: true
-      }.freeze
-
-      attr_reader :connection_pool
-
+    class ActiveRecordPostgreSQL < PhronomyExamples::Storage::Backend
       def initialize(connection_pool:)
-        @connection_pool = connection_pool
-        assert_postgresql_adapter!
-
-        super(
-          contents: ContentRepository.new(connection_pool: connection_pool),
-          agents: AgentRepository.new(connection_pool: connection_pool),
-          journals: JournalRepository.new(connection_pool: connection_pool),
-          executions: ExecutionRepository.new(connection_pool: connection_pool),
-          workflow_states: WorkflowStateRepository.new(connection_pool: connection_pool),
-          handoff_states: HandoffStateRepository.new(connection_pool: connection_pool),
-          teams: TeamRepository.new(connection_pool: connection_pool),
-          team_executions: TeamExecutionRepository.new(connection_pool: connection_pool)
-        )
-      end
-
-      def capabilities
-        CAPABILITIES
-      end
-
-      def transaction
-        connection_pool.with_connection do |connection|
-          rollback_error = nil
-          result = connection.transaction(requires_new: true) do
-            yield TransactionView.build(
-              connection_pool: connection_pool,
-              connection: connection
-            )
-          rescue ActiveRecord::Rollback => error
-            # ActiveRecord swallows this exception; the Storage contract does not.
-            rollback_error = error
-            raise
-          end
-          raise rollback_error if rollback_error
-
-          result
-        end
-      end
-
-      def assert_agent_watermark!(agent_id:, agent_revision:, journal_position:)
-        transaction do |tx|
-          tx.assert_agent_watermark!(
-            agent_id: agent_id,
-            agent_revision: agent_revision,
-            journal_position: journal_position
-          )
-        end
-      end
-
-      private
-
-      def assert_postgresql_adapter!
-        connection_pool.with_connection do |connection|
-          return if connection.adapter_name == "PostgreSQL"
-          raise Phronomy::Storage::UnsupportedBackendError,
-            "ActiveRecordPostgreSQL requires the ActiveRecord PostgreSQL adapter; got #{connection.adapter_name.inspect}"
-        end
+        super(connection_pool: connection_pool, resources: StorageMapping.resources,
+          mappings: StorageMapping.mappings, dialect: :postgresql)
       end
     end
   end
 end
-
-require_relative "active_record_postgresql_persistence/codec"
-require_relative "active_record_postgresql_persistence/connection_access"
-require_relative "active_record_postgresql_persistence/content_repository"
-require_relative "active_record_postgresql_persistence/agent_repository"
-require_relative "active_record_postgresql_persistence/journal_repository"
-require_relative "active_record_postgresql_persistence/execution_repository"
-require_relative "active_record_postgresql_persistence/workflow_state_repository"
-require_relative "active_record_postgresql_persistence/transaction_view"
-require_relative "active_record_postgresql_persistence/handoff_state_repository"
-require_relative "active_record_postgresql_persistence/team_repository"
-require_relative "active_record_postgresql_persistence/team_execution_repository"

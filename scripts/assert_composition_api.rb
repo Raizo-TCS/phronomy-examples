@@ -31,3 +31,8 @@ abort "The selected core lacks MultiAgent::SharedState; set PHRONOMY_PATH to the
 abort "The selected core still exposes Agent::SharedState" if
   Phronomy::Agent.const_defined?(:SharedState, false)
 puts "MultiAgent SharedState API preflight PASS"
+
+abort "The selected core does not support Storage SPI 2" unless
+  Phronomy::Storage::Backend::REQUIRED_CAPABILITIES[:spi_version] == 2 &&
+  Phronomy::Storage::View.method_defined?(:records)
+puts "Neutral Storage SPI 2 preflight PASS"

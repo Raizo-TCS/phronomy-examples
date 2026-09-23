@@ -24,12 +24,9 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
             end
           end
 
-          tx =
-            PhronomyExamples::Persistence::ActiveRecordPostgreSQL::TransactionView.build(
-              connection_pool: persistence.backend.connection_pool,
-              connection: target_connection
-            )
-          tx.agents.load(root.agent_id)
+          persistence.backend.transaction do |view|
+            view.records("agent.roots").fetch(root.agent_id)
+          end
         end
       end
       nil

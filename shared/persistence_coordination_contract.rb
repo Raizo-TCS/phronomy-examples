@@ -108,16 +108,16 @@ RSpec.shared_examples "a SQL coordination backend" do
     expect(persistence.handoff_states.load(coordination_handoff.main_agent_id)).to be_nil
   end
 
-  it "can continue the transaction after handling duplicate coordination records" do
+  it "can continue the outer transaction after rolling back duplicate-record savepoints" do
     persistence.teams.create(coordination_team)
     persistence.team_executions.create_active(coordination_run)
     persistence.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff)
     content_id = nil
     persistence.transaction do |tx|
-      expect { tx.teams.create(coordination_team) }.to raise_error(Phronomy::Storage::ConflictError)
-      expect { tx.team_executions.create_active(coordination_run) }.to raise_error(Phronomy::Storage::ConflictError)
+      expect { persistence.transaction { |inner| inner.teams.create(coordination_team) } }.to raise_error(Phronomy::Storage::ConflictError)
+      expect { persistence.transaction { |inner| inner.team_executions.create_active(coordination_run) } }.to raise_error(Phronomy::Storage::ConflictError)
       expect do
-        tx.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff)
+        persistence.transaction { |inner| inner.handoff_states.save(coordination_handoff.main_agent_id, expected_revision: nil, state: coordination_handoff) }
       end.to raise_error(Phronomy::Storage::ConflictError)
       content_id = tx.contents.put_text("write after handled conflicts")
     end

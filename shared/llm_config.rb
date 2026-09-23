@@ -4,103 +4,87 @@ require "ruby_llm"
 require "net/http"
 require "json"
 require "uri"
+require "tempfile"
 
-# Central LLM configuration for all examples.
-#
-# All values are read from environment variables so that external users
-# do not need to edit source files.  Typical setup:
-#
-#   export PHRONOMY_MODEL="gpt-4o-mini"        # required for OpenAI
-#   export OPENAI_API_KEY="sk-..."             # required for OpenAI
-#
-# For a local LM Studio instance:
-#   export PHRONOMY_MODEL="gpt-4o-mini"        # LM Studio ignores the name and uses the loaded model
-#   export PHRONOMY_BASE_URL="http://192.168.122.1:1234/v1"
-#   export PHRONOMY_API_KEY="lm-studio"
-#   (Use a plain OpenAI-recognised model name so RubyLLM routes via openai_api_base.
-#    Slash-prefixed names like "openai/gpt-oss-20b" are treated as OpenRouter.)
-#
-# See README.md for a full list of supported environment variables.
+# Application configuration. Model capabilities belong to RubyLLM's registry;
+# Agent.max_output_tokens is a separate per-request output cap.
 module LLMConfig
-  # Model identifier passed to RubyLLM / phronomy.
   MODEL = ENV.fetch("PHRONOMY_MODEL", "gpt-4o-mini")
-
-  # Provider symbol passed to RubyLLM.  When set together with a custom
-  # BASE_URL (e.g. LM Studio, Ollama, vLLM), phronomy sets
-  # assume_model_exists so RubyLLM does not reject unknown model names.
-  # Set PHRONOMY_PROVIDER="" (or leave unset) to let RubyLLM infer the
-  # provider from the model identifier.
-  PROVIDER = ENV["PHRONOMY_PROVIDER"].then { |v| v && !v.empty? ? v.to_sym : nil }
-
-  # Provider base URL. Leave unset to use the RubyLLM default (openai.com).
-  BASE_URL = ENV["PHRONOMY_BASE_URL"].then { |v| v && !v.empty? ? v : nil }
-
-  # API key.  Falls back to OPENAI_API_KEY for standard OpenAI usage.
+  BASE_URL = ENV["PHRONOMY_BASE_URL"].then { |value| value unless value.to_s.empty? }
+  PROVIDER = ENV["PHRONOMY_PROVIDER"].then do |value|
+    value.to_s.empty? ? (BASE_URL ? :openai : nil) : value.to_sym
+  end
   API_KEY = ENV["PHRONOMY_API_KEY"] || ENV["OPENAI_API_KEY"]
 
-  # LM Studio management API base URL (derived from BASE_URL when set).
-  # Used to query the actually-loaded context window size at runtime.
-  # Falls back to nil for non-LM-Studio providers.
-  LM_STUDIO_API_BASE = BASE_URL ? BASE_URL.sub(%r{/v1.*$}, "") : nil
+  RubyLLM.configure do |config|
+    config.openai_api_key = API_KEY if API_KEY
+    config.openai_api_base = BASE_URL if BASE_URL
+    if BASE_URL
+      config.openai_protocol = :chat_completions
+      config.openai_use_system_role = true
+    end
+  end
 
-  # Queries the LM Studio management API for the context window size that
-  # the model is currently loaded with.  This value can differ from the
-  # model's theoretical maximum because LM Studio lets users configure a
-  # smaller loaded_context_length (e.g. 4096 even when max is 131072).
-  #
-  # Returns nil when the API is unreachable or BASE_URL is not set.
+  # Optional LM Studio metadata. Failure means unknown, never a guessed limit.
   def self.fetch_loaded_context_window
-    return nil unless LM_STUDIO_API_BASE
+    return unless BASE_URL && PROVIDER == :openai
 
-    uri = URI.parse("#{LM_STUDIO_API_BASE}/api/v0/models/#{MODEL}")
-    response = Net::HTTP.get_response(uri)
-    return nil unless response.is_a?(Net::HTTPSuccess)
+    uri = URI.parse("#{BASE_URL.sub(%r{/v1.*$}, "")}/api/v0/models/#{MODEL}")
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https",
+      open_timeout: 2, read_timeout: 2) { |http| http.get(uri.request_uri) }
+    return unless response.is_a?(Net::HTTPSuccess)
 
-    data = JSON.parse(response.body)
-    data["loaded_context_length"]&.to_i
+    value = JSON.parse(response.body)["loaded_context_length"]
+    value if value.is_a?(Integer) && value.positive?
   rescue StandardError
     nil
   end
 
-  # The context window size actually loaded in the server right now.
-  # Can be overridden via PHRONOMY_CONTEXT_WINDOW.
-  # Falls back to 8192 when the management API is unavailable.
-  CONTEXT_WINDOW = ENV["PHRONOMY_CONTEXT_WINDOW"]&.to_i ||
-                   fetch_loaded_context_window ||
-                   8192
+  # Load application-provided capabilities through RubyLLM's public registry API.
+  # Keep the other registry entries, including provider-qualified duplicates.
+  def self.configure_model_registry!
+    explicit = ENV["PHRONOMY_CONTEXT_WINDOW"]
+    limit = if explicit && !explicit.empty?
+      Integer(explicit, 10).tap do |value|
+        raise ArgumentError, "PHRONOMY_CONTEXT_WINDOW must be positive" unless value.positive?
+      end
+    else
+      fetch_loaded_context_window
+    end
+    return unless BASE_URL || limit
 
-  # Fraction of CONTEXT_WINDOW used for per-request token budgets.
-  # Set to 1.0 to use the full declared context window.
-  CONTEXT_WINDOW_UTILIZATION = 1.0
-  EFFECTIVE_CONTEXT_WINDOW = (CONTEXT_WINDOW * CONTEXT_WINDOW_UTILIZATION).to_i
+    existing = begin
+      RubyLLM.models.find(MODEL, provider: PROVIDER)
+    rescue RubyLLM::ModelNotFoundError
+      nil
+    end
+    provider = PROVIDER&.to_s || existing&.provider
+    raise ArgumentError, "Set PHRONOMY_PROVIDER for a custom model" unless provider
 
-  # Configure RubyLLM once when this file is loaded.
-  RubyLLM.configure do |config|
-    config.openai_api_key = API_KEY if API_KEY
-    config.openai_api_base = BASE_URL if BASE_URL
-    # Local servers (LM Studio, Ollama, etc.) do not define a 'developer' role
-    # in their chat templates; force 'system' role when using a custom base URL.
-    config.openai_use_system_role = true if BASE_URL
-  end
-
-  # When Phronomy is already loaded, ensure a default output reserve is set so
-  # that TokenBudgetResolver can build a valid context budget for models whose
-  # registry max_output_tokens equals their context_window (e.g. LM Studio).
-  # Examples that require "phronomy" after this file can also call
-  # LLMConfig.apply_phronomy_defaults! explicitly.
-  DEFAULT_OUTPUT_RESERVE = (CONTEXT_WINDOW * 0.25).to_i.clamp(256, 4096)
-
-  def self.apply_phronomy_defaults!
-    require "phronomy"
-    Phronomy.configure do |c|
-      c.default_output_reserve ||= DEFAULT_OUTPUT_RESERVE
+    model = (existing&.to_h || {
+      id: MODEL, name: MODEL, provider: provider,
+      modalities: {input: ["text"], output: ["text"]},
+      capabilities: ["function_calling", "streaming"]
+    }).merge(context_window: limit)
+    models = (RubyLLM.models.all + RubyLLM.models.unlisted).map(&:to_h)
+    models.reject! { |entry| entry[:id] == model[:id] && entry[:provider] == provider }
+    models << model
+    Tempfile.create(["phronomy-example-models", ".json"]) do |file|
+      file.write(JSON.generate(models))
+      file.flush
+      RubyLLM.models.load_from_json(file.path)
     end
   end
 
-  apply_phronomy_defaults! if defined?(Phronomy)
+  # Chunking examples require known metadata; ordinary agents may run without it.
+  def self.input_token_limit!
+    limit = RubyLLM.models.find(MODEL, provider: PROVIDER).context_window
+    return limit if limit.is_a?(Integer) && limit.positive?
+
+    raise ArgumentError, "This example requires model input metadata; set PHRONOMY_CONTEXT_WINDOW"
+  end
+
+  configure_model_registry!
 end
 
-# Apply defaults now if llm_config.rb is loaded after require "phronomy",
-# and ensure it runs when phronomy is loaded afterwards via the post-require hook.
 require "phronomy"
-LLMConfig.apply_phronomy_defaults!

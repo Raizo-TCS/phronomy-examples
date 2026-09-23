@@ -60,7 +60,7 @@ REVIEWERS = {
 
 LOAD_AND_SPLIT_NODE = lambda do |state|
   Phronomy.configuration.tracer.trace("load_and_split", input: state.file_path) do |_span|
-    available_tokens = [LLMConfig::EFFECTIVE_CONTEXT_WINDOW - REVIEW_OVERHEAD_TOKENS, 1].max
+    available_tokens = [LLMConfig.input_token_limit! - REVIEW_OVERHEAD_TOKENS, 1].max
     source_tokens = (state.source_code.length / 4.0).ceil
     chunk_size = [[available_tokens * 4, state.source_code.length].min, 1].max
     splitter = Phronomy::VectorStore::Splitter::RecursiveSplitter.new(
@@ -134,7 +134,7 @@ end
 def build_improvement_prompt(snapshot)
   priority = snapshot.priority || "security"
   review_text = snapshot.reviews[priority.to_sym].to_s
-  max_improve_chars = [(LLMConfig::EFFECTIVE_CONTEXT_WINDOW - IMPROVE_OVERHEAD_TOKENS) * 4, 1].max
+  max_improve_chars = [(LLMConfig.input_token_limit! - IMPROVE_OVERHEAD_TOKENS) * 4, 1].max
   raw_source = snapshot.chunks.first&.dig(:text) || snapshot.source_code
   source_excerpt = raw_source[0, max_improve_chars]
 

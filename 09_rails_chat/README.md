@@ -89,15 +89,14 @@ verification script:
 export PHRONOMY_MODEL="openai/gpt-oss-20b"
 export PHRONOMY_BASE_URL="http://192.168.122.1:1234/v1"
 export PHRONOMY_API_KEY="lm-studio"
-export PHRONOMY_OUTPUT_RESERVE="4096"
+export PHRONOMY_PROVIDER="openai"
+export PHRONOMY_CONTEXT_WINDOW="8192" # actual model input limit
 ```
 
-`PHRONOMY_OUTPUT_RESERVE` is the fallback output-token reserve used when the
-selected model does not publish a usable `max_output_tokens` value through the
-model registry. Keep it positive and below the selected model's context window.
-
-The values have local-development defaults, so an OpenAI-compatible LM Studio
-endpoint at the default address works without editing source files.
+The shared configuration registers the actual input limit in RubyLLM's registry.
+Omit PHRONOMY_CONTEXT_WINDOW to use available registry/server metadata. No output
+reserve is subtracted. Supply the endpoint and key explicitly for LM Studio;
+without a custom endpoint the shared default is OpenAI.
 
 ## How to Run
 

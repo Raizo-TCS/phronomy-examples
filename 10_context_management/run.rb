@@ -18,6 +18,8 @@
 # result[:messages] is the current logical transcript materialization. It is not
 # the exact per-call LLMInputManifest/provider input.
 
+# This demonstration explicitly supplies a small model input limit to RubyLLM.
+ENV["PHRONOMY_CONTEXT_WINDOW"] ||= "4096"
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
@@ -28,10 +30,7 @@ class ContextDemoAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
-  # Deliberately small enough that the imported history cannot all fit into one
-  # model call. This exercises Context Policy under a bounded token budget while
-  # the canonical Agent state remains intact.
-  context_window 4096
+  # Output generation is independent of the registry input-token limit.
   max_output_tokens 512
 
   instructions <<~PROMPT

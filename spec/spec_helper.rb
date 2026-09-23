@@ -14,7 +14,6 @@ require_relative "support/chat_stub"
 RSpec.configure do |config|
   config.before do
     WebMock.disable_net_connect!
-    LLMConfig.apply_phronomy_defaults!
   end
 
   config.after do

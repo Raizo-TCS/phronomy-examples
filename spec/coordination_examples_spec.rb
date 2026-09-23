@@ -81,7 +81,6 @@ RSpec.describe "Current coordination examples" do
     expect(expected.fetch("sections").first.fetch("content")).to include("durable section")
     calls_before = stub.calls.length
     Phronomy.reset_runtime!
-    LLMConfig.apply_phronomy_defaults!
     loaded = BlogWritingTeam.load(team.team_id, persistence: store)
     expect(loaded.resume(id)).to eq(expected)
     expect(stub.calls.length).to eq(calls_before)

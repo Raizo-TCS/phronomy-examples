@@ -25,7 +25,6 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     main_id = runner.main_agent.agent_id
     Phronomy.reset_runtime!
     pool.disconnect!
-    LLMConfig.apply_phronomy_defaults!
 
     restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored)] }
@@ -53,7 +52,6 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     calls_before = stub.calls.length
     Phronomy.reset_runtime!
     pool.disconnect!
-    LLMConfig.apply_phronomy_defaults!
 
     restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     loaded = BlogWritingTeam.load(team.team_id, persistence: restored)

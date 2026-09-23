@@ -283,3 +283,27 @@ rescue; duplicate IDs and revision conflicts remain ordinary `ConflictError`.
 SQL, indexes, schemas, lock/transaction boundaries and record formats are unchanged.
 The shared `a Persistence backend` suite checks both raw notification and rollback;
 existing domain, transaction, concurrency and failure specs still apply.
+
+## Refactor 34 transaction migration
+
+Explicit nested `backend.transaction` or `persistence.transaction` calls on the
+same backend and synchronous execution context now use savepoints on the same
+connection. A failed inner block rolls back only its changes and re-raises the
+same exception. Catch outside that inner block if the outer scope should continue.
+A successful inner block is still rolled back if the outer block fails.
+
+Previously ActiveRecord joined nested scopes, so catching the inner exception
+could leave its writes pending in the outer transaction. Code depending on those
+writes must change. `ActiveRecord::Rollback` also propagates from this API after
+rollback; it is no longer silently consumed as it is by ActiveRecord itself.
+
+Journal append validates and serializes the complete input batch before writing.
+This prevents an invalid later record from leaving partial rows and an unchanged
+head. It does not make arbitrary database failures safe to catch and ignore in
+the same scope. Let database errors escape, or establish an explicit inner
+transaction before the operation and catch outside it.
+
+Schemas, durable record formats, public method signatures, parent-row lock order
+and transaction-bound connection access are unchanged. Use normal block completion
+or exceptions; non-local exits (`return`, `break`, `throw`) are not portable commit
+controls. Run the matching core contract suite with this adapter.

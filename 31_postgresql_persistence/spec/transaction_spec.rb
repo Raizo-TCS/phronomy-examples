@@ -45,4 +45,20 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence transaction boundary" do
 
     expect(persistence.contents.exist?(content_id)).to be(false)
   end
+  it "propagates ActiveRecord::Rollback after rolling back the inner savepoint" do
+    outer_id = inner_id = nil
+    failure = ActiveRecord::Rollback.new("explicit rollback")
+    persistence.transaction do |outer|
+      outer_id = outer.contents.put_text("outer")
+      expect do
+        persistence.transaction do |inner|
+          inner_id = inner.contents.put_text("inner")
+          raise failure
+        end
+      end.to raise_error { |error| expect(error).to equal(failure) }
+      expect(outer.contents.exist?(inner_id)).to be(false)
+    end
+    expect(persistence.contents.exist?(outer_id)).to be(true)
+    expect(persistence.contents.exist?(inner_id)).to be(false)
+  end
 end

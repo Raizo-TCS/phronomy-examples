@@ -16,34 +16,37 @@ module PhronomyExamples
               "Journal record_ids must be non-empty and unique"
           end
 
+          payloads = encoded.map { |record| Codec.dump_record(record) }
+          position = Integer(expected_position)
+
           with_write_connection do |connection|
             ensure_head!(connection, agent_id)
             current_position = head_on(connection, agent_id)
-            unless current_position == Integer(expected_position)
+            unless current_position == position
               raise Phronomy::Storage::ConflictError,
                 "Journal position mismatch for #{agent_id}: expected #{expected_position}, current #{current_position}"
             end
             reject_existing_record_ids!(connection, agent_id, ids)
 
-            encoded.each_with_index do |record, index|
+            payloads.each_with_index do |payload, index|
               execute_sql(
                 connection,
                 "INSERT INTO phronomy_journal_records " \
                 "(agent_id, sequence, record_id, record_json) VALUES (" \
                 "#{quote_value(connection, agent_id)}, " \
-                "#{Integer(expected_position) + index + 1}, " \
+                "#{position + index + 1}, " \
                 "#{quote_value(connection, ids.fetch(index))}, " \
-                "#{quote_value(connection, Codec.dump_record(record))})"
+                "#{quote_value(connection, payload)})"
               )
             end
 
             unless encoded.empty?
-              next_position = Integer(expected_position) + encoded.length
+              next_position = position + encoded.length
               affected = update_sql(
                 connection,
                 "UPDATE phronomy_journal_heads SET position = #{next_position} " \
                 "WHERE agent_id = #{quote_value(connection, agent_id)} " \
-                "AND position = #{Integer(expected_position)}"
+                "AND position = #{position}"
               )
               unless affected == 1
                 raise Phronomy::Storage::ConflictError,

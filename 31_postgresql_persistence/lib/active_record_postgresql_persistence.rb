@@ -36,12 +36,20 @@ module PhronomyExamples
 
       def transaction
         connection_pool.with_connection do |connection|
-          connection.transaction do
+          rollback_error = nil
+          result = connection.transaction(requires_new: true) do
             yield TransactionView.build(
               connection_pool: connection_pool,
               connection: connection
             )
+          rescue ActiveRecord::Rollback => error
+            # ActiveRecord swallows this exception; the Storage contract does not.
+            rollback_error = error
+            raise
           end
+          raise rollback_error if rollback_error
+
+          result
         end
       end
 

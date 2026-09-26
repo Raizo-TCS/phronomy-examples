@@ -24,7 +24,7 @@ on:
       - "shared/persistence_coordination_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
 
-# Temporary coordinated branch dependency for the Storage SPI migration.
+# Temporary direct main-branch dependency until release-based coordination returns.
 env:
   PHRONOMY_PATH: ${{ github.workspace }}/vendor/phronomy
 
@@ -46,11 +46,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the matching core refactoring branch
+      - name: Check out the current core main branch
         uses: actions/checkout@v4
         with:
           repository: Raizo-TCS/phronomy
-          ref: refactor/architecture
+          ref: main
           path: vendor/phronomy
 
       - uses: ruby/setup-ruby@v1

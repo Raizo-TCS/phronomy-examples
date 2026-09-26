@@ -76,7 +76,7 @@ start instead of relying on a later deferred read-to-write upgrade.
 
 This reference backend still treats SQLite lock/busy failures as storage
 failures. It does **not** translate `SQLITE_BUSY` into
-`Phronomy::Storage::ConflictError`.
+`Phronomy::Persistence::ConflictError`.
 
 Optimistic conflicts are only the portable Phronomy precondition failures such
 as stale revisions and stale Journal positions.

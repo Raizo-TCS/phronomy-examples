@@ -36,8 +36,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
 
     expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
     expect(error).not_to be_a(Phronomy::Storage::ConflictError)
+    expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
     expect(error).not_to be_a(Phronomy::Storage::NotFoundError)
+    expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)
   end
   it "does not relabel an unavailable PostgreSQL endpoint as an optimistic conflict" do
     const_name = :"PhronomyUnavailablePostgreSQLBase_#{SecureRandom.hex(8).upcase}"
@@ -59,8 +61,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
 
     expect(error).to be_a(ActiveRecord::ActiveRecordError).or be_a(PG::Error)
     expect(error).not_to be_a(Phronomy::Storage::ConflictError)
+    expect(error).not_to be_a(Phronomy::Persistence::ConflictError)
     expect(error).not_to be_a(Phronomy::AgentBusyError)
     expect(error).not_to be_a(Phronomy::Storage::NotFoundError)
+    expect(error).not_to be_a(Phronomy::Persistence::NotFoundError)
   ensure
     record_class&.connection_pool&.disconnect! rescue nil
     Object.send(:remove_const, const_name) if const_name && Object.const_defined?(const_name)

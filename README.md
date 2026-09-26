@@ -303,3 +303,6 @@ through its real controller and view. To run that check inside either app:
 Existing `09_rails_chat` databases require the new coordination-table migration:
 `cd 09_rails_chat && bundle exec rails db:migrate`. The migration adds tables;
 it does not rewrite existing Agent, Journal, Content, or Workflow records.
+
+The [Persistence failure contract migration](docs/migrations/persistence-failure-contracts.md)
+explains the paired core change and domain/backend exception ownership.

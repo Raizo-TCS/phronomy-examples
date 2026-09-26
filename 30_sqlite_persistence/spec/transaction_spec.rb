@@ -41,7 +41,7 @@ RSpec.describe "ActiveRecord SQLite Persistence transaction boundary" do
           journal_position: 0
         )
       end
-    end.to raise_error(Phronomy::Storage::ConflictError)
+    end.to raise_error(Phronomy::Persistence::ConflictError)
 
     expect(persistence.contents.exist?(content_id)).to be(false)
   end

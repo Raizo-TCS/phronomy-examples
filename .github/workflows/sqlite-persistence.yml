@@ -11,6 +11,7 @@ on:
       - "shared/llm_config.rb"
       - "Gemfile.phronomy"
       - "shared/persistence_coordination_contract.rb"
+      - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
   pull_request:
     paths:
@@ -22,6 +23,7 @@ on:
       - "shared/llm_config.rb"
       - "Gemfile.phronomy"
       - "shared/persistence_coordination_contract.rb"
+      - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
 
 # Temporary coordinated branch dependency until release-based coordination returns.

@@ -6,6 +6,7 @@ on:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
       - "shared/persistence_coordination_contract.rb"
+      - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
   pull_request:
@@ -13,6 +14,7 @@ on:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
       - "shared/persistence_coordination_contract.rb"
+      - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
 

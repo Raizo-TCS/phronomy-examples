@@ -44,3 +44,9 @@ abort "The selected core still exposes the removed Agent Context API" if
   Phronomy::Agent.const_defined?(:Context, false) || Phronomy::Agent.const_defined?(:LLMInputPatch, false)
 abort "The selected core lacks Execution.submit" unless Phronomy::Execution.respond_to?(:submit)
 puts "r8 unit 1 Context/Tool/Execution API preflight PASS"
+
+abort "The selected core lacks r8 atomic admission; set PHRONOMY_PATH to the matching checkout" unless
+  Phronomy::Persistence.method_defined?(:atomic) &&
+  Phronomy::Agent.const_defined?(:Admission, false) &&
+  Phronomy::MultiAgent.const_defined?(:ReservedChildAdmission, false)
+puts "Atomic parent/child admission API preflight PASS"

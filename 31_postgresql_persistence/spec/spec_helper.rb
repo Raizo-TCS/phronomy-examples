@@ -26,7 +26,7 @@ module PostgreSQLPersistenceSpecSupport
     @postgresql_record_classes << const_name
 
     [
-      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+      Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
         connection_pool: pool
       )),
       pool
@@ -101,9 +101,9 @@ module PostgreSQLPersistenceSpecSupport
     threads&.each { |thread| thread.kill if thread.alive? }
   end
 
-  def with_bound_postgresql_transaction(persistence)
-    persistence.backend.connection_pool.with_connection do |connection|
-      persistence.transaction do |tx|
+  def with_bound_postgresql_transaction(stores)
+    stores.coordinator.backend.connection_pool.with_connection do |connection|
+      stores.agent.transaction do |tx|
         yield tx, connection
       end
     end
@@ -113,11 +113,11 @@ module PostgreSQLPersistenceSpecSupport
     Integer(connection.select_value("SELECT pg_backend_pid()"))
   end
 
-  def wait_until_postgresql_blocked(persistence, backend_pid, timeout: 5)
+  def wait_until_postgresql_blocked(stores, backend_pid, timeout: 5)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
 
     loop do
-      blocker_count = persistence.backend.connection_pool.with_connection do |connection|
+      blocker_count = stores.coordinator.backend.connection_pool.with_connection do |connection|
         Integer(
           connection.select_value(
             "SELECT cardinality(pg_blocking_pids(#{Integer(backend_pid)}))"

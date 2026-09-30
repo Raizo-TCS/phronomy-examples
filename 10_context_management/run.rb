@@ -76,7 +76,7 @@ end
 puts "=== 10 Stateful Agent Context ==="
 puts
 
-persistence = Phronomy::Persistence.in_memory
+persistence = Phronomy::PersistenceComposition.in_memory.agent
 
 agent = ContextDemoAgent.create(
   agent_id: "example-10-atlas",

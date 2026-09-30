@@ -23,8 +23,8 @@ composition. PostgreSQL parent locks and bytea encoding remain explicit.
 
 ## What Phase B proves
 
-The composed Persistence facade exposes the same eight domain repositories
-as the SQLite reference:
+The composition connects Agent, Team, and Workflow ports to the same backend.
+Its domain record adapters cover the same durable resources as the SQLite reference:
 
 - `contents`
 - `agents`
@@ -37,15 +37,8 @@ as the SQLite reference:
 - `transaction`
 - `assert_agent_watermark!`
 
-The domain facade advertises these retained capabilities:
-
-```ruby
-{
-  atomic_all: true,
-  atomic_admission: true,
-  optimistic_revision: true
-}
-```
+The common coordinator owns atomic participation. Backend capabilities are
+specified by Storage SPI 2; the old domain-facade capability API is removed.
 
 PostgreSQL adds validation that SQLite cannot provide:
 
@@ -310,3 +303,5 @@ transaction. Complete stream batches are validated before writes.
 Run the shipped neutral/domain contracts and the database-specific tests against
 the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
 locking, deadlock, connection-failure and fresh-pool tests remain a release gate.
+
+For the coordinated source API migration, see [r8 unit 3](../R8-UNIT3.md).

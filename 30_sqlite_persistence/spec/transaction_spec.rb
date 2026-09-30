@@ -3,14 +3,14 @@
 require "spec_helper"
 
 RSpec.describe "ActiveRecord SQLite Persistence transaction boundary" do
-  let(:persistence) { build_sqlite_persistence.first }
+  let(:stores) { build_sqlite_persistence.first }
 
   it "keeps watermark verification and the following write in one transaction" do
     root = build_agent_root
-    persistence.agents.create(root)
+    stores.agent.agents.create(root)
 
     content_id = nil
-    persistence.transaction do |tx|
+    stores.agent.transaction do |tx|
       expect(
         tx.assert_agent_watermark!(
           agent_id: root.agent_id,
@@ -22,18 +22,18 @@ RSpec.describe "ActiveRecord SQLite Persistence transaction boundary" do
       content_id = tx.contents.put_text("after-watermark")
     end
 
-    expect(persistence.contents.fetch_text(content_id)).to eq("after-watermark")
+    expect(stores.agent.contents.fetch_text(content_id)).to eq("after-watermark")
   end
 
   it "rolls back a write made before a stale watermark check" do
     root = build_agent_root
-    persistence.agents.create(root)
+    stores.agent.agents.create(root)
     advanced = root.with(agent_revision: 1)
-    persistence.agents.save(root.agent_id, expected_revision: 0, root: advanced)
+    stores.agent.agents.save(root.agent_id, expected_revision: 0, root: advanced)
 
     content_id = nil
     expect do
-      persistence.transaction do |tx|
+      stores.agent.transaction do |tx|
         content_id = tx.contents.put_text("must-roll-back")
         tx.assert_agent_watermark!(
           agent_id: root.agent_id,
@@ -43,22 +43,22 @@ RSpec.describe "ActiveRecord SQLite Persistence transaction boundary" do
       end
     end.to raise_error(Phronomy::Persistence::ConflictError)
 
-    expect(persistence.contents.exist?(content_id)).to be(false)
+    expect(stores.agent.contents.exist?(content_id)).to be(false)
   end
   it "propagates ActiveRecord::Rollback after rolling back the inner savepoint" do
     outer_id = inner_id = nil
     failure = ActiveRecord::Rollback.new("explicit rollback")
-    persistence.transaction do |outer|
+    stores.agent.transaction do |outer|
       outer_id = outer.contents.put_text("outer")
       expect do
-        persistence.transaction do |inner|
+        stores.agent.transaction do |inner|
           inner_id = inner.contents.put_text("inner")
           raise failure
         end
       end.to raise_error { |error| expect(error).to equal(failure) }
       expect(outer.contents.exist?(inner_id)).to be(false)
     end
-    expect(persistence.contents.exist?(outer_id)).to be(true)
-    expect(persistence.contents.exist?(inner_id)).to be(false)
+    expect(stores.agent.contents.exist?(outer_id)).to be(true)
+    expect(stores.agent.contents.exist?(inner_id)).to be(false)
   end
 end

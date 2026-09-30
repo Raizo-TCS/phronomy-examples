@@ -4,7 +4,7 @@ require "spec_helper"
 require "phronomy/testing/persistence_contract"
 
 RSpec.describe PhronomyExamples::Persistence::ActiveRecordSQLite do
-  let(:persistence) { build_sqlite_persistence.first }
+  let(:stores) { build_sqlite_persistence.first }
 
   it_behaves_like "a persistence content store"
   it_behaves_like "an Agent repository"

@@ -3,7 +3,7 @@
 RSpec.shared_examples "a neutral SQL resource driver" do
   it "accepts unrelated resource IDs, nullable indexed metadata and physical mappings" do
     persistence = build_persistence
-    pool = persistence.backend.connection_pool
+    pool = persistence.coordinator.backend.connection_pool
     resource = Phronomy::Storage::Resource.new(id: "inventory.items", kind: :records,
       attributes: {code: :nullable_string, quantity: :integer, enabled: :boolean},
       indexes: {code: [:code]}, unique: [{name: :unique_code, fields: [:code], where: {}}])

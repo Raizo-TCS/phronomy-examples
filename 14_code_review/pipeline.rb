@@ -47,7 +47,7 @@ class LocalLlmJudge
   end
 end
 
-IMPROVER_PERSISTENCE = Phronomy::Persistence.in_memory
+IMPROVER_PERSISTENCE = Phronomy::PersistenceComposition.in_memory.agent
 CODE_OUTPUT_GUARDRAIL = CodeOutputGuardrail.new
 REVIEW_OVERHEAD_TOKENS = 200 + REVIEWER_MAX_OUTPUT_TOKENS
 

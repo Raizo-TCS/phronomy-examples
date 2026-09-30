@@ -7,10 +7,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence durability" do
     first_backend, first_pool = build_postgresql_persistence
 
     root = build_agent_root(prefix: "durable-agent")
-    first_backend.agents.create(root)
+    first_backend.agent.agents.create(root)
 
-    content_id = first_backend.contents.put_text("durable PostgreSQL content")
-    appended = first_backend.journals.append(
+    content_id = first_backend.agent.contents.put_text("durable PostgreSQL content")
+    appended = first_backend.agent.journals.append(
       root.agent_id,
       expected_position: 0,
       records: [
@@ -30,17 +30,17 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence durability" do
       journal_position: appended.length,
       lifecycle_status: :active
     )
-    first_backend.agents.save(
+    first_backend.agent.agents.save(
       root.agent_id,
       expected_revision: 0,
       root: updated
     )
 
     execution = build_execution(updated)
-    first_backend.executions.create_active(execution)
+    first_backend.agent.executions.create_active(execution)
 
     thread_id = "durable-workflow-#{SecureRandom.uuid}"
-    first_backend.workflow_states.save(
+    first_backend.workflow.save(
       thread_id,
       expected_revision: nil,
       snapshot: {fields: {value: "persisted"}, phase: "pause"}
@@ -50,16 +50,16 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence durability" do
 
     second_backend, = build_postgresql_persistence
 
-    expect(second_backend.contents.fetch_text(content_id))
+    expect(second_backend.agent.contents.fetch_text(content_id))
       .to eq("durable PostgreSQL content")
-    expect(second_backend.agents.load(root.agent_id).agent_revision).to eq(1)
-    expect(second_backend.journals.head(root.agent_id)).to eq(1)
-    expect(second_backend.journals.read(root.agent_id).first.content_ref).to eq(content_id)
+    expect(second_backend.agent.agents.load(root.agent_id).agent_revision).to eq(1)
+    expect(second_backend.agent.journals.head(root.agent_id)).to eq(1)
+    expect(second_backend.agent.journals.read(root.agent_id).first.content_ref).to eq(content_id)
 
-    reloaded_execution = second_backend.executions.load(execution.execution_id)
+    reloaded_execution = second_backend.agent.executions.load(execution.execution_id)
     expect(reloaded_execution.to_h).to eq(execution.to_h)
 
-    workflow = second_backend.workflow_states.load(thread_id)
+    workflow = second_backend.workflow.load(thread_id)
     expect(workflow[:revision]).to eq(1)
     expect(workflow[:snapshot]).to eq(
       "fields" => {"value" => "persisted"},
@@ -68,10 +68,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence durability" do
   end
 
   it "rejects unsupported Workflow values instead of using a Ruby object serializer" do
-    persistence = build_postgresql_persistence.first
+    stores = build_postgresql_persistence.first
 
     expect do
-      persistence.workflow_states.save(
+      stores.workflow.save(
         "unsupported-#{SecureRandom.uuid}",
         expected_revision: nil,
         snapshot: {fields: {object: Object.new}, phase: "pause"}

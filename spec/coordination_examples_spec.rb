@@ -67,7 +67,7 @@ RSpec.describe "Current coordination examples" do
   end
 
   it "can read a completed Team result again after Runtime restart without Provider calls" do
-    store = Phronomy::Persistence.in_memory
+    store = Phronomy::PersistenceComposition.in_memory.team
     stub = ExampleChatStub.new do |_request, index|
       case index
       when 0 then ExampleChatStub.tool("enqueue_task", description: "Write an introduction")
@@ -77,7 +77,7 @@ RSpec.describe "Current coordination examples" do
     end
     team = BlogWritingTeam.create(team_id: "example-team-restart", persistence: store)
     expected = team.invoke("Ruby concurrency")
-    id = store.list_team_executions(team.team_id).first.team_execution_id
+    id = store.runs(team.team_id).first.team_execution_id
     expect(expected.fetch("sections").first.fetch("content")).to include("durable section")
     calls_before = stub.calls.length
     Phronomy.reset_runtime!

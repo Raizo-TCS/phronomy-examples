@@ -1,9 +1,9 @@
 # 29 — Unified Persistence and durable ownership
 
 This is the compact entry point for the current Unified Persistence architecture.
-The same `Phronomy::Persistence` backend stores Agent durable state and Workflow
-`workflow_states`, while live mutable ownership remains a separate Runtime
-concern.
+`PersistenceComposition.in_memory` binds separate Agent and Workflow ports to
+one Storage backend and neutral Persistence coordinator. Live mutable ownership
+remains a separate Runtime concern.
 
 ## Agent ownership
 
@@ -14,7 +14,7 @@ same `agent_id`.
 
 The example therefore demonstrates both boundaries explicitly:
 
-- `persistence.agents.load(agent_id)` reads the committed durable `AgentRoot`;
+- `stores.agent.agents.load(agent_id)` reads the committed durable `AgentRoot`;
 - `UnifiedPersistenceAgent.load(...)` resolves/hydrates the logical Agent owner,
   but returns the existing owner when one is already live in the process.
 

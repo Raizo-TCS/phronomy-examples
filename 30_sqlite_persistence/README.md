@@ -1,6 +1,6 @@
 # 30 — SQLite Persistence reference backend
 
-This example composes `Phronomy::Persistence` over neutral Storage SPI 2 with a
+This example composes domain stores and a neutral Persistence coordinator over Storage SPI 2 with a
 real durable database:
 
 ```text
@@ -59,14 +59,15 @@ The backend itself does not require Rails and does not refer to
 A caller injects a connection pool:
 
 ```ruby
-backend =
-  Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+stores =
+  Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
     connection_pool: ActiveRecord::Base.connection_pool
   ))
 ```
 
-Example `09_rails_chat` uses exactly this constructor with its Rails primary
-connection pool.
+Pass `stores.agent`, `stores.team`, or `stores.workflow` from this construction
+result to the corresponding domain. Example `09_rails_chat` selects `.agent`
+with its Rails primary connection pool.
 
 ## SQLite transaction model
 
@@ -200,7 +201,7 @@ It does not require an LLM API key.
 ```
 
 `29_unified_persistence` remains the compact architecture example and uses
-`Persistence.in_memory` intentionally.
+`PersistenceComposition.in_memory` intentionally.
 
 ## Rails integration
 
@@ -211,12 +212,12 @@ repository classes into the Rails application.
 The Rails initializer injects:
 
 ```ruby
-Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
   connection_pool: ActiveRecord::Base.connection_pool
 ))
 ```
 
-and Rails owns schema provisioning through its migration. The controllers keep
+Select `.agent` from this composition for the Agent constructor; Rails owns schema provisioning through its migration. The controllers keep
 using Phronomy's normal public Agent lifecycle:
 
 ```text
@@ -298,3 +299,5 @@ transaction. Complete stream batches are validated before writes.
 Run the shipped neutral/domain contracts and the database-specific tests against
 the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
 locking, deadlock, connection-failure and fresh-pool tests remain a release gate.
+
+For the coordinated source API migration, see [r8 unit 3](../R8-UNIT3.md).

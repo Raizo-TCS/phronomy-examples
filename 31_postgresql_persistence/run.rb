@@ -32,7 +32,7 @@ begin
   PhronomyExamples::Persistence::PostgreSQLSchema.apply!(first_pool)
 
   first_backend =
-    Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+    Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
       connection_pool: first_pool
     ))
 
@@ -41,10 +41,10 @@ begin
     agent_definition_id: "postgres-reference-agent",
     agent_definition_version: 1
   )
-  first_backend.agents.create(root)
+  first_backend.agent.agents.create(root)
 
-  content_id = first_backend.contents.put_text("durable PostgreSQL content")
-  appended = first_backend.journals.append(
+  content_id = first_backend.agent.contents.put_text("durable PostgreSQL content")
+  appended = first_backend.agent.journals.append(
     root.agent_id,
     expected_position: 0,
     records: [
@@ -64,7 +64,7 @@ begin
     journal_position: appended.length,
     lifecycle_status: :active
   )
-  first_backend.agents.save(
+  first_backend.agent.agents.save(
     root.agent_id,
     expected_revision: 0,
     root: updated
@@ -81,10 +81,10 @@ begin
     agent_root: updated,
     input_record: input_record
   )
-  first_backend.executions.create_active(execution)
+  first_backend.agent.executions.create_active(execution)
 
   workflow_instance_id = "postgres-demo-workflow-#{SecureRandom.uuid}"
-  first_backend.workflow_states.save(
+  first_backend.workflow.save(
     workflow_instance_id,
     expected_revision: nil,
     snapshot: {
@@ -96,7 +96,7 @@ begin
   puts "Stored durable state:"
   puts "  Agent:     #{root.agent_id}"
   puts "  Content:   #{content_id}"
-  puts "  Journal:   #{first_backend.journals.head(root.agent_id)} record(s)"
+  puts "  Journal:   #{first_backend.agent.journals.head(root.agent_id)} record(s)"
   puts "  Execution: #{execution.execution_id}"
   puts "  Workflow:  #{workflow_instance_id}"
 
@@ -107,19 +107,19 @@ begin
     build_pool(:PhronomyPostgreSQLDemoSecondBase, DATABASE_URL)
 
   second_backend =
-    Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+    Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
       connection_pool: second_pool
     ))
 
-  reloaded_root = second_backend.agents.load(root.agent_id)
-  reloaded_execution = second_backend.executions.load(execution.execution_id)
-  reloaded_workflow = second_backend.workflow_states.load(workflow_instance_id)
+  reloaded_root = second_backend.agent.agents.load(root.agent_id)
+  reloaded_execution = second_backend.agent.executions.load(execution.execution_id)
+  reloaded_workflow = second_backend.workflow.load(workflow_instance_id)
 
   puts
   puts "Reloaded through a fresh ActiveRecord pool:"
   puts "  Agent revision:      #{reloaded_root.agent_revision}"
-  puts "  Journal position:    #{second_backend.journals.head(root.agent_id)}"
-  puts "  Content text:        #{second_backend.contents.fetch_text(content_id)}"
+  puts "  Journal position:    #{second_backend.agent.journals.head(root.agent_id)}"
+  puts "  Content text:        #{second_backend.agent.contents.fetch_text(content_id)}"
   puts "  Execution revision:  #{reloaded_execution.execution_revision}"
   puts "  Workflow revision:   #{reloaded_workflow.fetch(:revision)}"
   puts "  Workflow phase:      #{reloaded_workflow.fetch(:snapshot).fetch("phase")}"

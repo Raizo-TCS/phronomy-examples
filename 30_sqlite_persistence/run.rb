@@ -28,7 +28,7 @@ module SQLitePersistenceDemo
     PhronomyExamples::Persistence::SQLiteSchema.apply!(pool)
 
     backend =
-      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+      Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
         connection_pool: pool
       ))
 
@@ -38,10 +38,10 @@ module SQLitePersistenceDemo
       agent_definition_id: "sqlite-reference-demo",
       agent_definition_version: 1
     )
-    backend.agents.create(root)
+    backend.agent.agents.create(root)
 
-    content_id = backend.contents.put_text("durable SQLite content")
-    appended = backend.journals.append(
+    content_id = backend.agent.contents.put_text("durable SQLite content")
+    appended = backend.agent.journals.append(
       root.agent_id,
       expected_position: 0,
       records: [
@@ -60,10 +60,10 @@ module SQLitePersistenceDemo
       journal_position: appended.length,
       lifecycle_status: :active
     )
-    backend.agents.save(root.agent_id, expected_revision: 0, root: updated)
+    backend.agent.agents.save(root.agent_id, expected_revision: 0, root: updated)
 
     workflow_instance_id = "sqlite-demo-workflow-#{suffix}"
-    backend.workflow_states.save(
+    backend.workflow.save(
       workflow_instance_id,
       expected_revision: nil,
       snapshot: {
@@ -76,25 +76,25 @@ module SQLitePersistenceDemo
     puts "  database:    #{database_path}"
     puts "  agent_id:    #{root.agent_id}"
     puts "  content_id:  #{content_id}"
-    puts "  journal:     #{backend.journals.head(root.agent_id)}"
+    puts "  journal:     #{backend.agent.journals.head(root.agent_id)}"
     puts "  workflow_id: #{workflow_instance_id}"
 
     Record.connection_pool.disconnect!
 
     connect(database_path)
     reloaded =
-      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+      Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
         connection_pool: Record.connection_pool
       ))
 
-    loaded_root = reloaded.agents.load(root.agent_id)
-    loaded_workflow = reloaded.workflow_states.load(workflow_instance_id)
+    loaded_root = reloaded.agent.agents.load(root.agent_id)
+    loaded_workflow = reloaded.workflow.load(workflow_instance_id)
 
     puts
     puts "Reloaded through a fresh ActiveRecord connection pool:"
     puts "  agent revision:     #{loaded_root.agent_revision}"
-    puts "  journal position:   #{reloaded.journals.head(root.agent_id)}"
-    puts "  content:            #{reloaded.contents.fetch_text(content_id)}"
+    puts "  journal position:   #{reloaded.agent.journals.head(root.agent_id)}"
+    puts "  content:            #{reloaded.agent.contents.fetch_text(content_id)}"
     puts "  workflow revision:  #{loaded_workflow[:revision]}"
     puts "  workflow phase:     #{loaded_workflow[:snapshot]['phase']}"
   ensure

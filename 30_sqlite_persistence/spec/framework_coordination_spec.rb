@@ -7,8 +7,8 @@ require_relative "../../21_team_coordinator/agents"
 
 RSpec.describe "Sample coordination through the real SQLite adapter" do
   it "restores the active Handoff specialist from SQLite in a fresh Runtime" do
-    persistence, pool = build_sqlite_persistence
-    runner = HandoffDemo.build_runner(persistence: persistence)
+    stores, pool = build_sqlite_persistence
+    runner = HandoffDemo.build_runner(persistence: stores.agent)
     stub = ExampleChatStub.new do |request, index|
       if index.zero?
         edge = request.fetch("tools").map { |tool| tool.fetch("function") }
@@ -26,8 +26,8 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     Phronomy.reset_runtime!
     pool.disconnect!
 
-    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
-    owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored)] }
+    restored = Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
+    owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored.agent)] }
     loaded_edges = edges.map do |edge|
       Phronomy::Agent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
         target_agent: owners.fetch(edge.target_agent.agent_id), description: edge.description)
@@ -38,25 +38,25 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
   end
 
   it "reads a terminal Team aggregate after SQLite reconnection without re-executing children" do
-    persistence, pool = build_sqlite_persistence
+    stores, pool = build_sqlite_persistence
     stub = ExampleChatStub.new do |_request, index|
       case index
       when 0 then ExampleChatStub.tool("enqueue_task", description: "Write the introduction")
       when 1 then ExampleChatStub.tool("finalize")
-      else "An introduction that describes Ruby concurrency, persistence and useful application examples."
+      else "An introduction that describes Ruby concurrency, stores and useful application examples."
       end
     end
-    team = BlogWritingTeam.create(team_id: "sqlite-blog-team", persistence: persistence)
+    team = BlogWritingTeam.create(team_id: "sqlite-blog-team", persistence: stores.team)
     result = team.invoke("Ruby concurrency")
-    run = persistence.list_team_executions(team.team_id).fetch(0)
+    run = stores.team.runs(team.team_id).fetch(0)
     calls_before = stub.calls.length
     Phronomy.reset_runtime!
     pool.disconnect!
 
-    restored = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
-    loaded = BlogWritingTeam.load(team.team_id, persistence: restored)
+    restored = Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
+    loaded = BlogWritingTeam.load(team.team_id, persistence: restored.team)
     expect(loaded.resume(run.team_execution_id)).to eq(result)
-    expect(restored.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)
+    expect(restored.team.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)
     expect(stub.calls.length).to eq(calls_before)
   end
 end

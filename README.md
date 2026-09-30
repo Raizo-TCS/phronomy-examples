@@ -51,11 +51,16 @@ Start with **10_context_management** for this model.
 
 ### Unified durable state
 
-```text
-Agent durable state ───────┐
-                           ├─ Phronomy::Persistence
-Workflow workflow_states ──┘
-```
+`PersistenceComposition` connects separate domain stores to one neutral
+`Persistence` coordinator and Storage backend:
+
+| Domain | Injected component |
+|---|---|
+| Agent | `stores.agent` |
+| Team | `stores.team` |
+| Workflow | `stores.workflow` |
+
+See [r8 unit 3 migration](R8-UNIT3.md) for the source-branch API changes.
 
 Live Agent state remains owned by the single live process-local Agent owner.
 Persistence is the last committed durable representation and recovery source.

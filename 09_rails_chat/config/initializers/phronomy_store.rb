@@ -16,7 +16,7 @@ module PhronomyStore
   # The initial migration and 20260907000000 coordination migration provision
   # all eight repositories used by the standalone reference backend.
   @persistence =
-    Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
+    Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
       connection_pool: ActiveRecord::Base.connection_pool
-    ))
+    )).agent
 end

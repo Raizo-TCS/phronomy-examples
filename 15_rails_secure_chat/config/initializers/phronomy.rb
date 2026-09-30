@@ -22,5 +22,5 @@ module PhronomyStore
     attr_reader :persistence
   end
 
-  @persistence = Phronomy::Persistence.in_memory
+  @persistence = Phronomy::PersistenceComposition.in_memory.agent
 end

@@ -4,14 +4,14 @@ require "spec_helper"
 
 RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
   it "does not relabel a terminated PostgreSQL session as an optimistic conflict" do
-    persistence, = build_postgresql_persistence
+    stores, = build_postgresql_persistence
     _control_backend, control_pool = build_postgresql_persistence
 
     root = build_agent_root(prefix: "terminated-session")
-    persistence.agents.create(root)
+    stores.agent.agents.create(root)
 
     error = begin
-      persistence.backend.connection_pool.with_connection do |target_connection|
+      stores.coordinator.backend.connection_pool.with_connection do |target_connection|
         target_connection.transaction do
           pid = postgresql_backend_pid(target_connection)
 
@@ -24,7 +24,7 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
             end
           end
 
-          persistence.backend.transaction do |view|
+          stores.coordinator.backend.transaction do |view|
             view.records("agent.roots").fetch(root.agent_id)
           end
         end
@@ -50,10 +50,10 @@ RSpec.describe "ActiveRecord PostgreSQL Persistence storage failures" do
     )
 
     error = begin
-      backend = Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
+      backend = Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordPostgreSQL.new(
         connection_pool: record_class.connection_pool
       ))
-      backend.agents.load("connection-failure-probe")
+      backend.agent.agents.load("connection-failure-probe")
       nil
     rescue StandardError => e
       e

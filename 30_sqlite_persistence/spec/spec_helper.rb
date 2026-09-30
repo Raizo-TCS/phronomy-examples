@@ -34,7 +34,7 @@ module SQLitePersistenceSpecSupport
     @sqlite_record_classes << const_name
 
     [
-      Phronomy::Persistence.new(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)),
+      Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool)),
       pool,
       database_path
     ]

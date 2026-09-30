@@ -10,10 +10,11 @@
 require_relative "../shared/llm_config"
 require "phronomy"
 
-persistence = Phronomy::Persistence.in_memory
+stores = Phronomy::PersistenceComposition.in_memory
 
 Phronomy.configure do |config|
-  config.persistence = persistence
+  config.agent_store = stores.agent
+  config.workflow_store = stores.workflow
 end
 
 class UnifiedPersistenceAgent < Phronomy::Agent::Base
@@ -22,7 +23,7 @@ class UnifiedPersistenceAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions <<~PROMPT
-    You are demonstrating Phronomy persistence.
+    You are demonstrating durable conversation memory.
     Answer the user's question in one short sentence.
   PROMPT
 end
@@ -47,15 +48,15 @@ puts "Agent output:  #{agent_result[:output]}"
 puts "Transcript:    #{agent.transcript.size} records"
 
 # Persistence can be inspected independently as the durable source of truth.
-stored_root = persistence.agents.load(agent.agent_id)
+stored_root = stores.agent.agents.load(agent.agent_id)
 puts "Durable Agent revision: #{stored_root.agent_revision}"
-puts "Durable Journal head:   #{persistence.journals.head(agent.agent_id)}"
+puts "Durable Journal head:   #{stores.agent.journals.head(agent.agent_id)}"
 
 # In the same Runtime, .load resolves the existing live owner; it does not create
 # a second mutable Agent object with the same agent_id.
 resolved_owner = UnifiedPersistenceAgent.load(
   agent.agent_id,
-  persistence: persistence
+  persistence: stores.agent
 )
 raise "same-process Agent ownership mismatch" unless resolved_owner.equal?(agent)
 puts "Same-process load returns existing owner: #{resolved_owner.equal?(agent)}"
@@ -89,7 +90,7 @@ halted = approval_workflow.invoke(
   config: {workflow_instance_id: workflow_instance_id}
 )
 
-halted_record = persistence.workflow_states.load(workflow_instance_id)
+halted_record = stores.workflow.load(workflow_instance_id)
 
 puts "Workflow instance id: #{halted.workflow_instance_id}"
 puts "Workflow phase:       #{halted.phase}"
@@ -102,7 +103,7 @@ completed = approval_workflow.send_event(
   event: :approve
 )
 
-completed_record = persistence.workflow_states.load(workflow_instance_id)
+completed_record = stores.workflow.load(workflow_instance_id)
 
 puts
 puts "After approval:"

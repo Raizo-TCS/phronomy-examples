@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# All example bundles use this reviewed, merged core revision.
-# Local development may explicitly select a compatible checkout.
+# These examples require the r8 unit 1 core candidate until it is released.
+# Select that checkout explicitly with PHRONOMY_PATH; the API preflight rejects older gems.
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?

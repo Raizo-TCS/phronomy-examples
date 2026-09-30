@@ -36,3 +36,11 @@ abort "The selected core does not support Storage SPI 2" unless
   Phronomy::Storage::Backend::REQUIRED_CAPABILITIES[:spi_version] == 2 &&
   Phronomy::Storage::View.method_defined?(:records)
 puts "Neutral Storage SPI 2 preflight PASS"
+
+abort "The selected core lacks the r8 Context/Tool framework; set PHRONOMY_PATH to the matching checkout" unless
+  Phronomy.const_defined?(:Context, false) && Phronomy::Context.const_defined?(:Assembly, false) &&
+  Phronomy::Context.const_defined?(:PromptTemplate, false) && Phronomy::Tool.const_defined?(:Authorization, false)
+abort "The selected core still exposes the removed Agent Context API" if
+  Phronomy::Agent.const_defined?(:Context, false) || Phronomy::Agent.const_defined?(:LLMInputPatch, false)
+abort "The selected core lacks Execution.submit" unless Phronomy::Execution.respond_to?(:submit)
+puts "r8 unit 1 Context/Tool/Execution API preflight PASS"

@@ -84,7 +84,7 @@ puts "--- Scenario 3: Instance-level hook (per-instance temperature) ---"
 creative = LoggingAgent.new
 creative.before_llm_input = lambda do |ctx|
   puts "  [instance hook] #{ctx.agent_definition_id} call=#{ctx.call_sequence}: temperature -> 1.0"
-  Phronomy::Agent::LLMInputPatch.new(
+  Phronomy::Context::LLMInputPatch.new(
     model_config_patch: {temperature: 1.0}
   )
 end

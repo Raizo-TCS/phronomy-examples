@@ -1,6 +1,6 @@
 # 12 Prompt Template
 
-Demonstrates `Phronomy::Agent::Context::Instruction::PromptTemplate` with named
+Demonstrates `Phronomy::Context::PromptTemplate` with named
 `{{variable}}` placeholders.
 
 ## Purpose
@@ -13,7 +13,7 @@ that is filled with values at invocation time. Also demonstrates wiring a
 
 | Feature | Usage |
 |---------|-------|
-| `Phronomy::Agent::Context::Instruction::PromptTemplate.new(template:, system_template:)` | Template with `{{variable}}` placeholders |
+| `Phronomy::Context::PromptTemplate.new(template:, system_template:)` | Template with `{{variable}}` placeholders |
 | `#variables` | Lists all placeholder names as `Array<Symbol>` |
 | `#format(**variables)` | Expands placeholders in the human template; returns `String` |
 | `#format_system(**variables)` | Expands placeholders in the system template; returns `String` or `nil` |

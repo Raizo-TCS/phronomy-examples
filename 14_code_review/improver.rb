@@ -13,7 +13,7 @@ IMPROVEMENT_POLICY = (
   "No explanations, preamble, or commentary outside the code block."
 ).freeze
 
-IMPROVE_TEMPLATE = Phronomy::Agent::Context::Instruction::PromptTemplate.new(
+IMPROVE_TEMPLATE = Phronomy::Context::PromptTemplate.new(
   template: <<~TMPL,
     Focus area: {{priority}}
 

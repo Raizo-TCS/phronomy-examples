@@ -31,7 +31,7 @@ class DeterministicAgent < Phronomy::Agent::Base
 
   before_llm_input ->(ctx) {
     puts "  [class hook] #{ctx.agent_definition_id} call=#{ctx.call_sequence}: setting temperature=0.0"
-    Phronomy::Agent::LLMInputPatch.new(
+    Phronomy::Context::LLMInputPatch.new(
       model_config_patch: {temperature: 0.0}
     )
   }

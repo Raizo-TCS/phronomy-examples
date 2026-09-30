@@ -27,6 +27,9 @@ for path in ruby_files():
         fail(path, "removed fan_out API remains; use Execution or dispatch_parallel")
     if "Phronomy::Agent::Context::Capability::Base" in text:
         fail(path, "legacy Capability::Base spelling remains; use Phronomy::Tool::Base")
+    for removed in ["Phronomy::Agent::Context::Instruction::PromptTemplate", "Phronomy::Agent::LLMInputPatch", "Phronomy::Agent::ContextPolicy", "Phronomy::Agent::Selection"]:
+        if removed in text:
+            fail(path, f"removed Context API remains: {removed}")
     if "Phronomy::Agent::Runner" in text:
         fail(path, "removed Agent::Runner namespace remains")
     for removed in ["Phronomy::Agent::SharedState", "Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner", "Phronomy::MultiAgent::Handoff", "Phronomy::MultiAgent::HandoffPolicy"]:

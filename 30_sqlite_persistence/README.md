@@ -65,7 +65,7 @@ stores =
   ))
 ```
 
-Pass `stores.agent`, `stores.team`, or `stores.workflow` from this construction
+Pass `stores.agent`, `stores.multi_agent`, or `stores.workflow` from this construction
 result to the corresponding domain. Example `09_rails_chat` selects `.agent`
 with its Rails primary connection pool.
 

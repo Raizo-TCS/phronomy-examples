@@ -19,6 +19,7 @@ module PhronomyExamples
           create_teams(connection)
           create_team_executions(connection)
           create_handoff_states(connection)
+          create_agent_references(connection)
         end
       end
 
@@ -26,7 +27,7 @@ module PhronomyExamples
         return if connection.adapter_name == "SQLite"
 
         raise Phronomy::Storage::UnsupportedBackendError,
-              "SQLiteSchema requires the ActiveRecord SQLite adapter"
+          "SQLiteSchema requires the ActiveRecord SQLite adapter"
       end
       private_class_method :assert_sqlite!
 
@@ -222,6 +223,33 @@ module PhronomyExamples
         )
       end
       private_class_method :create_handoff_states
+
+      def create_agent_references(connection)
+        unless connection.table_exists?(:phronomy_agent_retentions)
+          connection.create_table(:phronomy_agent_retentions, id: false) do |table|
+            table.string :retention_id, null: false
+            table.string :agent_id, null: false
+            table.string :owner_key, null: false
+            table.integer :revision, null: false
+            table.text :retention_json, null: false
+          end
+        end
+        add_unique_index(connection, :phronomy_agent_retentions, :retention_id, "idx_phronomy_agent_retentions_id")
+        unless connection.table_exists?(:phronomy_agent_cancellations)
+          connection.create_table(:phronomy_agent_cancellations, id: false) do |table|
+            table.string :execution_id, null: false
+            table.string :agent_id, null: false
+            table.integer :revision, null: false
+            table.text :cancellation_json, null: false
+          end
+        end
+        add_unique_index(connection, :phronomy_agent_cancellations, :execution_id, "idx_phronomy_agent_cancellations_id")
+        [:phronomy_agent_retentions, :phronomy_agent_cancellations].each do |table|
+          connection.add_index(table, :agent_id) unless connection.index_exists?(table, :agent_id)
+        end
+        connection.add_index(:phronomy_agent_retentions, :owner_key) unless connection.index_exists?(:phronomy_agent_retentions, :owner_key)
+      end
+      private_class_method :create_agent_references
 
       def add_unique_index(connection, table, columns, name)
         return if connection.index_exists?(table, columns, name: name)

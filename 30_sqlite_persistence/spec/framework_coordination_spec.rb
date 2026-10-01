@@ -8,7 +8,7 @@ require_relative "../../21_team_coordinator/agents"
 RSpec.describe "Sample coordination through the real SQLite adapter" do
   it "restores the active Handoff specialist from SQLite in a fresh Runtime" do
     stores, pool = build_sqlite_persistence
-    runner = HandoffDemo.build_runner(persistence: stores.agent)
+    runner = HandoffDemo.build_runner(persistence: stores)
     stub = ExampleChatStub.new do |request, index|
       if index.zero?
         edge = request.fetch("tools").map { |tool| tool.fetch("function") }
@@ -29,10 +29,10 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
     restored = Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
     owners = participants.to_h { |id, klass| [id, klass.load(id, persistence: restored.agent)] }
     loaded_edges = edges.map do |edge|
-      Phronomy::Agent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
+      Phronomy::MultiAgent::Handoff.new(source_agent: owners.fetch(edge.source_agent.agent_id),
         target_agent: owners.fetch(edge.target_agent.agent_id), description: edge.description)
     end
-    loaded = Phronomy::MultiAgent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges)
+    loaded = Phronomy::MultiAgent::HandoffRunner.new(main_agent: owners.fetch(main_id), handoffs: loaded_edges, persistence: restored.multi_agent)
     expect(loaded.invoke("Here is another invoice detail").fetch(:agent).agent_id).to eq(first.fetch(:agent).agent_id)
     expect(stub.calls.length).to eq(3)
   end
@@ -46,17 +46,17 @@ RSpec.describe "Sample coordination through the real SQLite adapter" do
       else "An introduction that describes Ruby concurrency, stores and useful application examples."
       end
     end
-    team = BlogWritingTeam.create(team_id: "sqlite-blog-team", persistence: stores.team)
+    team = BlogWritingTeam.create(team_id: "sqlite-blog-team", persistence: stores.multi_agent)
     result = team.invoke("Ruby concurrency")
-    run = stores.team.runs(team.team_id).fetch(0)
+    run = stores.multi_agent.runs(team.team_id).fetch(0)
     calls_before = stub.calls.length
     Phronomy.reset_runtime!
     pool.disconnect!
 
     restored = Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(connection_pool: pool))
-    loaded = BlogWritingTeam.load(team.team_id, persistence: restored.team)
+    loaded = BlogWritingTeam.load(team.team_id, persistence: restored.multi_agent)
     expect(loaded.resume(run.team_execution_id)).to eq(result)
-    expect(restored.team.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)
+    expect(restored.multi_agent.team_executions.load(run.team_execution_id).assignments).to eq(run.assignments)
     expect(stub.calls.length).to eq(calls_before)
   end
 end

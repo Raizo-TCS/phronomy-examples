@@ -10,7 +10,27 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_07_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_000000) do
+  create_table "phronomy_agent_retentions", id: false, force: :cascade do |t|
+    t.string "retention_id", null: false
+    t.string "agent_id", null: false
+    t.string "owner_key", null: false
+    t.integer "revision", null: false
+    t.text "retention_json", null: false
+    t.index ["retention_id"], name: "idx_phronomy_agent_retentions_id", unique: true
+    t.index ["agent_id"]
+    t.index ["owner_key"]
+  end
+
+  create_table "phronomy_agent_cancellations", id: false, force: :cascade do |t|
+    t.string "execution_id", null: false
+    t.string "agent_id", null: false
+    t.integer "revision", null: false
+    t.text "cancellation_json", null: false
+    t.index ["execution_id"], name: "idx_phronomy_agent_cancellations_id", unique: true
+    t.index ["agent_id"]
+  end
+
   create_table "phronomy_agents", id: false, force: :cascade do |t|
     t.string "agent_id", null: false
     t.integer "revision", null: false

@@ -18,16 +18,16 @@ RSpec.shared_context "reserved child stores" do
   def new_child_admission
     Phronomy::Agent::Admission.new(persistence: stores.agent, root: child_root,
       input: "reserved input", config: {phronomy_reserved_execution_id: child_execution_id,
-                                       phronomy_coordination: reservation_owner}, preparation_metadata: {})
+                                        phronomy_reservation: reservation_owner}, preparation_metadata: {})
   end
 
   def admit_reserved_child(admission = new_child_admission)
-    Phronomy::MultiAgent::ReservedChildAdmission.new(persistence: stores.team, owner: reservation_owner).admit(admission)
+    Phronomy::MultiAgent::ReservedChildAdmission.new(persistence: stores.multi_agent, owner: reservation_owner).admit(admission)
     admission.result
   end
 
   def cancel_reserved_parent
-    stores.team.transaction do |tx|
+    stores.multi_agent.transaction do |tx|
       current = tx.team_executions.load(reserved_run.team_execution_id)
       tx.team_executions.save(current.team_execution_id, expected_revision: current.execution_revision,
         execution: current.with(metadata: current.metadata.merge("cancel_requested" => true)))
@@ -39,28 +39,29 @@ RSpec.shared_context "reserved child stores" do
     source_root = build_agent_root(prefix: "handoff-source")
     stores.agent.agents.create(source_root)
     source = build_execution(source_root).with(execution_revision: 0, status: :active, phase: :calling_llm,
-      metadata: {"coordination" => {"kind" => "handoff", "main_agent_id" => source_root.agent_id}})
+      metadata: {"reservation" => {"kind" => "handoff", "main_agent_id" => source_root.agent_id}})
     stores.agent.executions.create_active(source)
     handed_off = source.with(status: :handed_off, phase: :handed_off,
-      metadata: source.metadata.merge("handoff_target_execution_id" => child_execution_id))
+      metadata: source.metadata.merge("transfer_receipt" => {"target_agent_id" => child_root.agent_id, "target_execution_id" => child_execution_id, "owner_key" => "handoff:#{source_root.agent_id}"}))
     stores.agent.executions.save(source.execution_id, expected_revision: 0, execution: handed_off)
     now = Time.now.utc.iso8601(6)
-    routing = Phronomy::Agent::HandoffState.new(main_agent_id: source_root.agent_id,
+    routing = Phronomy::MultiAgent::HandoffState.new(main_agent_id: source_root.agent_id,
       handoff_revision: 1, active_agent_id: child_root.agent_id, active_handoff_context_ref: nil,
       phase: "target_pending", pending_source_execution_id: source.execution_id,
       pending_target_execution_id: child_execution_id, created_at: now, updated_at: now, metadata: {})
-    stores.agent.handoff_states.save(source_root.agent_id, expected_revision: nil, state: routing)
-    owner = {"kind" => "handoff", "main_agent_id" => source_root.agent_id, "handoff_revision" => 1}
+    stores.multi_agent.handoff_states.save(source_root.agent_id, expected_revision: nil, state: routing)
+    owner = {"kind" => "handoff", "main_agent_id" => source_root.agent_id}
     runner = Phronomy::MultiAgent::HandoffRunner.allocate
     runner.instance_variable_set(:@main_agent, Struct.new(:agent_id).new(source_root.agent_id))
-    runner.instance_variable_set(:@persistence, stores.agent)
+    runner.instance_variable_set(:@persistence, stores.multi_agent)
+    runner.instance_variable_set(:@agents, {})
     [runner, source, owner]
   end
 
   before do
     stores.agent.agents.create(child_root)
-    stores.team.teams.create(coordination_team)
-    stores.team.team_executions.create_active(reserved_run)
+    stores.multi_agent.teams.create(coordination_team)
+    stores.multi_agent.team_executions.create_active(reserved_run)
   end
 end
 
@@ -101,10 +102,9 @@ RSpec.shared_examples "atomic reserved child admission" do
     runner, source, owner = prepare_handoff_target
     admission = Phronomy::Agent::Admission.new(persistence: stores.agent, root: child_root,
       input: "target", config: {phronomy_reserved_execution_id: child_execution_id,
-                                phronomy_coordination: owner}, preparation_metadata: {})
-    Phronomy::MultiAgent::ReservedChildAdmission.new(persistence: stores.agent, owner: owner).admit(admission)
-    expect(Phronomy::Agent::ExecutionCancellation).to receive(:signal).with(child_execution_id, child_root.agent_id).once
+                                phronomy_reservation: owner}, preparation_metadata: {})
+    Phronomy::MultiAgent::ReservedChildAdmission.new(persistence: stores.multi_agent, owner: owner).admit(admission)
+    expect(stores.agent).to receive(:request_cancellation).with(agent_id: child_root.agent_id, execution_id: child_execution_id, scope: anything).and_call_original
     expect(runner.cancel(source.execution_id)).to include(execution_id: child_execution_id, cancellation_requested: true)
   end
-
 end

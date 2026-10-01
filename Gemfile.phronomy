@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# These examples require the r8 unit 3 core candidate until it is released.
+# These examples require the r8 unit 4 core candidate until it is released.
 # Select that checkout explicitly with PHRONOMY_PATH; the API preflight rejects older gems.
 phronomy_path = ENV["PHRONOMY_PATH"]
 

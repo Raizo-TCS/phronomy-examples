@@ -10,6 +10,10 @@ module PhronomyExamples
 
       def mappings
         {
+          "agent.retentions" => records("phronomy_agent_retentions", "retention_id", "retention_json",
+            attributes: {owner: "agent_id", holder: "owner_key"}),
+          "agent.cancellations" => records("phronomy_agent_cancellations", "execution_id", "cancellation_json",
+            attributes: {owner: "agent_id"}),
           "agent.roots" => records("phronomy_agents", "agent_id", "root_json"),
           "team.roots" => records("phronomy_teams", "team_id", "root_json"),
           "agent.executions" => records("phronomy_executions", "execution_id", "execution_json",
@@ -22,15 +26,15 @@ module PhronomyExamples
           "handoff.states" => records("phronomy_handoff_states", "main_agent_id", "state_json",
             attributes: {active_agent_id: "active_agent_id"}),
           "agent.journal" => {table: "phronomy_journal_records", head_table: "phronomy_journal_heads",
-            stream: "agent_id", head: "position", position: "sequence", id: "record_id", record: "record_json"},
+                              stream: "agent_id", head: "position", position: "sequence", id: "record_id", record: "record_json"},
           "content.blobs" => {table: "phronomy_contents", key: "content_id", bytes: "bytes",
-            attributes: {canonicalization_version: "canonicalization_version"}}
+                              attributes: {canonicalization_version: "canonicalization_version"}}
         }
       end
 
       def records(table, key, record, attributes: {}, constants: {}, constraints: {})
         {table: table, key: key, revision: "revision", record: record,
-          attributes: attributes, constants: constants, constraints: constraints}
+         attributes: attributes, constants: constants, constraints: constraints}
       end
       private_class_method :records
     end

@@ -1,0 +1,772 @@
+{
+  "format": "phronomy.snapshot/1",
+  "revision": "r8-unit3",
+  "resources": {
+    "agent.roots": {
+      "kind": "records",
+      "entries": [
+        {
+          "key": "child",
+          "revision": 1,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "child",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 1,
+              "context_revision": 1,
+              "journal_position": 2,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.136565Z",
+              "updated_at": "2026-10-01T03:38:36.150726Z",
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "ordinary",
+          "revision": 1,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "ordinary",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 1,
+              "context_revision": 1,
+              "journal_position": 2,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.129690Z",
+              "updated_at": "2026-10-01T03:38:36.147165Z",
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "parent",
+          "revision": 0,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "parent",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 0,
+              "context_revision": 0,
+              "journal_position": 0,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.135871Z",
+              "updated_at": "2026-10-01T03:38:36.135871Z",
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "source",
+          "revision": 0,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "source",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 0,
+              "context_revision": 0,
+              "journal_position": 0,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.137296Z",
+              "updated_at": "2026-10-01T03:38:36.137296Z",
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "target",
+          "revision": 0,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "target",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 0,
+              "context_revision": 0,
+              "journal_position": 0,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.138078Z",
+              "updated_at": "2026-10-01T03:38:36.138078Z",
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "unresolved",
+          "revision": 0,
+          "attributes": {},
+          "record": {
+            "record_type": "phronomy.agent_root",
+            "format_version": "0.1",
+            "payload": {
+              "agent_id": "unresolved",
+              "agent_definition_id": "migration-agent",
+              "agent_definition_version": 1,
+              "agent_revision": 0,
+              "context_revision": 0,
+              "journal_position": 0,
+              "lifecycle_status": "idle",
+              "transcript_generation": 0,
+              "created_at": "2026-10-01T03:38:36.139173Z",
+              "updated_at": "2026-10-01T03:38:36.139173Z",
+              "metadata": {}
+            }
+          }
+        }
+      ]
+    },
+    "agent.executions": {
+      "kind": "records",
+      "entries": [
+        {
+          "key": "child-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "child",
+            "active": false
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "child-run",
+              "agent_id": "child",
+              "execution_revision": 1,
+              "status": "completed",
+              "phase": "completed",
+              "base_agent_revision": 1,
+              "base_context_revision": 1,
+              "base_journal_position": 2,
+              "working_records": [
+                {
+                  "record_id": "5a2271d9-85c5-4f76-9e47-68089a3b4586",
+                  "agent_id": "child",
+                  "sequence": null,
+                  "execution_id": "child-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:9190d3f6216d657d58dea3ae22767d85baf47122bf6671e7b8919deca3f6d2c8",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.158586Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": "sha256:bdab8365b1245b86b7e93495879c9ec6ca15a684a748a45e17d699344bb0c659",
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.158618Z",
+              "updated_at": "2026-10-01T03:38:36.161241Z",
+              "terminal_reason": null,
+              "metadata": {
+                "coordination": {
+                  "kind": "subagent",
+                  "parent_agent_id": "parent",
+                  "parent_execution_id": "parent-run",
+                  "slot": "old-slot"
+                }
+              }
+            }
+          }
+        },
+        {
+          "key": "ordinary-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "ordinary",
+            "active": false
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "ordinary-run",
+              "agent_id": "ordinary",
+              "execution_revision": 1,
+              "status": "completed",
+              "phase": "completed",
+              "base_agent_revision": 1,
+              "base_context_revision": 1,
+              "base_journal_position": 2,
+              "working_records": [
+                {
+                  "record_id": "dbc69146-43d8-4a11-ae7c-bb69a1786f70",
+                  "agent_id": "ordinary",
+                  "sequence": null,
+                  "execution_id": "ordinary-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:d7e9497217d5a63973f5868c0f43972a7be7d7f6409e1ade89784a01897f7947",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.152261Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": "sha256:56f7815219440740dbe1b2a4e3e1d9ae77d3e850f89f1184fa9e29a19b3245f1",
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.152965Z",
+              "updated_at": "2026-10-01T03:38:36.155579Z",
+              "terminal_reason": null,
+              "metadata": {}
+            }
+          }
+        },
+        {
+          "key": "parent-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "parent",
+            "active": true
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "parent-run",
+              "agent_id": "parent",
+              "execution_revision": 1,
+              "status": "active",
+              "phase": "calling_llm",
+              "base_agent_revision": 0,
+              "base_context_revision": 0,
+              "base_journal_position": 0,
+              "working_records": [
+                {
+                  "record_id": "bd58d6fd-2e97-4a7b-b25a-77a375975310",
+                  "agent_id": "parent",
+                  "sequence": null,
+                  "execution_id": "parent-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:98e09c4dd9fa07b642141cc3462e05a3b09b3eb20c74c68cfc25a043fb387a93",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.165931Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": null,
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.165980Z",
+              "updated_at": "2026-10-01T03:38:36.172378Z",
+              "terminal_reason": null,
+              "metadata": {
+                "multi_agent_coordination_ref": "sha256:a504accb79988f5927c84038cb98580f3edea1ae5e2146e9e7cbe1f5e5e5619c",
+                "coordination_cancel_requested": true
+              }
+            }
+          }
+        },
+        {
+          "key": "source-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "source",
+            "active": false
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "source-run",
+              "agent_id": "source",
+              "execution_revision": 1,
+              "status": "handed_off",
+              "phase": "handed_off",
+              "base_agent_revision": 0,
+              "base_context_revision": 0,
+              "base_journal_position": 0,
+              "working_records": [
+                {
+                  "record_id": "2836816c-5eb5-4300-93ce-7c6c7960c4fc",
+                  "agent_id": "source",
+                  "sequence": null,
+                  "execution_id": "source-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:5fbc6734401bce2ba9fbf582c9de91637bbb86139b570095cab2534ecc866910",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.175950Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": null,
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.175986Z",
+              "updated_at": "2026-10-01T03:38:36.177274Z",
+              "terminal_reason": null,
+              "metadata": {
+                "coordination": {
+                  "kind": "handoff",
+                  "main_agent_id": "source",
+                  "handoff_revision": 2
+                },
+                "handoff_target_agent_id": "target",
+                "handoff_target_execution_id": "target-run",
+                "handoff_context_ref": "sha256:20b4c73e271c6a2fb5a024e6f75b0820d9da37f77ebe84e7f666233a9c0ecb41"
+              }
+            }
+          }
+        },
+        {
+          "key": "target-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "target",
+            "active": true
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "target-run",
+              "agent_id": "target",
+              "execution_revision": 1,
+              "status": "active",
+              "phase": "calling_llm",
+              "base_agent_revision": 0,
+              "base_context_revision": 0,
+              "base_journal_position": 0,
+              "working_records": [
+                {
+                  "record_id": "ace89c41-66d7-4299-9935-e2d6e90024ec",
+                  "agent_id": "target",
+                  "sequence": null,
+                  "execution_id": "target-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:ca75c41498e37fc12207fcb1e74e9cdba9c49563c98ee6fb16e0dfe12e7c0e30",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.179921Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": null,
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.179954Z",
+              "updated_at": "2026-10-01T03:38:36.181225Z",
+              "terminal_reason": null,
+              "metadata": {
+                "coordination": {
+                  "kind": "handoff",
+                  "main_agent_id": "source",
+                  "handoff_revision": 2
+                },
+                "durable_context_ref": "sha256:20b4c73e271c6a2fb5a024e6f75b0820d9da37f77ebe84e7f666233a9c0ecb41",
+                "pending_llm_call_id": "old-target-call"
+              }
+            }
+          }
+        },
+        {
+          "key": "unresolved-run",
+          "revision": 1,
+          "attributes": {
+            "owner": "unresolved",
+            "active": true
+          },
+          "record": {
+            "record_type": "phronomy.agent_execution",
+            "format_version": "0.1",
+            "payload": {
+              "execution_id": "unresolved-run",
+              "agent_id": "unresolved",
+              "execution_revision": 1,
+              "status": "active",
+              "phase": "calling_llm",
+              "base_agent_revision": 0,
+              "base_context_revision": 0,
+              "base_journal_position": 0,
+              "working_records": [
+                {
+                  "record_id": "02f6a362-ad35-4915-a049-77f0a9eb6d10",
+                  "agent_id": "unresolved",
+                  "sequence": null,
+                  "execution_id": "unresolved-run",
+                  "llm_call_id": null,
+                  "kind": "input_received",
+                  "channel": "external",
+                  "role": "user",
+                  "content_ref": "sha256:703b2539cc09f564478a426903d0bba74f4e88b441a3f55154fc9098f7b9c46a",
+                  "parent_id": null,
+                  "causation_id": null,
+                  "visibility": "agent",
+                  "context_generation": 0,
+                  "context_candidate": false,
+                  "occurred_at": "2026-10-01T03:38:36.183804Z",
+                  "metadata": {}
+                }
+              ],
+              "llm_calls": [],
+              "approval_request": null,
+              "result_ref": null,
+              "error_ref": null,
+              "created_at": "2026-10-01T03:38:36.183836Z",
+              "updated_at": "2026-10-01T03:38:36.184913Z",
+              "terminal_reason": null,
+              "metadata": {
+                "pending_llm_call_id": "old-external-call",
+                "pending_llm_started_at": "2026-09-30T12:00:00Z"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "agent.journal": {
+      "kind": "streams",
+      "entries": [
+        {
+          "stream": "child",
+          "position": 1,
+          "id": "9d2640bc-23eb-40ff-b899-1b4fffb930a6",
+          "record": {
+            "record_type": "phronomy.journal_record",
+            "format_version": "0.1",
+            "payload": {
+              "record_id": "9d2640bc-23eb-40ff-b899-1b4fffb930a6",
+              "agent_id": "child",
+              "sequence": 1,
+              "execution_id": null,
+              "llm_call_id": null,
+              "kind": "knowledge",
+              "channel": "context",
+              "role": "user",
+              "content_ref": "sha256:d4bf695591211cc2b646de180998b7c86d786b0f5d6fd55f33a326c3128d82db",
+              "parent_id": null,
+              "causation_id": null,
+              "visibility": "agent",
+              "context_generation": 0,
+              "context_candidate": true,
+              "occurred_at": "2026-10-01T03:38:36.148519Z",
+              "metadata": {
+                "source": "original",
+                "position": 1
+              }
+            }
+          }
+        },
+        {
+          "stream": "child",
+          "position": 2,
+          "id": "a66616ee-fa9e-4855-8115-e23ab49a1d51",
+          "record": {
+            "record_type": "phronomy.journal_record",
+            "format_version": "0.1",
+            "payload": {
+              "record_id": "a66616ee-fa9e-4855-8115-e23ab49a1d51",
+              "agent_id": "child",
+              "sequence": 2,
+              "execution_id": null,
+              "llm_call_id": null,
+              "kind": "knowledge",
+              "channel": "context",
+              "role": "user",
+              "content_ref": "sha256:f24529b7d2322863ca8e3c6a677b25adf0b136de8b600f9a2833428de00da082",
+              "parent_id": null,
+              "causation_id": null,
+              "visibility": "agent",
+              "context_generation": 0,
+              "context_candidate": true,
+              "occurred_at": "2026-10-01T03:38:36.148997Z",
+              "metadata": {
+                "source": "original",
+                "position": 2
+              }
+            }
+          }
+        },
+        {
+          "stream": "ordinary",
+          "position": 1,
+          "id": "934b62fa-6f11-4625-9a94-7db6d9d5ae55",
+          "record": {
+            "record_type": "phronomy.journal_record",
+            "format_version": "0.1",
+            "payload": {
+              "record_id": "934b62fa-6f11-4625-9a94-7db6d9d5ae55",
+              "agent_id": "ordinary",
+              "sequence": 1,
+              "execution_id": null,
+              "llm_call_id": null,
+              "kind": "knowledge",
+              "channel": "context",
+              "role": "user",
+              "content_ref": "sha256:d4bf695591211cc2b646de180998b7c86d786b0f5d6fd55f33a326c3128d82db",
+              "parent_id": null,
+              "causation_id": null,
+              "visibility": "agent",
+              "context_generation": 0,
+              "context_candidate": true,
+              "occurred_at": "2026-10-01T03:38:36.143677Z",
+              "metadata": {
+                "source": "original",
+                "position": 1
+              }
+            }
+          }
+        },
+        {
+          "stream": "ordinary",
+          "position": 2,
+          "id": "231c66e2-e665-4e55-92a0-c2e270cf2890",
+          "record": {
+            "record_type": "phronomy.journal_record",
+            "format_version": "0.1",
+            "payload": {
+              "record_id": "231c66e2-e665-4e55-92a0-c2e270cf2890",
+              "agent_id": "ordinary",
+              "sequence": 2,
+              "execution_id": null,
+              "llm_call_id": null,
+              "kind": "knowledge",
+              "channel": "context",
+              "role": "user",
+              "content_ref": "sha256:f24529b7d2322863ca8e3c6a677b25adf0b136de8b600f9a2833428de00da082",
+              "parent_id": null,
+              "causation_id": null,
+              "visibility": "agent",
+              "context_generation": 0,
+              "context_candidate": true,
+              "occurred_at": "2026-10-01T03:38:36.144037Z",
+              "metadata": {
+                "source": "original",
+                "position": 2
+              }
+            }
+          }
+        }
+      ],
+      "heads": {
+        "child": 2,
+        "ordinary": 2
+      }
+    },
+    "handoff.states": {
+      "kind": "records",
+      "entries": [
+        {
+          "key": "source",
+          "revision": 2,
+          "attributes": {
+            "active_agent_id": "target"
+          },
+          "record": {
+            "record_type": "phronomy.handoff_state",
+            "format_version": "0.1",
+            "payload": {
+              "main_agent_id": "source",
+              "handoff_revision": 2,
+              "active_agent_id": "target",
+              "active_handoff_context_ref": "sha256:20b4c73e271c6a2fb5a024e6f75b0820d9da37f77ebe84e7f666233a9c0ecb41",
+              "phase": "target_active",
+              "pending_source_execution_id": "source-run",
+              "pending_target_execution_id": "target-run",
+              "created_at": "2026-09-30T12:00:00Z",
+              "updated_at": "2026-09-30T12:00:00Z",
+              "metadata": {
+                "cancelled_execution_ids": [
+                  "target-run"
+                ],
+                "target_definition": {
+                  "id": "migration-agent",
+                  "version": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "content.blobs": {
+      "kind": "blobs",
+      "entries": [
+        {
+          "key": "sha256:20b4c73e271c6a2fb5a024e6f75b0820d9da37f77ebe84e7f666233a9c0ecb41",
+          "hex": "7b226974656d73223a5b5d2c22726573706f6e736962696c697479223a225072657365727665207468697320657861637420726573706f6e736962696c697479227d",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:37e5e798603537a1dcb1987b876c82137e3a2c6f157f51d9e9c8c9b14c1446f9",
+          "hex": "756e7374617274656420696e707574",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "hex": "5b5d",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:56f7815219440740dbe1b2a4e3e1d9ae77d3e850f89f1184fa9e29a19b3245f1",
+          "hex": "7361766564206f7264696e61727920726573756c74",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:5fbc6734401bce2ba9fbf582c9de91637bbb86139b570095cab2534ecc866910",
+          "hex": "696e70757420666f7220736f75726365",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:62936e52dc2108cab34454741f9598d9524e297cd90afa72f9fc56c517192826",
+          "hex": "6368696c6420696e707574",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:703b2539cc09f564478a426903d0bba74f4e88b441a3f55154fc9098f7b9c46a",
+          "hex": "696e70757420666f7220756e7265736f6c766564",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:9190d3f6216d657d58dea3ae22767d85baf47122bf6671e7b8919deca3f6d2c8",
+          "hex": "696e70757420666f72206368696c64",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:98e09c4dd9fa07b642141cc3462e05a3b09b3eb20c74c68cfc25a043fb387a93",
+          "hex": "696e70757420666f7220706172656e74",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:a504accb79988f5927c84038cb98580f3edea1ae5e2146e9e7cbe1f5e5e5619c",
+          "hex": "7b226368696c6472656e223a5b7b226167656e745f6964223a226368696c64222c22646566696e6974696f6e223a7b226964223a226d6967726174696f6e2d6167656e74222c2276657273696f6e223a317d2c2264757261626c655f636f6e746578745f726566223a6e756c6c2c226572726f725f726566223a6e756c6c2c22657865637574696f6e5f6964223a226368696c642d72756e222c22696e7075745f726566223a227368613235363a36323933366535326463323130386361623334343534373431663935393864393532346532393763643930616661373266396663353663353137313932383236222c226b6e6f776c656467655f726566223a227368613235363a65373633653137373633376464663165643261633566303233343362343136353363303063313865383032373464663531363731393764643632396231336162222c226e616d65223a227265736561726368222c226f6e5f6572726f72223a227261697365222c22726573756c745f726566223a227368613235363a62646162383336356231323435623836623765393334393538373963396563366361313561363834613734386134356531376436393933343462623063363539222c22736c6f74223a226f6c642d736c6f74222c227374617465223a22636f6d706c65746564227d2c7b226167656e745f6964223a226f6c642d72657365727665642d6167656e742d75756964222c22646566696e6974696f6e223a7b226964223a226d6967726174696f6e2d6167656e74222c2276657273696f6e223a317d2c2264757261626c655f636f6e746578745f726566223a6e756c6c2c226572726f725f726566223a6e756c6c2c22657865637574696f6e5f6964223a226f6c642d72657365727665642d657865637574696f6e2d75756964222c22696e7075745f726566223a227368613235363a33376535653739383630333533376131646362313938376238373663383231333765336132633666313537663531643965396338633962313463313434366639222c226b6e6f776c656467655f726566223a227368613235363a34663533636461313863326261613063303335346262356639613365636265356564313261623464386531316261383733633266313131363132303262393435222c226e616d65223a227265736561726368222c226f6e5f6572726f72223a227261697365222c22726573756c745f726566223a6e756c6c2c22736c6f74223a22756e737461727465642d736c6f74222c227374617465223a227265736572766564227d5d2c226b696e64223a227374617469635f7375626167656e74227d",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:bdab8365b1245b86b7e93495879c9ec6ca15a684a748a45e17d699344bb0c659",
+          "hex": "7361766564206368696c6420726573756c74",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:ca75c41498e37fc12207fcb1e74e9cdba9c49563c98ee6fb16e0dfe12e7c0e30",
+          "hex": "696e70757420666f7220746172676574",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:d4bf695591211cc2b646de180998b7c86d786b0f5d6fd55f33a326c3128d82db",
+          "hex": "66697273742066616374",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:d7e9497217d5a63973f5868c0f43972a7be7d7f6409e1ade89784a01897f7947",
+          "hex": "696e70757420666f72206f7264696e617279",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:e763e177637ddf1ed2ac5f02343b41653c00c18e80274df5167197dd629b13ab",
+          "hex": "5b7b22636f6e74656e74223a2266697273742066616374222c226d65746164617461223a7b22706f736974696f6e223a312c22736f75726365223a226f726967696e616c227d7d2c7b22636f6e74656e74223a227365636f6e642066616374222c226d65746164617461223a7b22706f736974696f6e223a322c22736f75726365223a226f726967696e616c227d7d5d",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        },
+        {
+          "key": "sha256:f24529b7d2322863ca8e3c6a677b25adf0b136de8b600f9a2833428de00da082",
+          "hex": "7365636f6e642066616374",
+          "attributes": {
+            "canonicalization_version": 1
+          }
+        }
+      ]
+    },
+    "team.roots": {
+      "kind": "records",
+      "entries": []
+    },
+    "team.executions": {
+      "kind": "records",
+      "entries": []
+    },
+    "workflow.states": {
+      "kind": "records",
+      "entries": []
+    }
+  }
+}

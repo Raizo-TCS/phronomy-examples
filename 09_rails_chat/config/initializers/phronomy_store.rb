@@ -13,8 +13,8 @@ module PhronomyStore
   end
 
   # The Phronomy durable tables live in the Rails primary SQLite database.
-  # The initial migration and 20260907000000 coordination migration provision
-  # all eight repositories used by the standalone reference backend.
+  # Apply the coordination and 20261001000000 reference-table migrations.
+  # Existing unit 3 execution records also need the offline data migration.
   @persistence =
     Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
       connection_pool: ActiveRecord::Base.connection_pool

@@ -57,7 +57,7 @@ Start with **10_context_management** for this model.
 | Domain | Injected component |
 |---|---|
 | Agent | `stores.agent` |
-| Team | `stores.team` |
+| Team | `stores.multi_agent` |
 | Workflow | `stores.workflow` |
 
 See [r8 unit 3 migration](R8-UNIT3.md) for the source-branch API changes.

@@ -45,16 +45,16 @@ end
 # Each runner represents one conversation. Every participant shares its exact
 # Persistence instance; reusing this runner continues with the active specialist.
 module HandoffDemo
-  def self.build_runner(persistence: Phronomy::PersistenceComposition.in_memory.agent)
-    triage = TriageAgent.new(persistence: persistence)
-    billing = BillingAgent.new(persistence: persistence)
-    tech = TechSupportAgent.new(persistence: persistence)
+  def self.build_runner(persistence: Phronomy::PersistenceComposition.in_memory)
+    triage = TriageAgent.new(persistence: persistence.agent)
+    billing = BillingAgent.new(persistence: persistence.agent)
+    tech = TechSupportAgent.new(persistence: persistence.agent)
     handoffs = [
-      Phronomy::Agent::Handoff.new(source_agent: triage, target_agent: billing,
+      Phronomy::MultiAgent::Handoff.new(source_agent: triage, target_agent: billing,
         description: "Transfer billing, invoice, payment, refund, or charge-dispute requests."),
-      Phronomy::Agent::Handoff.new(source_agent: triage, target_agent: tech,
+      Phronomy::MultiAgent::Handoff.new(source_agent: triage, target_agent: tech,
         description: "Transfer software errors, crashes, bugs, and technical-support requests.")
     ]
-    Phronomy::MultiAgent::HandoffRunner.new(main_agent: triage, handoffs: handoffs)
+    Phronomy::MultiAgent::HandoffRunner.new(main_agent: triage, handoffs: handoffs, persistence: persistence.multi_agent)
   end
 end

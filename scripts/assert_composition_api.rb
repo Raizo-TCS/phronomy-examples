@@ -65,3 +65,12 @@ abort "The selected core lacks r8 unit 4 execution/coordination boundaries" unle
     Phronomy::PersistenceComposition::Stores.members.include?(:multi_agent)
 abort "The selected core still exposes Agent-owned Handoff" if Phronomy::Agent.const_defined?(:Handoff, false)
 puts "r8 unit 4 Agent/MultiAgent API preflight PASS"
+
+abort "The selected core lacks r8 unit 5 common contracts; set PHRONOMY_PATH to the matching checkout" unless
+  Phronomy.const_defined?(:Embeddings, false) && Phronomy.const_defined?(:Documents, false) &&
+    Phronomy::Embeddings::Base.protected_method_defined?(:perform_embed) &&
+    Phronomy::VectorStore::Base.protected_method_defined?(:perform_search) &&
+    Phronomy::VectorStore::InMemory.instance_method(:add).owner == Phronomy::VectorStore::Base
+abort "The selected core still exposes the removed VectorStore helper namespaces" if
+  [:Embeddings, :Loader, :Splitter].any? { |name| Phronomy::VectorStore.const_defined?(name, false) }
+puts "r8 unit 5 VectorStore/Embeddings/Documents API preflight PASS"

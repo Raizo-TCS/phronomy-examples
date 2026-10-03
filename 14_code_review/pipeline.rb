@@ -63,7 +63,7 @@ LOAD_AND_SPLIT_NODE = lambda do |state|
     available_tokens = [LLMConfig.input_token_limit! - REVIEW_OVERHEAD_TOKENS, 1].max
     source_tokens = (state.source_code.length / 4.0).ceil
     chunk_size = [[available_tokens * 4, state.source_code.length].min, 1].max
-    splitter = Phronomy::VectorStore::Splitter::RecursiveSplitter.new(
+    splitter = Phronomy::Documents::Splitter::RecursiveSplitter.new(
       chunk_size: chunk_size,
       chunk_overlap: [chunk_size / 20, 200].min
     )

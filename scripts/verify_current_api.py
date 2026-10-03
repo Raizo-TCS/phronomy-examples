@@ -30,6 +30,9 @@ for path in ruby_files():
     for removed in ["Phronomy::Agent::Context::Instruction::PromptTemplate", "Phronomy::Agent::LLMInputPatch", "Phronomy::Agent::ContextPolicy", "Phronomy::Agent::Selection"]:
         if removed in text:
             fail(path, f"removed Context API remains: {removed}")
+    for removed in ["Phronomy::VectorStore::Embeddings", "Phronomy::VectorStore::Loader", "Phronomy::VectorStore::Splitter"]:
+        if removed in text:
+            fail(path, f"removed unit5 namespace remains: {removed}")
     if "Phronomy::Agent::Runner" in text:
         fail(path, "removed Agent::Runner namespace remains")
     for removed in ["Phronomy::Agent::SharedState", "Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner"]:

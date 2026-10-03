@@ -50,7 +50,7 @@ target_files.each_with_index do |path, idx|
   line_count = File.readlines(path).count
   source = File.read(path)
 
-  splitter = Phronomy::VectorStore::Splitter::RecursiveSplitter.new(
+  splitter = Phronomy::Documents::Splitter::RecursiveSplitter.new(
     chunk_size: MAX_CHUNK_CHARS,
     chunk_overlap: 200
   )

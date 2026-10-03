@@ -9,7 +9,7 @@ and tracing into one application flow.
 | Feature | API | Usage |
 |---|---|---|
 | Input/output boundary | `Phronomy::Filter::Base` | Validates source input and improved-code output |
-| Source splitting | `Phronomy::VectorStore::Splitter::RecursiveSplitter` | Splits large Ruby files for reviewer calls |
+| Source splitting | `Phronomy::Documents::Splitter::RecursiveSplitter` | Splits large Ruby files for reviewer calls |
 | Workflow | `Phronomy::Workflow.define` | Models the full review lifecycle |
 | Typed state | `Phronomy::WorkflowContext` | Carries source, chunks, findings, selection and result |
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |

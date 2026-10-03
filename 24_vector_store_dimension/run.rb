@@ -50,12 +50,12 @@ puts
 
 puts "--- Part 2: VectorSearch tool → Agent ---"
 
-class KeywordEmbeddings < Phronomy::VectorStore::Embeddings::Base
+class KeywordEmbeddings < Phronomy::Embeddings::Base
   TERMS = %w[refund shipping support security].freeze
 
-  def embed(text, cancellation_token = nil)
-    cancellation_token&.raise_if_cancelled!
+  protected
 
+  def perform_embed(text, cancellation_token = nil)
     normalized = text.to_s.downcase
     vector = TERMS.map { |term| normalized.scan(term).length.to_f }
 

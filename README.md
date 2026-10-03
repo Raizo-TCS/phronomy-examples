@@ -5,6 +5,10 @@
 
 # Phronomy Examples
 
+The r8 unit 5 examples require the matching core contract changes. Embeddings
+now lives in `Phronomy::Embeddings`; loaders and splitters live in
+`Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md).
+
 All seven bundles target the RubyLLM 2.0 core candidate. Export `PHRONOMY_PATH`
 as an absolute path, then run `scripts/update_phronomy.sh` before verification.
 The portable lockfiles use a sibling `phronomy` checkout; Bundler updates that

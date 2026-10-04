@@ -315,3 +315,8 @@ it does not rewrite existing Agent, Journal, Content, or Workflow records.
 
 The [Persistence failure contract migration](docs/migrations/persistence-failure-contracts.md)
 explains the paired core change and domain/backend exception ownership.
+
+## r8 unit 6 contracts
+
+See [the migration notes](R8-UNIT6.md) and
+[the local LLM/Tool example](33_llm_tool_contracts/README.md).

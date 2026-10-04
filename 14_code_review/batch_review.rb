@@ -78,7 +78,7 @@ target_files.each_with_index do |path, idx|
       begin
         result = task.wait_result
         findings[key] << result[:output].to_s
-      rescue Phronomy::ContextLengthError, Phronomy::TransportError => e
+      rescue Phronomy::LLMAdapter::ContextLengthError, Phronomy::LLMAdapter::TransportError => e
         warn "\n  [SKIP #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
       rescue => e
         warn "\n  [ERROR #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"

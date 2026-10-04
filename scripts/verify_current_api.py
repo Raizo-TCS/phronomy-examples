@@ -33,6 +33,8 @@ for path in ruby_files():
     for removed in ["Phronomy::VectorStore::Embeddings", "Phronomy::VectorStore::Loader", "Phronomy::VectorStore::Splitter"]:
         if removed in text:
             fail(path, f"removed unit5 namespace remains: {removed}")
+    if re.search(r"Phronomy::(?:TokenUsage|TransportError|RateLimitError|AuthenticationError|ContextLengthError)\b", text):
+        fail(path, "removed root LLM value/failure name remains; use Phronomy::LLMAdapter")
     if "Phronomy::Agent::Runner" in text:
         fail(path, "removed Agent::Runner namespace remains")
     for removed in ["Phronomy::Agent::SharedState", "Phronomy::Agent::HandoffRunner", "Phronomy::MultiAgent::Runner"]:

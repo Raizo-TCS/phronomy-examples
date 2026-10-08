@@ -1,10 +1,14 @@
-PATH
-  remote: ../phronomy
+GIT
+  remote: https://github.com/Raizo-TCS/phronomy.git
+  revision: fcb8ce752a5935c51cf0cce3fb55ce7bf7f19adf
+  ref: fcb8ce752a5935c51cf0cce3fb55ce7bf7f19adf
   specs:
-    phronomy (0.27.0)
+    phronomy (0.28.0)
       json (< 3)
+      json_schemer (~> 2.5)
       mcp (~> 1.0)
       ruby_llm (~> 2.0.0)
+      schematist (~> 1.1)
       state_machines (~> 0.6)
       zeitwerk (>= 2.6, < 3)
 
@@ -41,13 +45,16 @@ GEM
       simpleidn (~> 0.2)
     logger (1.7.0)
     marcel (1.2.1)
-    mcp (1.6.0)
+    mcp (1.7.0)
       json_schemer (>= 2.4)
     multipart-post (2.4.1)
-    net-http (0.9.1)
+    net-http (0.10.0)
+      net-protocol (>= 0.3.0)
       uri (>= 0.11.1)
+    net-protocol (0.4.0)
+      timeout
     public_suffix (7.0.5)
-    regexp_parser (2.13.0)
+    regexp_parser (2.13.1)
     rexml (3.4.4)
     rspec (3.13.2)
       rspec-core (~> 3.13.0)
@@ -83,7 +90,8 @@ GEM
     simplecov_json_formatter (0.1.4)
     simpleidn (0.3.0)
     state_machines (0.202.0)
-    uri (1.1.1)
+    timeout (0.6.1)
+    uri (1.1.2)
     webmock (3.26.4)
       addressable (>= 2.8.0)
       crack (>= 0.3.2)
@@ -96,7 +104,7 @@ PLATFORMS
   x86_64-linux-gnu
 
 DEPENDENCIES
-  phronomy!
+  phronomy (~> 0.28.0)!
   rspec (~> 3.13)
   simplecov
   simplecov-lcov
@@ -122,12 +130,13 @@ CHECKSUMS
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   marcel (1.2.1) sha256=1678e9360e32f9eafa917c80029e2f6d10b2715c66a4b87b6d0da9b9cd1f859f
-  mcp (1.6.0) sha256=73fe3be93df68cffd6e73c852e7a1182a0a5eacdaff586b864bfeac22ae6f7be
+  mcp (1.7.0) sha256=bdf3261177b948b0777a6f247c57aad5f64c84830c02d126d4bfea188b0cebb7
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
-  net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
-  phronomy (0.27.0)
+  net-http (0.10.0) sha256=1a2ff6e37a05724973c43f2bf7bf105f59c36a4cd0a7e9b1c021a0a566987c27
+  net-protocol (0.4.0) sha256=f9f90c8c6f64794a45160bf422177a336db12809de3beeeaa26b88fcd2e8c853
+  phronomy (0.28.0)
   public_suffix (7.0.5) sha256=1a8bb08f1bbea19228d3bed6e5ed908d1cb4f7c2726d18bd9cadf60bc676f623
-  regexp_parser (2.13.0) sha256=d105d95d2138954e73914d2fbfb3d0a8f8605a49a3e89864c32e78b9107cb770
+  regexp_parser (2.13.1) sha256=5aedb6b7c35688f51e86eef17a15374dfd287c83f4ca644b2c5f3ec50a33b44b
   rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142
   rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587
   rspec-core (3.13.6) sha256=a8823c6411667b60a8bca135364351dda34cd55e44ff94c4be4633b37d828b2d
@@ -142,7 +151,8 @@ CHECKSUMS
   simplecov_json_formatter (0.1.4) sha256=529418fbe8de1713ac2b2d612aa3daa56d316975d307244399fa4838c601b428
   simpleidn (0.3.0) sha256=12ca730bed2f3db04d11e9bfd1bca3e11fb37f55b21eb2e9793fb5814bf54d03
   state_machines (0.202.0) sha256=20db5367b4541155fc6d764f8ba54182ba6d49ceac7d917598709a61143a16e1
-  uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
+  timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
+  uri (1.1.2) sha256=89292e98eabbef6248b0a0ed5e7e398e152f83f17560023a6d94a7f492b169fb
   webmock (3.26.4) sha256=8d8da206d217ebe6968cfb09c77f4533c23074e1432bad865f3994eacbaad50d
   webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
   zeitwerk (2.8.3) sha256=2c85125a8467ce069e20123d1e709a08955c9d29c118c25b46b7b7fafdbb92e5

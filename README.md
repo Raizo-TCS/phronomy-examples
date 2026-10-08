@@ -1,18 +1,17 @@
-> Refactor 45 snapshot: use `PHRONOMY_PATH` to select a core checkout with the
-> RubyLLM 2.0 migration applied. These examples and the core must be updated together.
-> The published 0.26.0 gem does not contain this candidate. Complete old in-flight
-> Tool executions before upgrading; see the core migration guide.
-
 # Phronomy Examples
 
-The r8 unit 5 examples require the matching core contract changes. Embeddings
-now lives in `Phronomy::Embeddings`; loaders and splitters live in
-`Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md).
+These examples target Phronomy 0.28.0 and the r8 contracts, including the
+RubyLLM 2.0 migration. Before publication, all seven bundles and CI use the exact
+core Git revision pinned in `Gemfile.phronomy`. Complete old in-flight Tool
+executions before upgrading; see the core migration guide.
 
-All seven bundles target the RubyLLM 2.0 core candidate. Export `PHRONOMY_PATH`
-as an absolute path, then run `scripts/update_phronomy.sh` before verification.
-The portable lockfiles use a sibling `phronomy` checkout; Bundler updates that
-source to your explicit path. No publishing or version bump is included here.
+Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
+`Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
+[r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
+
+CI installs the shared dependency and its lockfiles directly. It does not select
+a core branch from the examples branch name. To verify a local core checkout,
+export `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
 
 ## LLM token settings
 

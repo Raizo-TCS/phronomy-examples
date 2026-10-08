@@ -10,6 +10,14 @@ stable `team_id` and a durable Persistence backend, create the Team once, then
 load that identity and resume the saved `team_execution_id` after restart.
 The CLI creates a new InMemory Team for each demonstration attempt.
 
+`finalize` closes task admission; the coordinator then finishes its conversation
+with an ordinary reply. Enqueue all four or more sections before finalizing.
+The example validates at least four sections with at least 50 characters each
+and uses `OutputValidator`'s existing limit of three retries. A durably failed
+`Cannot enqueue after finalize` rejection starts a fresh Team within that limit.
+Uncertain persistence outcomes and other execution errors propagate instead of
+starting another generation.
+
 The aggregate receives symbol-keyed assignments. Its return value is saved as
 canonical JSON, so callers read string keys such as `result.fetch("sections")`.
 Aggregation must be safe to repeat until its result is durably committed.

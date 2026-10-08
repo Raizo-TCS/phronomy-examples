@@ -1,10 +1,14 @@
-PATH
-  remote: ../../phronomy
+GIT
+  remote: https://github.com/Raizo-TCS/phronomy.git
+  revision: fcb8ce752a5935c51cf0cce3fb55ce7bf7f19adf
+  ref: fcb8ce752a5935c51cf0cce3fb55ce7bf7f19adf
   specs:
-    phronomy (0.26.0)
+    phronomy (0.28.0)
       json (< 3)
+      json_schemer (~> 2.5)
       mcp (~> 1.0)
       ruby_llm (~> 2.0.0)
+      schematist (~> 1.1)
       state_machines (~> 0.6)
       zeitwerk (>= 2.6, < 3)
 
@@ -117,7 +121,7 @@ GEM
     et-orbi (1.4.0)
       tzinfo
     event_stream_parser (1.0.0)
-    faraday (2.14.3)
+    faraday (2.14.4)
       faraday-net_http (>= 2.0, < 3.5)
       json
       logger
@@ -184,7 +188,7 @@ GEM
       net-pop
       net-smtp
     marcel (1.2.1)
-    mcp (1.5.1)
+    mcp (1.7.0)
       json_schemer (>= 2.4)
     mini_mime (1.1.5)
     minitest (6.0.6)
@@ -192,14 +196,15 @@ GEM
       prism (~> 1.5)
     msgpack (1.8.0)
     multipart-post (2.4.1)
-    net-http (0.9.1)
+    net-http (0.10.0)
+      net-protocol (>= 0.3.0)
       uri (>= 0.11.1)
     net-imap (0.6.4)
       date
       net-protocol
     net-pop (0.1.2)
       net-protocol
-    net-protocol (0.2.2)
+    net-protocol (0.4.0)
       timeout
     net-scp (4.1.0)
       net-ssh (>= 2.6.5, < 8.0.0)
@@ -290,7 +295,7 @@ GEM
       erb
       psych (>= 4.0.0)
       tsort
-    regexp_parser (2.12.0)
+    regexp_parser (2.13.1)
     reline (0.6.3)
       io-console (~> 0.5)
     rubocop (1.86.1)
@@ -382,7 +387,7 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
-    uri (1.1.1)
+    uri (1.1.2)
     useragent (0.16.11)
     web-console (4.3.0)
       actionview (>= 8.0.0)
@@ -416,7 +421,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
-  phronomy!
+  phronomy (~> 0.28.0)!
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
-# These examples require the r8 unit 6 core candidate until it is released.
-# Select that checkout explicitly with PHRONOMY_PATH; the API preflight rejects older gems.
+# Pin the reviewed 0.28.0 candidate until the gem is published.
+# A local checkout can be selected explicitly with PHRONOMY_PATH.
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", "~> 0.27.0"
+  gem "phronomy", "~> 0.28.0", git: "https://github.com/Raizo-TCS/phronomy.git",
+    ref: "fcb8ce752a5935c51cf0cce3fb55ce7bf7f19adf"
 end

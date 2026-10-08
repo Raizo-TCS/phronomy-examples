@@ -26,10 +26,6 @@ on:
       - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/sqlite-persistence.yml"
 
-# Temporary coordinated branch dependency until release-based coordination returns.
-env:
-  PHRONOMY_PATH: ${{ github.workspace }}/vendor/phronomy
-
 jobs:
   sqlite-persistence:
     name: Ruby ${{ matrix.ruby }} / SQLite Persistence
@@ -48,12 +44,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the matching core branch
-        uses: actions/checkout@v4
-        with:
-          repository: Raizo-TCS/phronomy
-          ref: ${{ github.head_ref || github.ref_name }}
-          path: vendor/phronomy
 
       - uses: ruby/setup-ruby@v1
         with:

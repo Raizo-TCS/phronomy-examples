@@ -18,10 +18,6 @@ on:
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
 
-# Temporary coordinated branch dependency until release-based coordination returns.
-env:
-  PHRONOMY_PATH: ${{ github.workspace }}/vendor/phronomy
-
 jobs:
   postgresql-persistence:
     name: Ruby ${{ matrix.ruby }} / PostgreSQL Persistence
@@ -59,12 +55,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the matching core branch
-        uses: actions/checkout@v4
-        with:
-          repository: Raizo-TCS/phronomy
-          ref: ${{ github.head_ref || github.ref_name }}
-          path: vendor/phronomy
 
       - uses: ruby/setup-ruby@v1
         with:

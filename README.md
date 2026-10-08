@@ -1,9 +1,9 @@
 # Phronomy Examples
 
 These examples target Phronomy 0.28.0 and the r8 contracts, including the
-RubyLLM 2.0 migration. Before publication, all seven bundles and CI use the exact
-core Git revision pinned in `Gemfile.phronomy`. Complete old in-flight Tool
-executions before upgrading; see the core migration guide.
+RubyLLM 2.0 migration. All seven bundles and CI use the released gem through
+`Gemfile.phronomy`. Complete old in-flight Tool executions before upgrading;
+see the core migration guide.
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
@@ -116,8 +116,8 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-Normal repository use resolves the exact reviewed Phronomy Git revision through
-that shared definition:
+Normal repository use resolves the released Phronomy 0.28 series from RubyGems
+through that shared definition and the committed lockfiles:
 
 ```bash
 ./scripts/update_phronomy.sh

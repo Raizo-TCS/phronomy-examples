@@ -9,7 +9,7 @@ RSpec.describe "Blog planning validation and retries" do
   let(:accepted) { double("accepted team", stream: valid_post) }
   let(:execution) { OpenStruct.new(team_execution_id: "failed-plan") }
   let(:failure) do
-    {status: "failed", error: {"class" => "Phronomy::ConfigurationError", "message" => "Cannot enqueue after finalize"}}
+    {status: "failed", error: {"class" => "Phronomy::ConfigurationError", "message" => "Cannot enqueue after finalize", "code" => "team.enqueue_after_finalize"}}
   end
   let(:error) { Phronomy::Error.new("Phronomy::ConfigurationError: Cannot enqueue after finalize") }
   let(:rejected) { double("rejected team", executions: [execution], result: failure) }
@@ -50,7 +50,7 @@ RSpec.describe "Blog planning validation and retries" do
   end
 
   it "propagates a different confirmed failure without retrying" do
-    failure.fetch(:error)["message"] = "Different configuration failure"
+    failure.fetch(:error)["code"] = "other.failure"
     expect(BlogWritingTeam).to receive(:new).once.and_return(rejected)
     expect { BlogWritingTeam.generate("topic") }.to raise_error { |caught| expect(caught).to equal(error) }
   end
@@ -69,5 +69,23 @@ RSpec.describe "Blog planning validation and retries" do
   it "fails verification after the existing retry limit" do
     expect(BlogWritingTeam).to receive(:new).exactly(OutputValidator::MAX_RETRIES + 1).times.and_return(rejected)
     expect { BlogWritingTeam.generate("topic") }.to raise_error(SystemExit) { |exit| expect(exit.status).to eq(1) }
+  end
+  it "uses the reason code even when the diagnostic wording changes" do
+    failure.fetch(:error)["message"] = "Task generation was already closed"
+    expect(BlogWritingTeam).to receive(:new).ordered.and_return(rejected)
+    expect(BlogWritingTeam).to receive(:new).ordered.and_return(accepted)
+    expect(BlogWritingTeam.generate("topic")).to eq(valid_post)
+  end
+
+  it "does not infer a code from an old matching message" do
+    failure.fetch(:error).delete("code")
+    expect(BlogWritingTeam).to receive(:new).once.and_return(rejected)
+    expect { BlogWritingTeam.generate("topic") }.to raise_error { |caught| expect(caught).to equal(error) }
+  end
+
+  it "does not retry an active outcome even with a matching code" do
+    failure[:status] = "active"
+    expect(BlogWritingTeam).to receive(:new).once.and_return(rejected)
+    expect { BlogWritingTeam.generate("topic") }.to raise_error { |caught| expect(caught).to equal(error) }
   end
 end

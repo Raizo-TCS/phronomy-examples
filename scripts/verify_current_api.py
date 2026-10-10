@@ -85,7 +85,7 @@ for path in ruby_files():
     ):
         fail(path, "per-operation event block remains")
 
-for path in (ROOT / "shared" / "storage").glob("*.rb"):
+for path in (ROOT / "packages/phronomy-active_record/lib/phronomy/active_record/storage").glob("*.rb"):
     text = path.read_text(encoding="utf-8")
     for stale in ["Phronomy::Agent", "Phronomy::MultiAgent", "Phronomy::Workflow", "Phronomy::ContentStore",
                   "assert_agent_watermark", "phronomy_agents", "phronomy_executions", "phronomy_teams"]:
@@ -94,7 +94,7 @@ for path in (ROOT / "shared" / "storage").glob("*.rb"):
 for root_name, dialect in [("30_sqlite_persistence", "sqlite"), ("31_postgresql_persistence", "postgresql")]:
     path = ROOT / root_name / "lib" / f"active_record_{dialect}_persistence.rb"
     text = path.read_text(encoding="utf-8")
-    if "< PhronomyExamples::Storage::Backend" not in text or "StorageMapping.resources" not in text:
+    if "< PhronomyActiveRecord::Storage::Backend" not in text or "StorageMapping.resources" not in text:
         fail(path, "SPI 2 resource composition missing")
 
 if failures:

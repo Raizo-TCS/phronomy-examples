@@ -14,7 +14,7 @@ The CLI creates a new InMemory Team for each demonstration attempt.
 with an ordinary reply. Enqueue all four or more sections before finalizing.
 The example validates at least four sections with at least 50 characters each
 and uses `OutputValidator`'s existing limit of three retries. A durably failed
-`Cannot enqueue after finalize` rejection starts a fresh Team within that limit.
+`team.enqueue_after_finalize` reason-code rejection starts a fresh Team within that limit.
 Uncertain persistence outcomes and other execution errors propagate instead of
 starting another generation.
 

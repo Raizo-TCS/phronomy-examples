@@ -7,7 +7,7 @@ page. The latter remains the default.
 | Role | Complete source | Purpose |
 |---|---|---|
 | Basic | [AgentResultJob](app/jobs/agent_result_job.rb) | Invoke an Agent from ActiveJob and publish its final result |
-| Feature-rich | [AgentStreamingJob](app/jobs/agent_streaming_job.rb) and [OrderedEventDelivery](app/services/ordered_event_delivery.rb) | Publish intermediate events with local ordering, buffering and explicit failure handling |
+| Feature-rich | [AgentStreamingJob](app/jobs/agent_streaming_job.rb) and `Phronomy::Integrations::OrderedEventDelivery` | Publish intermediate events with local ordering, buffering and explicit failure handling |
 
 ## Basic path
 
@@ -28,7 +28,7 @@ prove browser receipt.
 AgentStreamingJob registers a listener when constructing the Agent, then calls
 stream. That listener runs on Phronomy's EventLoop even though the Job called
 stream from its own thread. It only creates plain payloads and calls publish.
-OrderedEventDelivery sends those payloads from the existing Phronomy OffloadPool
+The optional Phronomy integration sends those payloads from the existing Phronomy OffloadPool
 via Blocking.call_async. The Rails-facing work runs inside the Rails executor.
 
 | Required property or selected policy | This example |
@@ -73,3 +73,8 @@ For a small TaskResult-to-Workflow example, see [03_state_graph](../03_state_gra
 For synchronous external work and explicit completion signals, see
 [25_event_loop](../25_event_loop/README.md). These are complementary examples, not
 requirements to copy the streaming adapter into every application.
+The Job uses `OrderedEventDelivery.open` to drain on success or failure. Token
+coalescing stays in [TokenEventBatch](app/services/token_event_batch.rb); the
+helper does not interpret event types. AgentResultJob remains the simple
+final-answer-only path. The integration requires the paired DX03-E core change;
+use PHRONOMY_PATH before that core API has a release.

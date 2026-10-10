@@ -1,6 +1,7 @@
 source "https://rubygems.org"
 
 eval_gemfile File.expand_path("../Gemfile.phronomy", __dir__)
+eval_gemfile File.expand_path("../Gemfile.phronomy_active_record", __dir__)
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.3"

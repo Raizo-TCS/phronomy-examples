@@ -2,14 +2,15 @@
 
 require "spec_helper"
 require "timeout"
-require_relative "../18_rails_agent_job/app/services/ordered_event_delivery"
+require "phronomy/integrations/ordered_event_delivery"
+require_relative "../18_rails_agent_job/app/services/token_event_batch"
 
-RSpec.describe OrderedEventDelivery do
+RSpec.describe Phronomy::Integrations::OrderedEventDelivery do
   it "copies queued data and combines only adjacent tokens without moving done" do
     started = Queue.new
     release = Queue.new
     sent = []
-    delivery = described_class.new do |payload|
+    delivery = described_class.new(prepare_batch: TokenEventBatch.method(:call)) do |payload|
       if payload[:type] == "tool_result"
         started << true
         release.pop
@@ -39,7 +40,7 @@ RSpec.describe OrderedEventDelivery do
     started = Queue.new
     release = Queue.new
     sent = []
-    delivery = described_class.new do |payload|
+    delivery = described_class.new(prepare_batch: TokenEventBatch.method(:call)) do |payload|
       if payload[:type] == "start"
         started << true
         release.pop

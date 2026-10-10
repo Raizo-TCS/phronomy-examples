@@ -19,7 +19,7 @@ RSpec.shared_examples "a neutral SQL resource driver" do
       connection.add_index(:inventory_items, :item_key, unique: true)
       connection.add_index(:inventory_items, :code, unique: true, name: "inventory_unique_code")
     end
-    backend = PhronomyExamples::Storage::Backend.new(connection_pool: pool, resources: [resource], dialect: storage_dialect,
+    backend = PhronomyActiveRecord::Storage::Backend.new(connection_pool: pool, resources: [resource], dialect: storage_dialect,
       mappings: {resource.id => {table: "inventory_items", key: "item_key", revision: "revision", record: "envelope",
         attributes: {code: "code", quantity: "quantity", enabled: "enabled"}, constants: {}, constraints: {unique_code: "inventory_unique_code"}}})
     records = backend.view.records(resource)
@@ -40,7 +40,7 @@ RSpec.shared_examples "a neutral SQL resource driver" do
   it "rejects invalid physical names before any storage operation" do
     resource = Phronomy::Storage::Resource.new(id: "arbitrary", kind: :records)
     expect do
-      PhronomyExamples::Storage::Mapping.new(resource,
+      PhronomyActiveRecord::Storage::Mapping.new(resource,
         table: "bad; DROP TABLE other", key: "id", revision: "revision", record: "record",
         attributes: {}, constants: {}, constraints: {})
     end.to raise_error(ArgumentError, /identifiers/)

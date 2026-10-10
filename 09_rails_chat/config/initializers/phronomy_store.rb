@@ -1,22 +1,14 @@
 # frozen_string_literal: true
 
-# Example 09 intentionally consumes the concrete SQLite Persistence backend
-# implemented and contract-tested by example 30. Keep the backend implementation
-# authoritative there; this Rails app is only a consumer.
-require Rails.root.join(
-  "../30_sqlite_persistence/lib/active_record_sqlite_persistence"
-).expand_path.to_s
+require "phronomy/active_record"
 
 module PhronomyStore
   class << self
     attr_reader :persistence
   end
 
-  # The Phronomy durable tables live in the Rails primary SQLite database.
-  # Apply the coordination and 20261001000000 reference-table migrations.
-  # Existing unit 3 execution records also need the offline data migration.
-  @persistence =
-    Phronomy::PersistenceComposition.build(backend: PhronomyExamples::Persistence::ActiveRecordSQLite.new(
-      connection_pool: ActiveRecord::Base.connection_pool
-    )).agent
+  # Rails owns the pool and explicitly runs the application's migrations.
+  @persistence = PhronomyActiveRecord.build(
+    connection_pool: ActiveRecord::Base.connection_pool, dialect: :sqlite
+  ).agent
 end

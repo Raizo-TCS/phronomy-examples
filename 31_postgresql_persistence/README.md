@@ -184,6 +184,18 @@ The database-specific tests use separate ActiveRecord connections and
 PostgreSQL's `pg_blocking_pids()` to verify real server-side lock waits instead
 of inferring contention from sleeps.
 
+The shared `shared/reason_diagnostics_contract.rb` tests confirmed Agent/Team
+failure diagnostics through the public APIs, including resume before and after
+Runtime teardown and reopening storage with a new connection pool. It also
+checks exact preservation of old diagnostics without a code and unknown codes.
+Only the provider HTTP boundary is stubbed; storage uses the real database.
+These tests cover reconnect readability, not recovery from an abrupt process
+crash. Run them separately with:
+
+```bash
+bundle exec rspec spec/reason_diagnostics_spec.rb
+```
+
 ## Durable reload demo
 
 ```bash

@@ -5,6 +5,13 @@ on: [push, pull_request]
 permissions:
   contents: read
 
+env:
+  PHRONOMY_PATH: ${{ github.workspace }}/core
+
+defaults:
+  run:
+    working-directory: examples
+
 jobs:
   current-api:
     runs-on: ubuntu-latest
@@ -14,9 +21,20 @@ jobs:
         ruby: ["3.2", "3.3", "3.4"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: examples
+          persist-credentials: false
+      - name: Check out the reviewed core candidate
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          ref: 8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77
+          path: core
+          persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
+          working-directory: examples
       - name: Install bundle
         run: bundle install
       - name: Install SQLite bundle
@@ -31,16 +49,27 @@ jobs:
       matrix:
         example: ["09_rails_chat", "15_rails_secure_chat", "18_rails_agent_job", "20_cve_scanner"]
     env:
-      BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.example }}/Gemfile
+      BUNDLE_GEMFILE: ${{ github.workspace }}/examples/${{ matrix.example }}/Gemfile
       RAILS_ENV: test
       PHRONOMY_MODEL: gpt-4o-mini
       PHRONOMY_BASE_URL: https://example.test/v1
       PHRONOMY_API_KEY: test-only
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: examples
+          persist-credentials: false
+      - name: Check out the reviewed core candidate
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          ref: 8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77
+          path: core
+          persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
+          working-directory: examples/${{ matrix.example }}
       - name: Install bundle
         run: bundle install
       - name: Migrate and eager load the application

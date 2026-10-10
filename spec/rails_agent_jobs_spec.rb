@@ -2,7 +2,8 @@
 
 require "spec_helper"
 require "ostruct"
-require_relative "../18_rails_agent_job/app/services/ordered_event_delivery"
+require "phronomy/integrations/ordered_event_delivery"
+require_relative "../18_rails_agent_job/app/services/token_event_batch"
 
 # Unit tests of the complete application Jobs. Rails/Action Cable are test
 # doubles here; real Phronomy Tasks and OffloadPool run the delivery adapter.

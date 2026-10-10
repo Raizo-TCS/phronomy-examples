@@ -1,3 +1,10 @@
+PATH
+  remote: packages/phronomy-active_record
+  specs:
+    phronomy-active_record (0.1.0)
+      activerecord (>= 7.1, < 9)
+      phronomy (~> 0.28.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -405,6 +412,7 @@ DEPENDENCIES
   jbuilder
   kamal
   phronomy (~> 0.28.0)
+  phronomy-active_record!
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

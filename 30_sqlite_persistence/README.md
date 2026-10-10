@@ -301,3 +301,7 @@ the matching candidate core. S2a results do not verify the new SPI; live Postgre
 locking, deadlock, connection-failure and fresh-pool tests remain a release gate.
 
 For the coordinated source API migration, see [r8 unit 3](../R8-UNIT3.md).
+
+## Backend distribution
+
+This example consumes the local optional [phronomy-active_record package](../packages/phronomy-active_record/README.md). The driver, mappings and versioned schema have one authoritative implementation there. Compatibility imports preserve existing example entry points.

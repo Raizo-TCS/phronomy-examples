@@ -1,3 +1,10 @@
+PATH
+  remote: packages/phronomy-active_record
+  specs:
+    phronomy-active_record (0.1.0)
+      activerecord (>= 7.1, < 9)
+      phronomy (~> 0.28.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -112,6 +119,7 @@ DEPENDENCIES
   activerecord (~> 8.1.3)
   pg (~> 1.6)
   phronomy (~> 0.28.0)
+  phronomy-active_record!
   rake (~> 13.2)
   rspec (~> 3.13)
 

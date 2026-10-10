@@ -5,6 +5,11 @@ on:
     paths:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
+      - "Gemfile.phronomy_active_record"
+      - "packages/phronomy-active_record/**"
+      - "shared/storage/**"
+      - "shared/storage_resource_contract.rb"
+      - "shared/persistence_storage_mapping.rb"
       - "shared/persistence_coordination_contract.rb"
       - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
@@ -13,10 +18,21 @@ on:
     paths:
       - "31_postgresql_persistence/**"
       - "Gemfile.phronomy"
+      - "Gemfile.phronomy_active_record"
+      - "packages/phronomy-active_record/**"
+      - "shared/storage/**"
+      - "shared/storage_resource_contract.rb"
+      - "shared/persistence_storage_mapping.rb"
       - "shared/persistence_coordination_contract.rb"
       - "shared/reserved_child_admission_contract.rb"
       - ".github/workflows/postgresql-persistence.yml"
       - "scripts/verify_postgresql_persistence.sh"
+
+permissions:
+  contents: read
+
+env:
+  PHRONOMY_PATH: ${{ github.workspace }}/core
 
 jobs:
   postgresql-persistence:
@@ -51,14 +67,26 @@ jobs:
 
     defaults:
       run:
-        working-directory: 31_postgresql_persistence
+        working-directory: examples/31_postgresql_persistence
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: examples
+          persist-credentials: false
+
+      - name: Check out the reviewed core candidate
+        uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          ref: 8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77
+          path: core
+          persist-credentials: false
 
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
+          working-directory: examples/31_postgresql_persistence
 
       - name: Install bundle
         run: bundle install

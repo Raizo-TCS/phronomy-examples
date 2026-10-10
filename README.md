@@ -1,17 +1,21 @@
 # Phronomy Examples
 
-These examples target Phronomy 0.28.0 and the r8 contracts, including the
-RubyLLM 2.0 migration. All seven bundles and CI use the released gem through
-`Gemfile.phronomy`. Complete old in-flight Tool executions before upgrading;
-see the core migration guide.
+This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
+including the RubyLLM 2.0 migration. Ordered event delivery and saved failure
+reason codes require the paired core candidate
+[`8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77`](https://github.com/Raizo-TCS/phronomy/commit/8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77);
+they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
+core checkout before updating or verifying any bundle. Complete old in-flight
+Tool executions before upgrading; see the core migration guide.
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI installs the shared dependency and its lockfiles directly. It does not select
-a core branch from the examples branch name. To verify a local core checkout,
-export `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
+CI checks out the exact core commit above beside the examples checkout and sets
+`PHRONOMY_PATH` for every job. It does not select a core branch from the examples
+branch name. To verify a local core checkout, export `PHRONOMY_PATH` and run
+`scripts/update_phronomy.sh` first.
 
 ## LLM token settings
 
@@ -116,22 +120,25 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-Normal repository use resolves the released Phronomy 0.28 series from RubyGems
-through that shared definition and the committed lockfiles:
-
-```bash
-./scripts/update_phronomy.sh
-./scripts/verify_examples.sh
-```
-
-To test every bundle against a local checkout of the same reviewed baseline,
-export `PHRONOMY_PATH` so dependency update and verification use that checkout:
+The default dependency still resolves the released Phronomy 0.28 series from
+RubyGems. That release does not contain all APIs used by this candidate. Until a
+new core version is published, use the reviewed core commit above through
+`PHRONOMY_PATH`:
 
 ```bash
 export PHRONOMY_PATH=../phronomy
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
+
+Before publishing these examples, update `Gemfile.phronomy` and all seven
+lockfiles to the core release containing these changes, remove the candidate CI
+checkout override, and repeat verification against the released gem.
+
+The optional SQL package is consumed from `packages/phronomy-active_record`
+through `Gemfile.phronomy_active_record`. Its source and gem-build verification
+are included here; publishing the SQL gem is a separate operation. See its
+[README](packages/phronomy-active_record/README.md) for explicit schema setup.
 
 `31_postgresql_persistence` is included in dependency updates but its database
 suite is run separately because ordinary repository verification must remain

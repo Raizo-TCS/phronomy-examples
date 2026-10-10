@@ -1,0 +1,5 @@
+# frozen_string_literal: true
+
+# Local package until a release is published. No remote gem availability assumed.
+gem "phronomy-active_record", path: File.expand_path("packages/phronomy-active_record", __dir__),
+  require: "phronomy/active_record"

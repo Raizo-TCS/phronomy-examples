@@ -1,50 +1,47 @@
 # frozen_string_literal: true
 
-# Feature-rich counterpart to AgentResultJob. The application owns the payload,
-# ordering, batching and failure policy; Phronomy supplies execution and events.
+require "phronomy/integrations/ordered_event_delivery"
+
+# The app owns payloads, authorization, destination and token coalescing.
 class AgentStreamingJob < ApplicationJob
   queue_as :default
 
   AGENTS = {"DemoAgent" => DemoAgent}.freeze
 
   def perform(agent_class_name, input, stream:)
-    delivery = OrderedEventDelivery.new(capacity: 256, batch_size: 32) do |payload|
+    sender = ->(payload) {
       Rails.application.executor.wrap do
         ActionCable.server.broadcast(stream, payload)
       end
-    end
-    error = nil
-    error_notified = false
-
-    begin
-      agent_class = AGENTS.fetch(agent_class_name) do
-        raise ArgumentError, "unsupported agent_class_name: #{agent_class_name}"
-      end
-      agent = agent_class.new(on_event: ->(event) {
-        payload = event_payload(event)
-        if payload
-          delivery.publish(payload)
-          error_notified = true if event.type == :error
-        end
-      })
-      agent.stream(input.to_s)
-    rescue => caught
-      error = caught
-      unless error_notified
-        begin
-          delivery.publish(type: "error", message: caught.message)
-        rescue => notification_error
-          Rails.logger.warn("[AgentStreamingJob] Error notification failed: #{notification_error.message}")
-        end
-      end
-    ensure
+    }
+    Phronomy::Integrations::OrderedEventDelivery.open(
+      capacity: 256, batch_size: 32, flush_timeout: 30,
+      deliver: sender, prepare_batch: TokenEventBatch.method(:call)
+    ) do |delivery|
+      error_notified = false
       begin
-        delivery.close_and_wait(timeout: 30)
-      rescue => delivery_error
-        error ||= delivery_error
+        agent_class = AGENTS.fetch(agent_class_name) do
+          raise ArgumentError, "unsupported agent_class_name: #{agent_class_name}"
+        end
+        agent = agent_class.new(on_event: ->(event) {
+          payload = event_payload(event)
+          if payload
+            delivery.publish(payload)
+            error_notified = true if event.type == :error
+          end
+        })
+        agent.stream(input.to_s)
+      rescue => error
+        unless error_notified
+          begin
+            delivery.publish(type: "error", message: error.message)
+          rescue => notification_error
+            Rails.logger.warn("[AgentStreamingJob] Error notification failed: #{notification_error.message}")
+          end
+        end
+        raise
       end
     end
-    raise error if error
   end
 
   private

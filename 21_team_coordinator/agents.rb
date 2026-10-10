@@ -71,8 +71,7 @@ class BlogWritingTeam < Phronomy::MultiAgent::TeamCoordinator
     execution = team.executions.first
     outcome = team.result(execution.team_execution_id) if execution
     unless outcome && outcome[:status] == "failed" &&
-        outcome.dig(:error, "class") == "Phronomy::ConfigurationError" &&
-        outcome.dig(:error, "message") == "Cannot enqueue after finalize"
+        outcome.dig(:error, "code") == "team.enqueue_after_finalize"
       raise
     end
 

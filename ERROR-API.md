@@ -21,4 +21,6 @@ that actual reviewed commit before running CI.
 Run root tests, both SQL suites/reload demos, Rails 09/15 history verification and
 `verify_examples.sh` against the same core candidate. Root controller tests use
 Rails plumbing doubles; they do not replace real Rails boot/controller/view tests.
-DX05-B/C/D/E remain separate work; this candidate implements DX05-A.
+DX05-C now uses existing result composition in example 14; see
+[its application migration](docs/dx05-review-composition.md). DX05-B/D/E remain
+separate work. The error API changes described here are DX05-A.

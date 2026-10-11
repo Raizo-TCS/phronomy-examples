@@ -79,56 +79,38 @@ def review_texts(state)
   texts.empty? ? [state.source_code] : texts
 end
 
-# Starts every reviewer/chunk Agent invocation without creating application
-# Threads. The returned TaskResult is only a completion handle; child Agent execution
-# is coordinated by Phronomy's EventLoop/FSMSession runtime.
+# Start every reviewer/chunk invocation, then compose results in input order.
+# Phronomy owns completion bookkeeping; this application owns partial-result
+# selection, reviewer grouping and chunk order. No automatic retry is added.
 def start_parallel_reviews(state)
   texts = review_texts(state)
   jobs = REVIEWERS.flat_map do |key, agent_class|
     texts.each_with_index.map { |text, index| [key, agent_class, text, index] }
   end
 
-  result_task = Phronomy::TaskResult.deferred(name: "example-14-parallel-reviews")
-  outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
-  mutex = Mutex.new
-  remaining = jobs.length
-
-  if remaining.zero?
-    result_task.complete(REVIEWERS.to_h { |key, _| [key, ""] })
-    return result_task
-  end
-
-  settle_one = lambda do |key, index, output, error|
-    warn "[#{REVIEWERS.fetch(key).name}] chunk #{index + 1}/#{texts.size}: #{error.class}: #{error.message}" if error
-
-    completed = false
-    reviews = nil
-    mutex.synchronize do
-      outputs[key][index] = output.to_s unless error
-      remaining -= 1
-      if remaining.zero?
-        completed = true
-        reviews = outputs.transform_values { |values| values.compact.reject(&:empty?).join("\n") }
-      end
-    end
-    result_task.complete(reviews) if completed
-  end
-
-  jobs.each do |key, agent_class, chunk_text, index|
+  tasks = jobs.map do |_key, agent_class, chunk_text, index|
     puts "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}"
     begin
       agent = agent_class.new(knowledge: [agent_class.review_knowledge])
-      operation = agent.invoke_async(chunk_text)
-      operation.on_complete do |result, error|
-        output = error ? nil : result[:output].to_s.strip
-        settle_one.call(key, index, output, error)
-      end
-    rescue => error
-      settle_one.call(key, index, nil, error)
+      agent.invoke_async(chunk_text).map { |result| result[:output].to_s.strip }
+    rescue StandardError => error
+      Phronomy::TaskResult.failed(error, name: "example-14-review-start")
     end
   end
 
-  result_task
+  Phronomy::TaskResult.all_settled(tasks).map do |outcomes|
+    outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
+    outcomes.each do |outcome|
+      key, agent_class, _text, index = jobs.fetch(outcome.index)
+      if outcome.status == :completed
+        outputs.fetch(key)[index] = outcome.value
+      else
+        error = outcome.error
+        warn "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}: #{error.class}: #{error.message}"
+      end
+    end
+    outputs.transform_values { |values| values.compact.reject(&:empty?).join("\n") }
+  end
 end
 
 def build_improvement_prompt(snapshot)

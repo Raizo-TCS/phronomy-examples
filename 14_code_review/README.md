@@ -16,6 +16,7 @@ and tracing into one application flow.
 | Event-driven completion | `Workflow#signal` | Async work returns to the FSM as later events |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
 | Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
+| Result composition | `TaskResult#map` + `TaskResult.all_settled` | Extracts findings and gathers every review in input order, including failed or cancelled children |
 | Persistent Knowledge | `knowledge:` | Reviewer criteria / improvement policy become Journal context candidates |
 | Prompt template | `Agent::Context::Instruction::PromptTemplate` | Builds the improvement request |
 | Synchronous-work boundary | `Phronomy::Blocking.call_async` | The direct RubyLLM quality-judge call is isolated from EventLoop by the bounded OffloadPool |
@@ -32,6 +33,21 @@ instead of using removed static-Knowledge APIs.
 
 `OffloadPool` is used only to keep synchronous work off EventLoop. It is not a
 Workflow scheduler and does not imply CPU isolation or distributed execution.
+
+## Parallel review results
+
+`start_parallel_reviews` starts all reviewer/chunk calls and returns one composed
+`TaskResult`. Phronomy owns synchronization and completion bookkeeping. The
+application groups successful findings by reviewer, joins them in source-chunk
+order and warns about excluded failures. A result-conversion error becomes a
+failed child result, so it cannot leave the application waiting for a manually
+maintained completion count.
+
+Warnings are emitted after **all** child results settle, in reviewer/chunk order.
+One failed or cancelled child does not cancel its peers. If every child fails,
+each reviewer still has an empty string; this does not mean that the source
+passed review. This change adds no retry, deadline or Agent cleanup. See the
+[DX05-C before/after comparison and acceptance](../docs/dx05-review-composition.md).
 
 ## Run
 
@@ -53,28 +69,21 @@ bundle exec ruby 14_code_review/batch_review.rb
 
 ## Flow
 
-```text
-source file
-   ↓
-Filter
-   ↓
-VectorStore::Splitter::RecursiveSplitter
-   ↓
-Workflow :parallel_review
-   ├─ SecurityReviewerAgent.invoke_async
-   ├─ PerformanceReviewerAgent.invoke_async
-   ├─ ReadabilityReviewerAgent.invoke_async
-   └─ AbstractionReviewerAgent.invoke_async
-   ↓ completion callbacks → Workflow#signal
-wait_state :awaiting_priority
-   ↓ user event
-ImproverAgent.invoke_async
-   ↓ completion callback → Workflow#signal
-output Filter
-   ↓
-application quality judge
-   ↓ Runtime#offload
-Workflow completion
+```mermaid
+flowchart TD
+  input["Source filter and Documents splitter"] --> review["Workflow parallel_review"]
+  review --> security["Security reviewer"]
+  review --> performance["Performance reviewer"]
+  review --> readability["Readability reviewer"]
+  review --> abstraction["Abstraction reviewer"]
+  security --> results["map and all_settled"]
+  performance --> results
+  readability --> results
+  abstraction --> results
+  results -->|Workflow signal| priority["Wait for review priority"]
+  priority -->|User event| improve["Improver and output filter"]
+  improve --> judge["Quality judge via Blocking.call_async"]
+  judge -->|Workflow signal| done["Workflow completion"]
 ```
 
 No application `Thread.new` is required. Logical asynchronous coordination is

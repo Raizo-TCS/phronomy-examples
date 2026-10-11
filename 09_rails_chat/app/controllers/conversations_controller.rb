@@ -8,16 +8,21 @@ class ConversationsController < ApplicationController
   def index
     @agent_id = session[:agent_id]
     if @agent_id
-      agent = ChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
+      begin
+        agent = ChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
+      rescue Phronomy::AgentNotFoundError => error
+        raise unless error.agent_id == @agent_id
+
+        session[:agent_id] = nil
+        @messages = []
+        return
+      end
       @messages = PhronomyExamples::TranscriptMessages.read(agent).map do |message|
         OpenStruct.new(message)
       end
     else
       @messages = []
     end
-  rescue Phronomy::Storage::NotFoundError
-    session[:agent_id] = nil
-    @messages = []
   end
 
   def create

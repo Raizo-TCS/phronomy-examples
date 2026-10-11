@@ -148,13 +148,17 @@ end
 
 def load_or_create_improver(snapshot)
   agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
-  ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
-rescue Phronomy::Storage::NotFoundError
-  ImproverAgent.create(
-    agent_id: agent_id,
-    knowledge: [IMPROVEMENT_POLICY],
-    persistence: IMPROVER_PERSISTENCE
-  )
+  begin
+    ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
+  rescue Phronomy::AgentNotFoundError => error
+    raise unless error.agent_id == agent_id
+
+    ImproverAgent.create(
+      agent_id: agent_id,
+      knowledge: [IMPROVEMENT_POLICY],
+      persistence: IMPROVER_PERSISTENCE
+    )
+  end
 end
 
 def start_improvement(snapshot)

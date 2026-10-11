@@ -12,7 +12,14 @@ class SummariesController < ApplicationController
       return
     end
 
-    agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    begin
+      agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    rescue Phronomy::AgentNotFoundError => error
+      raise unless error.agent_id == agent_id
+
+      render json: { error: "No active conversation." }, status: :unprocessable_entity
+      return
+    end
     messages = PhronomyExamples::TranscriptMessages.read(agent)
 
     if messages.empty?
@@ -28,8 +35,6 @@ class SummariesController < ApplicationController
     )
 
     render json: { summary: result.summary }
-  rescue Phronomy::Storage::NotFoundError
-    render json: { error: "No active conversation." }, status: :unprocessable_entity
   rescue => e
     Rails.logger.error("SummarizationGraph error: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join('\n')}")
     render json: { error: "Summarization failed. Please try again." }, status: :internal_server_error

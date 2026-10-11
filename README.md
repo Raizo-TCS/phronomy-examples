@@ -1,12 +1,13 @@
 # Phronomy Examples
 
 This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
-including the RubyLLM 2.0 migration. Ordered event delivery and saved failure
-reason codes require the paired core candidate
-[`8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77`](https://github.com/Raizo-TCS/phronomy/commit/8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77);
+including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
+busy errors, plus cause-aware saved diagnostics. These APIs require the paired core candidate
+[`c673c958cd15407fb4552b6e0eca42175ec73ab7`](https://github.com/Raizo-TCS/phronomy/commit/c673c958cd15407fb4552b6e0eca42175ec73ab7);
 they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
 core checkout before updating or verifying any bundle. Complete old in-flight
-Tool executions before upgrading; see the core migration guide.
+Tool executions before upgrading; see the core migration guide and
+[error API changes](ERROR-API.md).
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and

@@ -8,16 +8,21 @@ class ConversationsController < ApplicationController
     @agent_id = session[:agent_id]
     @user_id  = session[:user_id]
     if @agent_id
-      agent = SecureChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
+      begin
+        agent = SecureChatAgent.load(@agent_id, persistence: PhronomyStore.persistence)
+      rescue Phronomy::AgentNotFoundError => error
+        raise unless error.agent_id == @agent_id
+
+        session[:agent_id] = nil
+        @messages = []
+        return
+      end
       @messages = PhronomyExamples::TranscriptMessages.read(agent).map do |message|
         OpenStruct.new(message)
       end
     else
       @messages = []
     end
-  rescue Phronomy::Storage::NotFoundError
-    session[:agent_id] = nil
-    @messages = []
   end
 
   def create
@@ -32,12 +37,16 @@ class ConversationsController < ApplicationController
     agent_id = session[:agent_id]
     return redirect_to root_path unless agent_id.present? && params[:id] == agent_id
 
-    agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    begin
+      agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    rescue Phronomy::AgentNotFoundError => error
+      raise unless error.agent_id == agent_id
+
+      session.delete(:agent_id)
+      return redirect_to root_path
+    end
     agent.clear_transcript!
     session.delete(:agent_id)
     redirect_to root_path, notice: "Conversation cleared."
-  rescue Phronomy::Storage::NotFoundError
-    session.delete(:agent_id)
-    redirect_to root_path
   end
 end

@@ -1,8 +1,9 @@
 # DX05-E P6: application-owned Agent scopes
 
-Status: local implementation candidate against core `586674cac5422f945c8aeb33c2567c545a729acf`.
-The API is unreleased. This unit changes examples only; application-time CI and
-PostgreSQL acceptance are still required.
+Status: implemented on examples main; the Agent scope APIs are available in
+Phronomy 0.29.0. The original reviewed core was
+`586674cac5422f945c8aeb33c2567c545a729acf`. Application-time PostgreSQL and all
+13 CI jobs passed; default bundles and CI now select the published gem.
 
 ## Problem and outcome
 
@@ -197,7 +198,7 @@ included by both SQL suites: fresh-pool reload preserves saved revisions and
 closed lifecycle, opaque retention blocks unloading, Store failure preserves
 the original owner, and async scope cleanup leaves the pool usable.
 
-Run with `PHRONOMY_PATH` set to the reviewed core checkout:
+Run against the released Phronomy 0.29.0 gem with `PHRONOMY_PATH` unset:
 
 ```bash
 bundle install
@@ -212,7 +213,8 @@ PHRONOMY_POSTGRES_URL=postgresql://... bundle exec rspec
 PHRONOMY_POSTGRES_URL=postgresql://... bundle exec ruby run.rb
 ```
 
-Use the package's `verification.json` for measured local counts and unexecuted
-gates. PostgreSQL and remote CI results must be supplied at application time;
-previously reported P5 successes are not P6 test results. Publication still
-requires updating the examples dependency to the released core version.
+The package's `verification.json` preserves historical candidate-time results.
+Application acceptance passed root 93, CVE 79, SQLite 145 and PostgreSQL 136
+cases, both fresh-pool reloads, all 13 CI jobs and the full 99-check verification
+script. Core dependencies and all seven lockfiles now select released Phronomy
+0.29.0; CI repeats the normal suites against the published gem.

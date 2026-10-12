@@ -3,7 +3,7 @@ PATH
   specs:
     phronomy-active_record (0.1.0)
       activerecord (>= 7.1, < 9)
-      phronomy (~> 0.28.0)
+      phronomy (~> 0.29.0)
 
 GEM
   remote: https://rubygems.org/
@@ -220,7 +220,8 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    phronomy (0.28.0)
+    phronomy (0.29.0)
+      faraday (~> 2.1)
       json (< 3)
       json_schemer (~> 2.5)
       mcp (~> 1.0)
@@ -411,7 +412,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
-  phronomy (~> 0.28.0)
+  phronomy (~> 0.29.0)
   phronomy-active_record!
   propshaft
   puma (>= 5.0)

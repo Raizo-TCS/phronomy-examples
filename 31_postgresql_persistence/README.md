@@ -286,7 +286,7 @@ savepoint; the failed SPI scope cannot continue.
 
 ## Refactor 35: neutral Storage SPI 2
 
-Apply the matching core update and set PHRONOMY_PATH before resolving dependencies.
+The default released Phronomy 0.29.0 dependency provides this SPI. Use PHRONOMY_PATH only for an explicit local framework checkout.
 The core requires spi_version 2 and neutral atomic_resources, record_cas,
 stream_cas, conditional_unique, guarded_checks and nested_savepoints capabilities.
 Public Persistence retains its existing eight domain repositories and three
@@ -313,7 +313,7 @@ at scope exit and reject cross-thread use; cached root handles join the current
 transaction. Complete stream batches are validated before writes.
 
 Run the shipped neutral/domain contracts and the database-specific tests against
-the matching candidate core. S2a results do not verify the new SPI; live PostgreSQL
+released Phronomy 0.29.0. S2a results do not verify the new SPI; live PostgreSQL
 locking, deadlock, connection-failure and fresh-pool tests remain a release gate.
 
 For the coordinated source API migration, see [r8 unit 3](../R8-UNIT3.md).

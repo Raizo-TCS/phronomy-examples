@@ -1,8 +1,7 @@
 # 17 Multi-Agent Handoff
 
-This version requires the matching r8 unit 4 core with
-`Phronomy::MultiAgent::HandoffRunner`; set `PHRONOMY_PATH` to that checkout.
-The released 0.26.0 core still uses the previous Runner namespace.
+This version uses `Phronomy::MultiAgent::HandoffRunner` from the default released
+Phronomy 0.29.0 dependency. The old 0.26.0 core used the previous Runner namespace.
 
 This example uses `Phronomy::MultiAgent::HandoffRunner` and explicit
 `Phronomy::MultiAgent::Handoff` edges. All Agents in a conversation share one

@@ -10,7 +10,7 @@ Until publication, use this package directory with `path:` (or a pinned checkout
 containing it). This does not assume that an unpublished gem exists on RubyGems.
 
 ```ruby
-gem "phronomy", "~> 0.28.0"
+gem "phronomy", "~> 0.29.0"
 gem "phronomy-active_record", path: "/path/to/phronomy-active_record",
   require: "phronomy/active_record"
 gem "sqlite3", ">= 2.1" # or pg for PostgreSQL

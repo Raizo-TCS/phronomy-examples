@@ -48,7 +48,7 @@ follow producer completion and notification drain.
 
 ## Development and verification
 
-Set `PHRONOMY_PATH` to the reviewed core checkout specified in the root README.
+Use released Phronomy 0.29.0 by default. Set `PHRONOMY_PATH` only when testing an explicit local framework checkout, as described in the root README.
 From this directory:
 
 ```bash

@@ -1,17 +1,15 @@
 # Phronomy Examples
 
-Agent lifetime examples now use the reviewed core scope API. See [DX05-E P6 ownership, before/after and acceptance](docs/dx05-agent-scope-examples.md). This API remains tied to the pinned unreleased core; update the released-gem dependency when publishing.
-
-
-This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
-including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
-busy errors, plus cause-aware saved diagnostics. DX05-D adds Workflow task states.
-These APIs require the paired core candidate
-[`586674cac5422f945c8aeb33c2567c545a729acf`](https://github.com/Raizo-TCS/phronomy/commit/586674cac5422f945c8aeb33c2567c545a729acf);
-they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
-core checkout before updating or verifying any bundle. Complete old in-flight
-Tool executions before upgrading; see the core migration guide and
+These examples use Phronomy 0.29.0 from RubyGems, including the r8 contracts
+and RubyLLM 2.0 migration. DX05-A provides owned Agent absence and Team busy
+errors with saved cause diagnostics; DX05-D provides Workflow task states;
+DX05-E provides application-owned Agent scopes and safe incarnation release.
+See [Agent ownership and acceptance](docs/dx05-agent-scope-examples.md) and
 [error API changes](ERROR-API.md).
+
+The default dependency is `~> 0.29.0` in all seven bundles. Complete old in-flight
+Tool executions before upgrading; see the core migration guide. Local framework
+development can still select a checkout explicitly with `PHRONOMY_PATH`.
 
 DX05-C moves example 14's parallel-review completion bookkeeping to the existing
 `TaskResult.all_settled` API. Reviewer grouping and partial-failure policy stay in
@@ -28,15 +26,15 @@ DX05-D migrates 01/03/04/07/14/20/25/26 to `task_state(start:, apply:)`.
 Phronomy owns completion correlation and failure delivery; applications own their
 operations, result mapping and business events. See the
 [before/after and responsibility boundaries](docs/dx05-workflow-task-state.md).
-DX05-E Agent scope/unload remains separate work.
+DX05-E adds explicit ownership scopes around these workflows and notification delivery.
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI checks out the exact core commit above beside the examples checkout and sets
-`PHRONOMY_PATH` for every job. It does not select a core branch from the examples
-branch name. To verify a local core checkout, export `PHRONOMY_PATH` and run
+CI installs the released Phronomy gem using the committed lockfiles. No core
+checkout or `PHRONOMY_PATH` override is used in the release CI jobs. To verify
+a local framework checkout, export `PHRONOMY_PATH` and run
 `scripts/update_phronomy.sh` first.
 
 ## LLM token settings
@@ -142,20 +140,19 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-The default dependency still resolves the released Phronomy 0.28 series from
-RubyGems. That release does not contain all APIs used by this candidate. Until a
-new core version is published, use the reviewed core commit above through
-`PHRONOMY_PATH`:
+The default dependency resolves the released Phronomy 0.29 series from RubyGems.
+Keep `PHRONOMY_PATH` unset to update and verify all seven bundles against the
+published gem:
 
 ```bash
-export PHRONOMY_PATH=../phronomy
+unset PHRONOMY_PATH
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
 
-Before publishing these examples, update `Gemfile.phronomy` and all seven
-lockfiles to the core release containing these changes, remove the candidate CI
-checkout override, and repeat verification against the released gem.
+For local framework development, set `PHRONOMY_PATH` to an explicit checkout and
+repeat the dependency update before verification. Do not commit local core paths
+in release lockfiles.
 
 The optional SQL package is consumed from `packages/phronomy-active_record`
 through `Gemfile.phronomy_active_record`. Its source and gem-build verification

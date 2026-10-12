@@ -142,10 +142,10 @@ end
 
 ## Acceptance
 
-Run against the paired core checkout:
+Run against released Phronomy 0.29.0:
 
 ```bash
-export PHRONOMY_PATH=/absolute/path/to/reviewed/core
+unset PHRONOMY_PATH
 bundle check
 bundle exec rspec spec/parallel_review_composition_spec.rb
 bundle exec rspec spec

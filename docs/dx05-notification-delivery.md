@@ -345,10 +345,10 @@ Agent release remains DX05-E, and shared Workflow completion handling remains DX
 
 ## Verification
 
-Run the following in the real Rails environment. Set `PHRONOMY_PATH` to the absolute path of the core checkout specified above.
+Run the following in the real Rails environment against released Phronomy 0.29.0. Leave `PHRONOMY_PATH` unset unless testing an explicit local framework checkout.
 
 ```bash
-export PHRONOMY_PATH=/absolute/path/to/core
+unset PHRONOMY_PATH
 export RAILS_ENV=test
 export PHRONOMY_MODEL=gpt-4o-mini
 export PHRONOMY_BASE_URL=https://example.test/v1

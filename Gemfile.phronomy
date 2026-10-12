@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# Use the released 0.28 series consistently across all seven bundles.
+# Use the released 0.29 series consistently across all seven bundles.
 # A local checkout can be selected explicitly with PHRONOMY_PATH.
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", "~> 0.28.0"
+  gem "phronomy", "~> 0.29.0"
 end

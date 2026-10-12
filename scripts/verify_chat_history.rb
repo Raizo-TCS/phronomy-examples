@@ -22,19 +22,23 @@ begin
   browser.post("/conversations")
   raise "Conversation creation failed: #{browser.response.status}" unless browser.response.status == 302
   agent_id = browser.request.session.fetch(:agent_id)
-  agent_class.get(agent_id).purge!
+  raise "Creation retained a live owner" if agent_class.get(agent_id)
+  agent_class.load(agent_id, persistence: PhronomyStore.persistence).purge!
 
   inputs = ["123", "null", "false", '{"content":"preserved user JSON"}']
   context = inputs.flat_map do |input|
     [{role: :user, content: input}, {role: :assistant, content: "Reply to #{input}"}]
   end
-  agent_class.create(agent_id: agent_id, persistence: PhronomyStore.persistence, context: context)
-  # Exercise loading the saved owner instead of relying on a live Agent cache.
-  Phronomy.reset_runtime!
+  agent_class.create(agent_id: agent_id, persistence: PhronomyStore.persistence, context: context).unload!
+  # Each request loads its own incarnation without resetting the Runtime.
   browser.get("/")
   raise "History rendering failed: #{browser.response.status}" unless browser.response.status == 200
   text = CGI.unescapeHTML(browser.response.body)
   inputs.each { |input| raise "History lost literal text: #{input}" unless text.include?(input) }
+  raise "History request retained a live owner" if agent_class.get(agent_id)
+  browser.get("/")
+  raise "Repeated history request failed" unless browser.response.status == 200
+  raise "Repeated history retained a live owner" if agent_class.get(agent_id)
   puts "Chat history passed: health, creation, saved-owner load, numeric/null/boolean/JSON text."
 ensure
   if agent_id

@@ -41,3 +41,6 @@ func main() {
     fmt.Println("Hello, World!")
 }
 ```
+
+The code-generation stage uses `task_state` to apply the Agent result. Automatic
+tracing stays active; the application no longer forwards a completion signal.

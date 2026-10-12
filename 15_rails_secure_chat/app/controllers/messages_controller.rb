@@ -15,22 +15,26 @@ class MessagesController < ApplicationController
       return
     end
 
-    agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
+    result = Phronomy::Agent.open_scope do |agents|
+      agent = agents.load(SecureChatAgent, agent_id, persistence: PhronomyStore.persistence)
 
-    last_activity = session[:last_agent_activity_at]
-    if last_activity && (Time.now.to_i - last_activity.to_i) > PHRONOMY_MEMORY_TTL
-      agent.clear_transcript!
+      last_activity = session[:last_agent_activity_at]
+      if last_activity && (Time.now.to_i - last_activity.to_i) > PHRONOMY_MEMORY_TTL
+        agent.clear_transcript!
+      end
+      session[:last_agent_activity_at] = Time.now.to_i
+
+      agent.invoke(
+        content,
+        config: {
+          user_id: session[:user_id]
+        }
+      )
     end
-    session[:last_agent_activity_at] = Time.now.to_i
-
-    result = agent.invoke(
-      content,
-      config: {
-        user_id: session[:user_id]
-      }
-    )
 
     render json: {reply: result[:output]}
+  rescue Phronomy::AgentBusyError
+    render json: {error: "Conversation is busy. Please try again."}, status: :conflict
   rescue Phronomy::FilterBlockError => e
     render json: {error: "Blocked: #{e.message}"}, status: :unprocessable_entity
   rescue => e

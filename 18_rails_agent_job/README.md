@@ -78,3 +78,9 @@ coalescing stays in [TokenEventBatch](app/services/token_event_batch.rb); the
 helper does not interpret event types. AgentResultJob remains the simple
 final-answer-only path. The integration requires the paired DX03-E core change;
 use PHRONOMY_PATH before that core API has a release.
+
+## Agent lifetime
+
+Each Job owns an Agent scope. Streaming delivery drains inside that scope, before Agent release. A cleanup-only failure does not send a second error after a successful final notification; it propagates to the Job caller.
+
+See [DX05-E scope migration](../docs/dx05-agent-scope-examples.md).

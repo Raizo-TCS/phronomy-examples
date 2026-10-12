@@ -61,7 +61,7 @@ def display_quality_scores(scores)
   puts "=" * 50
 end
 
-def run_review(app, path, priority_override = nil)
+def run_review(path, priority_override = nil)
   begin
     INPUT_GUARDRAIL.call(path)
   rescue Phronomy::FilterBlockError => e
@@ -69,31 +69,33 @@ def run_review(app, path, priority_override = nil)
     return
   end
 
-  source_code = File.read(path)
-  puts "\n[Pipeline] Starting review..."
-  state = app.invoke({file_path: path, source_code: source_code})
-  display_reviews(state.reviews)
+  Phronomy::Agent.open_scope do |agents|
+    app = build_pipeline(agents: agents)
+    source_code = File.read(path)
+    puts "\n[Pipeline] Starting review..."
+    state = app.invoke({file_path: path, source_code: source_code})
+    display_reviews(state.reviews)
 
-  priority = priority_override || ask_priority
-  puts "\n[Pipeline] Proceeding with priority: #{priority}"
-  state = app.send_event(state: state, event: :proceed, input: {priority: priority})
-  display_quality_scores(state.quality_scores)
+    priority = priority_override || ask_priority
+    puts "\n[Pipeline] Proceeding with priority: #{priority}"
+    state = app.send_event(state: state, event: :proceed, input: {priority: priority})
+    display_quality_scores(state.quality_scores)
+  end
 end
 
-app = build_pipeline
 puts "=== AI Code Review Pipeline ==="
 puts
 
 if CLI_PATH
   paths = File.directory?(CLI_PATH) ? Dir.glob(File.join(CLI_PATH, "*.rb")).sort : [CLI_PATH]
-  paths.each { |path| run_review(app, path, CLI_PRIORITY) }
+  paths.each { |path| run_review(path, CLI_PRIORITY) }
 else
   loop do
     print "Enter the path to a Ruby file to review (or 'quit' to exit):\n> "
     $stdout.flush
     path = $stdin.gets.to_s.strip
     break if path.empty? || path.downcase == "quit"
-    run_review(app, path)
+    run_review(path)
     puts
     print "Review another file? (y/n) > "
     $stdout.flush

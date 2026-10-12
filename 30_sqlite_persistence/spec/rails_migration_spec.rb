@@ -29,7 +29,7 @@ RSpec.describe "Example 09 coordination table upgrade" do
     expect(stores.multi_agent.team_executions.list_active(coordination_team.team_id).length).to eq(1)
     expect(stores.multi_agent.handoff_states.load(coordination_handoff.main_agent_id).to_h).to eq(coordination_handoff.to_h)
     other = coordination_run.with(team_execution_id: SecureRandom.uuid, execution_revision: 0)
-    expect { stores.multi_agent.team_executions.create_active(other) }.to raise_error(Phronomy::AgentBusyError)
+    expect { stores.multi_agent.team_executions.create_active(other) }.to raise_error(Phronomy::MultiAgent::TeamBusyError)
   end
   it "adds unit 4 retention and cancellation tables without changing existing data" do
     stores, pool = build_sqlite_persistence

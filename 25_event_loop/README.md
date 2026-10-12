@@ -17,27 +17,19 @@ TaskResult / PendingOperation = completion handles
 
 ## Correct async Workflow pattern
 
-A Workflow entry/transition callback is run-to-completion. If it needs work that
-cannot complete immediately:
+Declare `task_state(name, start:, apply:)` for a state-owned asynchronous wait.
+`start` returns an Agent/Workflow TaskResult, or submits actual blocking I/O to
+`Phronomy::Blocking.call_async`. It receives an isolated context snapshot.
+`apply` performs the short state update on EventLoop; ordinary guards then route
+the updated context. Waiting for the Task consumes no worker.
 
-1. start an asynchronous Phronomy lifecycle (`Agent#invoke_async`,
-   `Agent#stream_async`, another Workflow, MultiAgent fan-out), **or** submit a
-   synchronous external operation that must stay off EventLoop to
-   `Phronomy::Blocking.call_async`;
-2. return the Workflow context immediately;
-3. attach `on_complete` to the returned completion handle;
-4. call `Workflow#signal` when the operation settles;
-5. carry the result/error in the event payload;
-6. let the EventLoop perform the next FSM transition.
+In this example, expected operation errors are converted into data inside the
+blocking operation, preserving the application's failure state. Submission and
+cancellation failures propagate through the Workflow TaskResult. No implicit
+retry is added. External callers may wait on `Workflow#invoke_async` results.
 
-This example demonstrates:
-
-- `Phronomy::Blocking.call_async`
-- completion callbacks via `on_complete`
-- `Workflow#invoke_async`
-- `Workflow#signal`
-- external `TaskResult#wait_result`
-- `Diagnostics.snapshot`
+The example also prints `Diagnostics.snapshot`. External business events can
+still use `Workflow#signal`; source completion no longer needs that bridge.
 
 `OffloadPool` is bounded synchronous-work isolation. It is not a scheduler for
 logical Workflow execution and does not imply CPU isolation.

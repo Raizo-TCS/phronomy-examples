@@ -79,56 +79,39 @@ def review_texts(state)
   texts.empty? ? [state.source_code] : texts
 end
 
-# Starts every reviewer/chunk Agent invocation without creating application
-# Threads. The returned TaskResult is only a completion handle; child Agent execution
-# is coordinated by Phronomy's EventLoop/FSMSession runtime.
-def start_parallel_reviews(state)
+# Start every reviewer/chunk invocation, then compose results in input order.
+# Phronomy owns completion bookkeeping; this application owns partial-result
+# selection, reviewer grouping and chunk order. No automatic retry is added.
+def start_parallel_reviews(state, agents:)
   texts = review_texts(state)
   jobs = REVIEWERS.flat_map do |key, agent_class|
     texts.each_with_index.map { |text, index| [key, agent_class, text, index] }
   end
 
-  result_task = Phronomy::TaskResult.deferred(name: "example-14-parallel-reviews")
-  outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
-  mutex = Mutex.new
-  remaining = jobs.length
-
-  if remaining.zero?
-    result_task.complete(REVIEWERS.to_h { |key, _| [key, ""] })
-    return result_task
-  end
-
-  settle_one = lambda do |key, index, output, error|
-    warn "[#{REVIEWERS.fetch(key).name}] chunk #{index + 1}/#{texts.size}: #{error.class}: #{error.message}" if error
-
-    completed = false
-    reviews = nil
-    mutex.synchronize do
-      outputs[key][index] = output.to_s unless error
-      remaining -= 1
-      if remaining.zero?
-        completed = true
-        reviews = outputs.transform_values { |values| values.compact.reject(&:empty?).join("\n") }
-      end
-    end
-    result_task.complete(reviews) if completed
-  end
-
-  jobs.each do |key, agent_class, chunk_text, index|
+  tasks = jobs.map do |_key, agent_class, chunk_text, index|
     puts "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}"
     begin
-      agent = agent_class.new(knowledge: [agent_class.review_knowledge])
-      operation = agent.invoke_async(chunk_text)
-      operation.on_complete do |result, error|
-        output = error ? nil : result[:output].to_s.strip
-        settle_one.call(key, index, output, error)
-      end
-    rescue => error
-      settle_one.call(key, index, nil, error)
+      agents.create_async(agent_class, knowledge: [agent_class.review_knowledge]).flat_map do |agent|
+        agent.invoke_async(chunk_text)
+      end.map { |result| result[:output].to_s.strip }
+    rescue StandardError => error
+      Phronomy::TaskResult.failed(error, name: "example-14-review-start")
     end
   end
 
-  result_task
+  Phronomy::TaskResult.all_settled(tasks).map do |outcomes|
+    outputs = REVIEWERS.to_h { |key, _| [key, Array.new(texts.length)] }
+    outcomes.each do |outcome|
+      key, agent_class, _text, index = jobs.fetch(outcome.index)
+      if outcome.status == :completed
+        outputs.fetch(key)[index] = outcome.value
+      else
+        error = outcome.error
+        warn "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}: #{error.class}: #{error.message}"
+      end
+    end
+    outputs.transform_values { |values| values.compact.reject(&:empty?).join("\n") }
+  end
 end
 
 def build_improvement_prompt(snapshot)
@@ -146,24 +129,33 @@ def build_improvement_prompt(snapshot)
   )
 end
 
-def load_or_create_improver(snapshot)
+def load_or_create_improver(snapshot, agents:)
   agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
-  ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
-rescue Phronomy::Storage::NotFoundError
-  ImproverAgent.create(
-    agent_id: agent_id,
-    knowledge: [IMPROVEMENT_POLICY],
-    persistence: IMPROVER_PERSISTENCE
-  )
+  begin
+    agents.load(ImproverAgent, agent_id, persistence: IMPROVER_PERSISTENCE)
+  rescue Phronomy::AgentNotFoundError => error
+    raise unless error.agent_id == agent_id
+
+    agents.create(ImproverAgent,
+      agent_id: agent_id,
+      knowledge: [IMPROVEMENT_POLICY],
+      persistence: IMPROVER_PERSISTENCE
+    )
+  end
 end
 
-def start_improvement(snapshot)
-  agent = load_or_create_improver(snapshot)
+def start_improvement(snapshot, agents:)
   user_prompt = build_improvement_prompt(snapshot)
 
   puts "
 [ImproverAgent] Generating improvements..."
-  operation = agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
+  # The load-or-create application policy runs off EventLoop. Scope owns both
+  # materializations; waiting for the Agent call never occupies this worker.
+  operation = Phronomy::Blocking.call_async do
+    load_or_create_improver(snapshot, agents: agents)
+  end.flat_map do |agent|
+    agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
+  end
 
   operation.map do |result|
     value = result&.dig(:output).to_s
@@ -204,86 +196,36 @@ def build_quality_scores(state)
   }
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
-
-def signal_completion(workflow, workflow_instance_id:, event:, operation:, key:)
-  operation.on_complete do |value, error|
-    workflow.signal(
-      workflow_instance_id: workflow_instance_id,
-      event: event,
-      payload: error ? {error: error} : {key => value}
-    )
-  end
-end
-
-def build_pipeline
-  workflow = nil
-
-  workflow = Phronomy::Workflow.define(ReviewState) do
+def build_pipeline(agents:)
+  Phronomy::Workflow.define(ReviewState) do
     initial :load_and_split
 
     state :load_and_split, action: LOAD_AND_SPLIT_NODE
 
-    state :parallel_review
-    entry :parallel_review, lambda { |state|
-      snapshot = state.merge({})
-      operation = start_parallel_reviews(snapshot)
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :reviews_completed,
-        operation: operation,
-        key: :reviews
-      )
-      state
-    }
+    task_state :parallel_review,
+      start: ->(snapshot) { start_parallel_reviews(snapshot, agents: agents) },
+      apply: ->(state, reviews) { state.merge(reviews: reviews) }
 
     wait_state :awaiting_priority
 
-    state :improve
-    entry :improve, lambda { |state|
-      operation = start_improvement(state.merge({}))
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :improvement_completed,
-        operation: operation,
-        key: :improved_code
-      )
-      state
-    }
+    task_state :improve,
+      start: ->(snapshot) { start_improvement(snapshot, agents: agents) },
+      apply: ->(state, code) { state.merge(improved_code: code) }
 
-    state :evaluate
-    entry :evaluate, lambda { |state|
-      snapshot = state.merge({})
-      operation = Phronomy::Blocking.call_async do
-        Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
-          [build_quality_scores(snapshot), nil]
+    task_state :evaluate,
+      start: ->(snapshot) {
+        Phronomy::Blocking.call_async do
+          Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
+            [build_quality_scores(snapshot), nil]
+          end
         end
-      end
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :evaluation_completed,
-        operation: operation,
-        key: :quality_scores
-      )
-      state
-    }
+      },
+      apply: ->(state, scores) { state.merge(quality_scores: scores) }
 
     transition from: :load_and_split, to: :parallel_review
-    transition from: :parallel_review, on: :reviews_completed, to: :awaiting_priority,
-      action: ->(state, event) { state.merge(reviews: event_payload!(event).fetch(:reviews)) }
+    transition from: :parallel_review, to: :awaiting_priority
     transition from: :awaiting_priority, on: :proceed, to: :improve
-    transition from: :improve, on: :improvement_completed, to: :evaluate,
-      action: ->(state, event) { state.merge(improved_code: event_payload!(event).fetch(:improved_code)) }
-    transition from: :evaluate, on: :evaluation_completed, to: :__finish__,
-      action: ->(state, event) { state.merge(quality_scores: event_payload!(event).fetch(:quality_scores)) }
+    transition from: :improve, to: :evaluate
+    transition from: :evaluate, to: :__finish__
   end
-
-  workflow
 end

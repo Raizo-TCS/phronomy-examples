@@ -57,7 +57,7 @@ t_total = Time.now
 result = OutputValidator.validate(
   "multi-agent produces article of 300+ chars",
   check: ->(r) { r[:output].length >= 300 }
-) { OrchestratorAgent.new.invoke(task) }
+) { Phronomy::Agent.open_scope { |agents| agents.create(OrchestratorAgent).invoke_async(task) } }
 
 puts
 puts "--- Final Article ---"

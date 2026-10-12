@@ -8,7 +8,7 @@ A Rails application showing trust boundaries around a stateful Phronomy Agent.
 |---|---|---|
 | Prompt-injection filter | `Phronomy::Filter::PromptInjectionFilter` | Blocks common instruction-override patterns before the LLM boundary |
 | Application PII policy | `Phronomy::Filter::Base` | Demonstrates custom input/output Filters |
-| Stateful Agent | `Agent.create` / `Agent.load` | Gives each browser session an independent Agent identity |
+| Stateful Agent | `scope.create` / `scope.load` | Gives each browser session an independent Agent identity |
 | Canonical transcript | `agent.transcript` | Reads Journal-backed conversation state |
 | Caller metadata | `config: { user_id: }` | Propagates the supported caller identity metadata into the invocation |
 | Async summarization | `invoke_async` + `Workflow#signal` | Keeps Workflow state transitions event-driven |
@@ -62,3 +62,12 @@ Open `http://localhost:3002`.
 The shared `Gemfile.phronomy` lives at the repository root, so the Dockerfile
 expects the repository root to be the Docker build context. The Kamal
 `builder.context` setting is configured accordingly.
+
+## Request-owned Agents
+
+Each request opens `Phronomy::Agent.open_scope` and acquires its own Agent
+incarnation. Only the Agent ID is kept in the browser session; the transcript,
+Journal and application-owned Persistence survive scope exit. Simultaneous
+requests for the same live Agent return HTTP 409 without taking its ownership.
+No automatic retry is added. See [DX05-E ownership and failure policy](../docs/dx05-agent-scope-examples.md).
+The summary Workflow receives the request scope explicitly and uses `task_state` with `create_async.flat_map`. It waits for a final summary; failures reach the controller as errors instead of becoming a successful empty summary.

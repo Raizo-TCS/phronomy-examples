@@ -51,7 +51,7 @@ revision boundaries.
 | Feature | Class / Method | Role |
 |---|---|---|
 | LLM agent | `Phronomy::Agent::Base` | `IssueClassifierAgent` subclass; classifies batches of issues |
-| One-shot invocation | `Phronomy::Agent.run_once` | Creates a fresh Agent for each batch so history does not bleed across batches |
+| Batch lifetime | `Phronomy::Agent.open_scope` | Creates a fresh Agent per batch, waits for its result, then releases its live owner |
 | Runtime architecture | EventLoop / FSMSession | Agent lifecycle coordination is handled by Phronomy; no application runtime backend selection is required |
 | Unified persistence taxonomy | `Persistence#workflow_states` + Agent Journal | Classifies current durable-state issues without using the removed StateStore abstraction |
 | Shared LLM config | `LLMConfig::MODEL`, `LLMConfig::PROVIDER` | Provider-agnostic model/provider config from `shared/llm_config.rb` |

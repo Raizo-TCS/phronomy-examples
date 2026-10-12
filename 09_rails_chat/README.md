@@ -37,7 +37,7 @@ so they are not tied to the lifetime of one Rails process.
 | Feature | Class / API | Usage |
 |---------|-------------|-------|
 | Stateful Agent | `Agent::Base` + `agent_definition` | `ChatAgent` retains Journal-backed conversation state across turns |
-| Agent lifecycle | `Agent.create` / `Agent.load` | `ConversationsController` creates; subsequent requests load by durable `agent_id` |
+| Agent lifecycle | `scope.create` / `scope.load` | `ConversationsController` creates; subsequent requests load by durable `agent_id` |
 | External durable Persistence | `PhronomyExamples::Persistence::ActiveRecordSQLite` | `PhronomyStore.persistence` injects the Rails primary connection pool |
 | LLM invocation | `agent.invoke(content)` | `MessagesController` runs the normal Agent → LLM execution path |
 | Transcript read-back | `agent.transcript` | `ConversationsController#index` reloads the logical transcript from durable Journal state |
@@ -146,9 +146,17 @@ durability guarantees remain tested in `30_sqlite_persistence`.
 | File | Description |
 |------|-------------|
 | `app/agents/chat_agent.rb` | `ChatAgent < Agent::Base` with durable definition identity |
-| `app/controllers/conversations_controller.rb` | `Agent.create` / `Agent.load` + transcript rendering |
+| `app/controllers/conversations_controller.rb` | `scope.create` / `scope.load` + transcript rendering |
 | `app/controllers/messages_controller.rb` | `Agent.load` + real `agent.invoke(content)` |
 | `config/initializers/phronomy_store.rb` | Injects Rails primary connection pool into example 30's backend |
 | `db/migrate/20260816180000_create_phronomy_persistence_tables.rb` | Rails-owned provisioning for the Persistence tables |
 | `../30_sqlite_persistence/lib/active_record_sqlite_persistence.rb` | Authoritative concrete SQLite backend implementation |
 | `app/views/conversations/index.html.erb` | Chat UI |
+
+## Request-owned Agents
+
+Each request opens `Phronomy::Agent.open_scope` and acquires its own Agent
+incarnation. Only the Agent ID is kept in the browser session; the transcript,
+Journal and application-owned Persistence survive scope exit. Simultaneous
+requests for the same live Agent return HTTP 409 without taking its ownership.
+No automatic retry is added. See [DX05-E ownership and failure policy](../docs/dx05-agent-scope-examples.md).

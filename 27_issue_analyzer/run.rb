@@ -227,8 +227,10 @@ else
     $stdout.flush
 
     begin
-      # run_once creates a fresh Agent per batch so history never bleeds across batches.
-      result = Phronomy::Agent.run_once(definition: IssueClassifierAgent, input: payload.to_json)
+      # Each batch owns a fresh Agent and releases its live incarnation afterwards.
+      result = Phronomy::Agent.open_scope do |agents|
+        agents.create(IssueClassifierAgent).invoke_async(payload.to_json)
+      end
       raw = result[:output].to_s.strip
         .gsub(/\A```(?:json)?\n?/, "")
         .gsub(/\n?```\z/, "")

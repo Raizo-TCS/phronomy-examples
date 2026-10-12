@@ -6,10 +6,9 @@
 # Demonstrates a simple single-node pipeline using Phronomy::Workflow:
 #   :generate → :done → finish
 #
-# The entry action starts an async Agent call. Agent#invoke_async returns a
-# Phronomy::TaskResult; TaskResult completion is converted into an explicit Workflow event.
-# The transition action copies the Agent output into the context before the
-# :done entry runs.
+# task_state starts an asynchronous Agent call and applies its successful
+# result before transition guards and the next state's entry actions run.
+# Phronomy owns completion correlation, failure propagation and stale results.
 #
 # The same workflow is reused across multiple inputs to show that the
 # pipeline is stateless and reusable.
@@ -33,61 +32,32 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
+Phronomy::Agent.open_scope do |agents|
+  app = Phronomy::Workflow.define(CodeState) do
+    initial :generate
 
-# app is assigned after Workflow.define so the completion callback captures it
-# by reference and can call app.signal when the Agent TaskResult settles.
-app = nil
-app = Phronomy::Workflow.define(CodeState) do
-  initial :generate
+    task_state :generate,
+      start: ->(state) {
+        prompt = "Write a Hello World program in #{state.language}. Return code only."
+        agents.create_async(CodeGeneratorAgent).flat_map { |agent| agent.invoke_async(prompt) }
+      },
+      apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
 
-  state :generate
-  state :done
+    state :done
+    transition from: :generate, to: :done
+    transition from: :done, to: :__finish__
+  end
 
-  entry :generate, ->(state) {
-    workflow_instance_id = state.workflow_instance_id
-    prompt = "Write a Hello World program in #{state.language}. Return code only."
+  puts "=== Basic Workflow Pipeline Example ==="
 
-    agent = CodeGeneratorAgent.new
-    task = agent.invoke_async(prompt).map do |result|
-      {output: result.fetch(:output)}
-    end
-
-    task.on_complete do |payload, error|
-      app.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :generation_completed,
-        payload: error ? {error: error} : payload
-      )
-    end
-
-    state
-  }
-
-  transition(
-    from: :generate,
-    on: :generation_completed,
-    to: :done,
-    action: ->(ctx, event) {
-      ctx.merge(output: event_payload!(event).fetch(:output))
-    }
-  )
-  transition from: :done, to: :__finish__
-end
-
-puts "=== Basic Workflow Pipeline Example ==="
-
-%w[Ruby Python JavaScript].each do |language|
-  puts
-  puts "Language: #{language}"
-  puts "--- Response ---"
-  result = OutputValidator.validate(
-    "#{language} Hello World code generated",
-    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
-  ) { app.invoke({language: language}) }
-  puts result.output
+  %w[Ruby Python JavaScript].each do |language|
+    puts
+    puts "Language: #{language}"
+    puts "--- Response ---"
+    result = OutputValidator.validate(
+      "#{language} Hello World code generated",
+      check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+    ) { app.invoke({language: language}) }
+    puts result.output
+  end
 end

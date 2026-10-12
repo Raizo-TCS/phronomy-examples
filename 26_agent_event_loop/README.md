@@ -18,28 +18,18 @@ the returned TaskResult supplies the terminal result to the external caller.
 
 ## Agent → Workflow bridge
 
-When a Workflow only needs terminal completion, it does not need to subscribe to
-Agent `:done`. The application uses the common completion contract instead:
-
-```text
-Workflow entry
-  → Agent#invoke_async
-  → Phronomy::TaskResult
-  → return immediately
-  → TaskResult#on_complete
-  → Workflow#signal(workflow_instance_id:, event:, payload:)
-  → Workflow transition
-```
-
-This is the same shape used for other asynchronous producers that return a TaskResult,
-such as OffloadPool work or child lifecycle operations.
+When a Workflow needs terminal completion, `task_state` starts `invoke_async`
+and applies the returned TaskResult's successful value. It does not subscribe to
+Agent `:done`. Phronomy correlates that completion to the current state entry and
+propagates failure/cancellation; no application callback or completion signal is
+needed. Blocking operations and composed TaskResults use the same contract.
 
 The Agent and Workflow remain independently modelled:
 
 - Agent owns model/tool execution, persisted execution state, and context assembly;
 - TaskResult represents terminal completion only;
 - Workflow owns business-process state;
-- `Workflow#signal` remains the explicit event ingress into the Workflow FSM.
+- `Workflow#signal` remains available for external business events.
 
 The final section shows `CancellationToken.timeout_after` and demonstrates that
 timeout is classified as `Phronomy::TimeoutError` / `:timeout`, not as a generic

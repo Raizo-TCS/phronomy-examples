@@ -65,6 +65,17 @@ def stub_llm(agent_class, responses)
 end
 
 RSpec.describe "CveScanner scan graph" do
+  let(:agents) { @agents }
+  around do |example|
+    Phronomy::Agent.open_scope do |scope|
+      @agents = scope
+      example.run
+    end
+  ensure
+    Phronomy.reset_runtime!
+  end
+
+  let(:notifications) { double("notification sink", publish: nil) }
   before do
     # Suppress all ActionCable broadcasts — we only care about state mutations.
     allow(ScanChannel).to receive(:broadcast)
@@ -97,7 +108,7 @@ RSpec.describe "CveScanner scan graph" do
 
       it "marks the CVE as not_found and does not call the LLM" do
         expect(CveScanner).not_to receive(:call_agent_json)
-        new_state = CveScanner.node_check_cve_data(state, scan_id: nil)
+        new_state = CveScanner.node_check_cve_data(state, notifications: nil)
         expect(new_state.vulnerability_status["CVE-9999-0001"]).to eq("not_found")
       end
     end
@@ -113,7 +124,7 @@ RSpec.describe "CveScanner scan graph" do
       end
 
       it "marks the CVE as no_packages" do
-        new_state = CveScanner.node_check_cve_data(state, scan_id: nil)
+        new_state = CveScanner.node_check_cve_data(state, notifications: nil)
         expect(new_state.vulnerability_status["CVE-9999-0002"]).to eq("no_packages")
       end
     end
@@ -121,7 +132,7 @@ RSpec.describe "CveScanner scan graph" do
     context "when CVE info has packages" do
       it "returns state unchanged (no pre-status set)" do
         state = state_after_gather
-        new_state = CveScanner.node_check_cve_data(state, scan_id: nil)
+        new_state = CveScanner.node_check_cve_data(state, notifications: nil)
         expect(new_state.vulnerability_status).to be_empty
       end
     end
@@ -130,14 +141,14 @@ RSpec.describe "CveScanner scan graph" do
   describe "node_run_checks" do
     it "runs each approved command and records the output" do
       state = state_after_gather.merge(approved_checks: ["dpkg -s wpasupplicant"])
-      new_state = CveScanner.node_run_checks(state, scan_id: nil)
+      new_state = CveScanner.node_run_checks(state, notifications: nil)
       expect(new_state.check_history.last[:cmd]).to eq("dpkg -s wpasupplicant")
       expect(new_state.check_history.last[:output]).to include("wpasupplicant")
     end
 
     it "records nothing when approved_checks is empty" do
       state = state_after_gather.merge(approved_checks: [])
-      new_state = CveScanner.node_run_checks(state, scan_id: nil)
+      new_state = CveScanner.node_run_checks(state, notifications: nil)
       expect(new_state.check_history).to be_empty
     end
   end
@@ -149,7 +160,7 @@ RSpec.describe "CveScanner scan graph" do
         stub_llm(CveScanner::CveAnalystAgent, [
           {decision: "need_more", proposed_commands: ["dpkg -s wpasupplicant"]}
         ])
-        new_state = CveScanner.node_propose_checks(state, scan_id: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("need_more")
         expect(new_state.proposed_checks).to eq(["dpkg -s wpasupplicant"])
       end
@@ -163,7 +174,7 @@ RSpec.describe "CveScanner scan graph" do
            vulnerability_status: {"CVE-2023-52160" => "vulnerable"},
            reasoning: {"CVE-2023-52160" => "affected version"}}
         ])
-        new_state = CveScanner.node_propose_checks(state, scan_id: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("done")
         expect(new_state.vulnerability_status["CVE-2023-52160"]).to eq("vulnerable")
       end
@@ -176,7 +187,7 @@ RSpec.describe "CveScanner scan graph" do
           vulnerability_status: {"CVE-2023-52160" => "unknown"}
         )
         expect(CveScanner).not_to receive(:call_agent_json)
-        new_state = CveScanner.node_propose_checks(state, scan_id: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("done")
       end
     end
@@ -188,7 +199,7 @@ RSpec.describe "CveScanner scan graph" do
 
   # Build the graph and stub node_gather_scan_info so OS / scraper calls are
   # bypassed while the graph itself is exercised.
-  def build_stubbed_graph(scan_id: nil)
+  def build_stubbed_graph(notifications: nil)
     allow(CveScanner).to receive(:node_gather_scan_info) do |state, **|
       state.merge(
         cve_ids: state.cve_ids,
@@ -198,7 +209,7 @@ RSpec.describe "CveScanner scan graph" do
         messages: ["OS: Ubuntu 24.04"]
       )
     end
-    CveScanner.build_graph(scan_id: scan_id)
+    CveScanner.build_graph(agents: agents, notifications: notifications)
   end
 
   # Resume a halted graph from a persisted-like state.
@@ -315,7 +326,7 @@ RSpec.describe "CveScanner scan graph" do
       end
       expect(CveScanner).not_to receive(:call_agent_json)
 
-      graph = CveScanner.build_graph(scan_id: nil)
+      graph = CveScanner.build_graph(agents: agents, notifications: nil)
       state = graph.invoke({cve_ids: ["CVE-9999-0001"]},
                            config: {workflow_instance_id: "test-path-c"})
 
@@ -354,9 +365,9 @@ RSpec.describe "CveScanner scan graph" do
         {decision: "done", vulnerability_status: {"CVE-2023-52160" => "vulnerable"}, reasoning: {}}
       ])
       broadcasts = []
-      allow(ScanChannel).to receive(:broadcast) { |_id, payload| broadcasts << payload }
+      allow(notifications).to receive(:publish) { |payload| broadcasts << payload }
 
-      graph = build_stubbed_graph(scan_id: 1)
+      graph = build_stubbed_graph(notifications: notifications)
       halted = graph.invoke({cve_ids: ["CVE-2023-52160"]},
                             config: {workflow_instance_id: "test-fu1-broadcast"})
       broadcasts.clear
@@ -469,9 +480,9 @@ RSpec.describe "CveScanner scan graph" do
 
       it "broadcasts a warning when scan_id is set" do
         broadcasts = []
-        allow(ScanChannel).to receive(:broadcast) { |_id, payload| broadcasts << payload }
+        allow(notifications).to receive(:publish) { |payload| broadcasts << payload }
         raw = {"VEC-2023521-60" => "vulnerable"}
-        CveScanner.normalize_vuln_status(raw, ["CVE-2023-52160"], scan_id: 1)
+        CveScanner.normalize_vuln_status(raw, ["CVE-2023-52160"], notifications: notifications)
         warning = broadcasts.find { |b| b[:type] == "log" && b[:message].include?("WARNING") }
         expect(warning).not_to be_nil
         expect(warning[:message]).to include("VEC-2023521-60")
@@ -663,7 +674,7 @@ RSpec.describe "CveScanner scan graph" do
         vulnerability_status: {"CVE-2023-52160" => "unknown"}
       )
 
-      new_state = CveScanner.node_propose_checks(state, scan_id: nil)
+      new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
       expect(new_state.check_decision).to eq("done")
       # LLM should NOT have been called (limit guard fires first).
       expect(CveScanner).not_to have_received(:call_agent_json)

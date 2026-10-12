@@ -8,19 +8,9 @@ Build a stateless, reusable code-generation pipeline with one node backed by
 an `Agent::Base` subclass. The same workflow instance is invoked multiple times
 with different inputs to show it has no side-effects between calls.
 
-The example also shows the standard terminal-completion bridge used by the
-Workflow examples:
-
-```text
-Agent#invoke_async
-  → Phronomy::TaskResult
-  → TaskResult#on_complete
-  → Workflow#signal
-  → Workflow transition
-```
-
-`TaskResult` is only the completion handle. The Workflow continues through an explicit
-Workflow event; the TaskResult does not become a Workflow execution primitive.
+Each `task_state` starts an Agent TaskResult and applies its successful output
+before normal transitions run. Phronomy owns completion correlation, stale-result
+rejection and failure propagation; the Agent owns its model/tool execution.
 
 ## Phronomy Features
 
@@ -30,8 +20,7 @@ Workflow event; the TaskResult does not become a Workflow execution primitive.
 | `Phronomy::Workflow.define` | Workflow definition API |
 | `initial` / `state` / `transition` | Assembles the pipeline |
 | `Phronomy::Agent::Base` | `CodeGeneratorAgent` drives the `:generate` node |
-| `Agent#invoke_async` / `TaskResult#on_complete` | Observes terminal Agent completion without using lifecycle events |
-| `Workflow#signal` | Converts completion into an explicit Workflow event |
+| `task_state` + `Agent#invoke_async` | Starts the operation and applies its successful result |
 | `invoke` | Executes the workflow with an initial state hash |
 
 ## How to Run

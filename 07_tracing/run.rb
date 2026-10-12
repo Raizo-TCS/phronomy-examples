@@ -32,60 +32,30 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
+Phronomy::Agent.open_scope do |agents|
+  app = Phronomy::Workflow.define(CodeState) do
+    initial :generate
 
-app = nil  # declared first so the TaskResult completion callback can capture it by reference
+    task_state :generate,
+      start: ->(state) {
+        agents.create_async(CodeGeneratorAgent).flat_map do |agent|
+          agent.invoke_async("Write a Hello World program in #{state.language}. Return code only.")
+        end
+      },
+      apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
 
-GENERATE_NODE_WITH_TRACE = ->(state) {
-  workflow_instance_id = state.workflow_instance_id
-  language = state.language
-
-  agent = CodeGeneratorAgent.new
-  task = agent.invoke_async(
-    "Write a Hello World program in #{language}. Return code only."
-  ).map do |result|
-    {output: result.fetch(:output)}
+    state :done
+    transition from: :generate, to: :done
+    transition from: :done, to: :__finish__
   end
 
-  task.on_complete do |payload, error|
-    app.signal(
-      workflow_instance_id: workflow_instance_id,
-      event: :generation_completed,
-      payload: error ? {error: error} : payload
-    )
-  end
-
-  state
-}
-
-app = Phronomy::Workflow.define(CodeState) do
-  initial :generate
-  state :generate
-  state :done
-
-  entry :generate, GENERATE_NODE_WITH_TRACE
-
-  transition(
-    from: :generate,
-    on: :generation_completed,
-    to: :done,
-    action: ->(ctx, event) {
-      ctx.merge(output: event_payload!(event).fetch(:output))
-    }
-  )
-  transition from: :done, to: :__finish__
+  puts "=== Tracing Example ==="
+  puts
+  result = OutputValidator.validate(
+    "Go Hello World code generated with tracing",
+    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+  ) { app.invoke({language: "Go"}) }
+  puts
+  puts "--- LLM Response ---"
+  puts result.output
 end
-
-puts "=== Tracing Example ==="
-puts
-result = OutputValidator.validate(
-  "Go Hello World code generated with tracing",
-  check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
-) { app.invoke({language: "Go"}) }
-puts
-puts "--- LLM Response ---"
-puts result.output

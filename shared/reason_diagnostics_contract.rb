@@ -29,6 +29,8 @@ RSpec.shared_examples "persisted reason diagnostics" do
     expect { team.invoke("plan") }.to raise_error(Phronomy::Error) { |error|
       expect(error).not_to be_a(Phronomy::ExecutionRehydrationRequiredError)
       expect(error.code).to eq("team.enqueue_after_finalize")
+      expect(error.cause).to be_instance_of(Phronomy::Error)
+      expect(error.cause.code).to eq("team.enqueue_after_finalize")
     }
 
     run = team.executions.first
@@ -39,12 +41,19 @@ RSpec.shared_examples "persisted reason diagnostics" do
     expected_diagnostic = {
       "class" => "Phronomy::ConfigurationError",
       "message" => "Cannot enqueue after finalize",
-      "code" => "team.enqueue_after_finalize"
+      "code" => "team.enqueue_after_finalize",
+      "cause" => {
+        "class" => "Phronomy::MultiAgent::TeamCoordinator::OperationRejected",
+        "message" => "Cannot enqueue after finalize",
+        "code" => "team.enqueue_after_finalize"
+      }
     }
     expect(stores.agent.contents.fetch_json(coordinator.error_ref)).to eq(expected_diagnostic)
     expect(team.result(run.team_execution_id).dig(:error, "code")).to eq("team.enqueue_after_finalize")
     expect { team.resume(run.team_execution_id) }.to raise_error(Phronomy::Error) { |error|
       expect(error.code).to eq("team.enqueue_after_finalize")
+      expect(error.cause).to be_instance_of(Phronomy::Error)
+      expect(error.cause.code).to eq("team.enqueue_after_finalize")
     }
     expect(stub.calls.length).to eq(3)
 
@@ -59,6 +68,8 @@ RSpec.shared_examples "persisted reason diagnostics" do
     expect { loaded.resume(run.team_execution_id) }.to raise_error(Phronomy::Error) { |error|
       expect(error).not_to be_a(Phronomy::ExecutionRehydrationRequiredError)
       expect(error.code).to eq("team.enqueue_after_finalize")
+      expect(error.cause).to be_instance_of(Phronomy::Error)
+      expect(error.cause.code).to eq("team.enqueue_after_finalize")
     }
     expect(stub.calls.length).to eq(3)
   end

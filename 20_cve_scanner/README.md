@@ -4,42 +4,51 @@ Rails-based CVE analysis example using Phronomy Workflow and Agents.
 
 ## Current execution model
 
-The scan is coordinated by a Workflow FSMSession on Phronomy's EventLoop.
-Long-running work is split by responsibility:
+Workflow nodes coordinate the scan on Phronomy's EventLoop. Agent `stream_async`
+returns a TaskResult; `task_state` applies its result before normal transitions. Shell commands and the synchronous Ubuntu scraper use
+`Phronomy::Blocking.call_async` and the bounded OffloadPool. Logical waits for
+Agents do not occupy that pool. The application creates no raw Threads for
+Workflow orchestration.
 
-```text
-Workflow EventLoop / FSMSession
-  ├─ Agent reasoning
-  │    └─ Agent#stream_async → completion TaskResult → Workflow#signal
-  │
-  └─ synchronous application work that must stay off EventLoop
-       ├─ shell commands
-       └─ Ubuntu CVE scraper
-            ↓
-       Runtime#offload (bounded OffloadPool)
-            ↓ on_complete
-       Workflow#signal
-```
+Screen notifications use the existing M91 `OrderedEventDelivery` API. Each
+initial, approval-resume, follow-up-resume and chat Job opens one
+`CveScanner::Notifications` scope. Graph nodes and Agent listeners receive its
+publisher explicitly. Only the application adapter knows ScanChannel and Rails;
+actual broadcasts run outside EventLoop inside the Rails executor. A Job drains
+its notifications before returning, including when it pauses for operator input.
+The next Job creates a fresh publisher. Operator-note requests use the same
+adapter and drain before enqueueing a chat response.
 
-The application does not create raw Threads for Workflow orchestration and does
-not place logical waits for child Agents into the OffloadPool.
+Ordering applies within each scope, not across concurrent Jobs. Payloads are
+plain-data snapshots. The queue capacity is 256 and the batch size is 32; active
+batches are separate from queue capacity. The 30-second flush timeout limits
+waiting and does not forcibly cancel an in-flight delivery. This is not a durable
+queue or an acknowledgement that the browser has received the notification.
 
-`OffloadPool` is a bounded isolation boundary for synchronous work. It is not a
-logical Workflow scheduler, CPU-isolation guarantee, or distributed execution
-mechanism.
+Saved done/awaiting state is preserved if the final publish or drain fails.
+Business failures remain primary if reporting or status-save also fails. A Chat
+Job now re-raises its business failure instead of swallowing it. No automatic
+retry is added. Listener overflow is observable as a `StreamCallbackError` with
+the original `OrderedEventDelivery::OverflowError` and code in its cause.
+
+See the complete [DX05-B before/after design](../docs/dx05-notification-delivery.md)
+for the notification responsibility boundary and failure matrix.
+[DX05-D](../docs/dx05-workflow-task-state.md) moves state-owned completion into
+`task_state`. Agent scope/unload (DX05-E) remains separate; future cleanup must
+follow producer completion and notification drain.
 
 ## Main Phronomy features
 
-- `Phronomy::Workflow.define`
-- `Workflow#signal`
-- Agent `stream_async`
-- `Phronomy::TaskResult` completion handles
-- `Runtime#offload`
-- Tool approval / operator wait states
-- follow-up and remediation loops represented as FSM state
+- `Phronomy::Workflow.define`, `task_state` and business approval events
+- Agent `stream_async` and `Phronomy::TaskResult` completion handles
+- `Phronomy::Blocking.call_async` for synchronous work
+- `Phronomy::Integrations::OrderedEventDelivery` for ordered notifications
+- Tool approval and operator wait states
+- Follow-up and remediation loops represented as FSM state
 
-## Development
+## Development and verification
 
+Set `PHRONOMY_PATH` to the reviewed core checkout specified in the root README.
 From this directory:
 
 ```bash
@@ -48,13 +57,32 @@ bin/rails db:create db:migrate
 bin/rails server
 ```
 
-For repository-wide verification, use the root scripts:
+Run real Rails notification, Job and request acceptance tests without a live LLM:
 
 ```bash
-export PHRONOMY_PATH=../phronomy
-./scripts/update_phronomy.sh
-./scripts/verify_examples.sh
+export RAILS_ENV=test
+export PHRONOMY_MODEL=gpt-4o-mini
+export PHRONOMY_BASE_URL=https://example.test/v1
+export PHRONOMY_API_KEY=test-only
+bundle exec rails db:prepare zeitwerk:check
+bundle exec rspec spec/lib spec/jobs spec/requests
 ```
 
-The verification suite starts this Rails app with `CVE_SCANNER_MOCK_LLM=1` so
-GUI smoke tests do not require a live model server.
+The 75 tests include 29 DX05-B cases. They use real Agent/Tool/Workflow execution,
+Rails and persisted Scan records, with protocol-level HTTP stubs, controlled
+shell/scraper results and an ActionCable server transport stub. They check
+EventLoop isolation, snapshot/order/drain, overflow, primary-error preservation,
+saved-state preservation and fresh publishers on resume. The existing CVE Rails
+CI job now runs these tests in addition to boot/eager-load checks.
+
+From the repository root, `bash scripts/verify_offline.sh` covers root specs and
+SQLite. `bash scripts/verify_examples.sh` additionally runs the broader example
+checks. Its GUI smoke tests use `CVE_SCANNER_MOCK_LLM=1`. Those GUI mocks are
+distinct from the real Agent protocol-stub acceptance tests above; neither is
+a live LLM or external Cable backend connectivity test.
+
+## Agent lifetime
+
+Each initial/resumed/chat Job owns an Agent scope outside its notification scope. Graph builders receive `agents:` explicitly, and task states materialize Agents asynchronously. Completed children are released after notification drain even at an approval/follow-up halt; the next Job creates its own scope. Saved state contains data, never a scope or live Agent. Cleanup-only failure preserves a saved done/awaiting status.
+
+See [DX05-E scope migration](../docs/dx05-agent-scope-examples.md).

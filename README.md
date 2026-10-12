@@ -1,12 +1,34 @@
 # Phronomy Examples
 
+Agent lifetime examples now use the reviewed core scope API. See [DX05-E P6 ownership, before/after and acceptance](docs/dx05-agent-scope-examples.md). This API remains tied to the pinned unreleased core; update the released-gem dependency when publishing.
+
+
 This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
-including the RubyLLM 2.0 migration. Ordered event delivery and saved failure
-reason codes require the paired core candidate
-[`8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77`](https://github.com/Raizo-TCS/phronomy/commit/8ab59c7d397a1dbd0bd9e295e723cb4ce9406c77);
+including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
+busy errors, plus cause-aware saved diagnostics. DX05-D adds Workflow task states.
+These APIs require the paired core candidate
+[`586674cac5422f945c8aeb33c2567c545a729acf`](https://github.com/Raizo-TCS/phronomy/commit/586674cac5422f945c8aeb33c2567c545a729acf);
 they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
 core checkout before updating or verifying any bundle. Complete old in-flight
-Tool executions before upgrading; see the core migration guide.
+Tool executions before upgrading; see the core migration guide and
+[error API changes](ERROR-API.md).
+
+DX05-C moves example 14's parallel-review completion bookkeeping to the existing
+`TaskResult.all_settled` API. Reviewer grouping and partial-failure policy stay in
+the application; see the [before/after comparison](docs/dx05-review-composition.md).
+DX05-C itself introduces no new core API.
+
+DX05-B routes example 20's notifications through the existing
+`OrderedEventDelivery` scope. The application chooses payloads and destinations;
+M91 handles ordering and drain outside EventLoop. Saved scan results survive a
+final notification failure. See the [before/after comparison](docs/dx05-notification-delivery.md).
+DX05-B itself introduces no new core API.
+
+DX05-D migrates 01/03/04/07/14/20/25/26 to `task_state(start:, apply:)`.
+Phronomy owns completion correlation and failure delivery; applications own their
+operations, result mapping and business events. See the
+[before/after and responsibility boundaries](docs/dx05-workflow-task-state.md).
+DX05-E Agent scope/unload remains separate work.
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and

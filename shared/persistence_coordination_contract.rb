@@ -21,12 +21,12 @@ RSpec.shared_examples "a SQL coordination backend" do
       -> { stores.multi_agent.team_executions.create_active(coordination_run) },
       -> { stores.multi_agent.team_executions.create_active(second) }
     )
-    expect_one_writer(results, Phronomy::AgentBusyError)
+    expect_one_writer(results, Phronomy::MultiAgent::TeamBusyError)
     winner = stores.multi_agent.team_executions.list_active(coordination_team.team_id).fetch(0)
     expect { stores.multi_agent.team_executions.create_active(winner) }.to raise_error(Phronomy::Persistence::ConflictError) do |error|
       expect(error.cause).to be_a(Phronomy::Storage::ConflictError)
     end
-    expect { stores.multi_agent.team_executions.assert_idle!(coordination_team.team_id) }.to raise_error(Phronomy::AgentBusyError)
+    expect { stores.multi_agent.team_executions.assert_idle!(coordination_team.team_id) }.to raise_error(Phronomy::MultiAgent::TeamBusyError)
   end
 
   it "allows one Team root CAS writer" do

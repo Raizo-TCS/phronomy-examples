@@ -27,9 +27,9 @@ RSpec.describe "Example execution boundaries" do
   end
 
   it "keeps Agent lifecycle observation separate from Workflow task completion" do
-    stub = ExampleChatStub.new { "おはようございます。" }
+    stub = ExampleChatStub.new { "\u304a\u306f\u3088\u3046\u3054\u3056\u3044\u307e\u3059\u3002" }
     expect { run_example("26_agent_event_loop") }
-      .to output(/Workflow answer:.*おはようございます.*Caught:.*TimeoutError/m).to_stdout
+      .to output(/Workflow answer:.*\u304a\u306f\u3088\u3046\u3054\u3056\u3044\u307e\u3059.*Caught:.*TimeoutError/m).to_stdout
     expect(stub.calls.length).to eq(2)
   end
 

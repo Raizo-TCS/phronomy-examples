@@ -80,3 +80,9 @@ SQLite. `bash scripts/verify_examples.sh` additionally runs the broader example
 checks. Its GUI smoke tests use `CVE_SCANNER_MOCK_LLM=1`. Those GUI mocks are
 distinct from the real Agent protocol-stub acceptance tests above; neither is
 a live LLM or external Cable backend connectivity test.
+
+## Agent lifetime
+
+Each initial/resumed/chat Job owns an Agent scope outside its notification scope. Graph builders receive `agents:` explicitly, and task states materialize Agents asynchronously. Completed children are released after notification drain even at an approval/follow-up halt; the next Job creates its own scope. Saved state contains data, never a scope or live Agent. Cleanup-only failure preserves a saved done/awaiting status.
+
+See [DX05-E scope migration](../docs/dx05-agent-scope-examples.md).

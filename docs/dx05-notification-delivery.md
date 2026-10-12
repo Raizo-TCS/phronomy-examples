@@ -1,5 +1,8 @@
 # DX05-B Separate notification delivery from business processing
 
+> Follow-up: [DX05-E P6](dx05-agent-scope-examples.md) adds Agent ownership. The before/after code below records the earlier DX05 unit; current application graph/review builders also receive `agents:`.
+
+
 ## Problem and purpose
 
 Scan decisions and command execution have different responsibilities from reporting progress to the UI. Previously, Workflow nodes and Agent listeners sent directly through ActionCable, allowing a slow notification destination to delay EventLoop processing. Making delivery asynchronous alone would still leave each Job responsible for completion, ordering and delivery failures.

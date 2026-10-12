@@ -4,6 +4,7 @@ require "spec_helper"
 require_relative "../14_code_review/pipeline"
 
 RSpec.describe "Parallel code review result composition" do
+  let(:agents) { instance_double(Phronomy::Agent::Scope) }
   let(:application) { Object.new }
   let(:chunks) { [{text: "first"}, {text: "second"}] }
   let(:state) { ReviewState.new(source_code: "whole source", chunks: chunks) }
@@ -13,8 +14,8 @@ RSpec.describe "Parallel code review result composition" do
 
   def reviewer(name)
     klass = double("#{name} class", name: name, review_knowledge: "#{name} criteria")
-    allow(klass).to receive(:new).with(knowledge: ["#{name} criteria"]) do
-      double("#{name} instance").tap do |agent|
+    allow(agents).to receive(:create_async).with(klass, knowledge: ["#{name} criteria"]) do
+      agent = double("#{name} instance").tap do |agent|
         allow(agent).to receive(:invoke_async) do |text|
           started << [name, text]
           response = responses.fetch([name, text])
@@ -22,12 +23,13 @@ RSpec.describe "Parallel code review result composition" do
           response
         end
       end
+      Phronomy::TaskResult.completed(agent)
     end
     klass
   end
 
   def start
-    application.send(:start_parallel_reviews, state)
+    application.send(:start_parallel_reviews, state, agents: agents)
   end
 
   before do
@@ -51,8 +53,7 @@ RSpec.describe "Parallel code review result composition" do
 
     it "keeps every reviewer key when there are no review texts" do
       allow(application).to receive(:review_texts).with(state).and_return([])
-      expect(first_reviewer).not_to receive(:new)
-      expect(second_reviewer).not_to receive(:new)
+      expect(agents).not_to receive(:create_async)
       expect(start.wait_result(timeout: 2)).to eq(first: "", second: "")
     end
 
@@ -101,7 +102,7 @@ RSpec.describe "Parallel code review result composition" do
     it "retains successful peers when Agent construction raises" do
       chunks.replace([{text: "first"}])
       error = IOError.new("construction failed")
-      allow(first_reviewer).to receive(:new).and_raise(error)
+      allow(agents).to receive(:create_async).with(first_reviewer, knowledge: ["FirstReviewer criteria"]).and_return(Phronomy::TaskResult.failed(error))
       responses[["SecondReviewer", "first"]] = Phronomy::TaskResult.completed({output: "peer finding"})
       expect(start.wait_result(timeout: 2)).to eq(first: "", second: "peer finding")
       expect(warnings).to eq(["[FirstReviewer] chunk 1/1: IOError: construction failed"])
@@ -194,12 +195,14 @@ RSpec.describe "Parallel code review result composition" do
 
   it "returns real Agent results through Workflow completion and pauses for the review priority" do
     stub = ExampleChatStub.new { " finding " }
-    workflow = application.send(:build_pipeline)
-    result = workflow.invoke({file_path: "sample.rb", source_code: "puts :hello"},
-      config: {workflow_instance_id: "dx05-review-composition"})
-    expect(result).to be_halted
-    expect(result.phase).to eq(:awaiting_priority)
-    expect(result.reviews).to eq(REVIEWERS.to_h { |key, _| [key, "finding"] })
+    Phronomy::Agent.open_scope do |scope|
+      workflow = application.send(:build_pipeline, agents: scope)
+      result = workflow.invoke({file_path: "sample.rb", source_code: "puts :hello"},
+        config: {workflow_instance_id: "dx05-review-composition"})
+      expect(result).to be_halted
+      expect(result.phase).to eq(:awaiting_priority)
+      expect(result.reviews).to eq(REVIEWERS.to_h { |key, _| [key, "finding"] })
+    end
     expect(stub.calls.length).to eq(4)
   end
 end

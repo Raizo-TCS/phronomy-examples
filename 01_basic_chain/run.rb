@@ -32,30 +32,32 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-app = Phronomy::Workflow.define(CodeState) do
-  initial :generate
+Phronomy::Agent.open_scope do |agents|
+  app = Phronomy::Workflow.define(CodeState) do
+    initial :generate
 
-  task_state :generate,
-    start: ->(state) {
-      prompt = "Write a Hello World program in #{state.language}. Return code only."
-      CodeGeneratorAgent.new.invoke_async(prompt)
-    },
-    apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
+    task_state :generate,
+      start: ->(state) {
+        prompt = "Write a Hello World program in #{state.language}. Return code only."
+        agents.create_async(CodeGeneratorAgent).flat_map { |agent| agent.invoke_async(prompt) }
+      },
+      apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
 
-  state :done
-  transition from: :generate, to: :done
-  transition from: :done, to: :__finish__
-end
+    state :done
+    transition from: :generate, to: :done
+    transition from: :done, to: :__finish__
+  end
 
-puts "=== Basic Workflow Pipeline Example ==="
+  puts "=== Basic Workflow Pipeline Example ==="
 
-%w[Ruby Python JavaScript].each do |language|
-  puts
-  puts "Language: #{language}"
-  puts "--- Response ---"
-  result = OutputValidator.validate(
-    "#{language} Hello World code generated",
-    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
-  ) { app.invoke({language: language}) }
-  puts result.output
+  %w[Ruby Python JavaScript].each do |language|
+    puts
+    puts "Language: #{language}"
+    puts "--- Response ---"
+    result = OutputValidator.validate(
+      "#{language} Hello World code generated",
+      check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+    ) { app.invoke({language: language}) }
+    puts result.output
+  end
 end

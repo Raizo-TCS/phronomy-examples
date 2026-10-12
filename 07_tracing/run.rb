@@ -32,28 +32,30 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-app = Phronomy::Workflow.define(CodeState) do
-  initial :generate
+Phronomy::Agent.open_scope do |agents|
+  app = Phronomy::Workflow.define(CodeState) do
+    initial :generate
 
-  task_state :generate,
-    start: ->(state) {
-      CodeGeneratorAgent.new.invoke_async(
-        "Write a Hello World program in #{state.language}. Return code only."
-      )
-    },
-    apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
+    task_state :generate,
+      start: ->(state) {
+        agents.create_async(CodeGeneratorAgent).flat_map do |agent|
+          agent.invoke_async("Write a Hello World program in #{state.language}. Return code only.")
+        end
+      },
+      apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
 
-  state :done
-  transition from: :generate, to: :done
-  transition from: :done, to: :__finish__
+    state :done
+    transition from: :generate, to: :done
+    transition from: :done, to: :__finish__
+  end
+
+  puts "=== Tracing Example ==="
+  puts
+  result = OutputValidator.validate(
+    "Go Hello World code generated with tracing",
+    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+  ) { app.invoke({language: "Go"}) }
+  puts
+  puts "--- LLM Response ---"
+  puts result.output
 end
-
-puts "=== Tracing Example ==="
-puts
-result = OutputValidator.validate(
-  "Go Hello World code generated with tracing",
-  check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
-) { app.invoke({language: "Go"}) }
-puts
-puts "--- LLM Response ---"
-puts result.output

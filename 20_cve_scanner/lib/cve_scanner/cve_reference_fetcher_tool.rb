@@ -94,7 +94,9 @@ class CveScanner::CveReferenceFetcherTool < Phronomy::Tool::Base
     end
 
     prompt = build_summarizer_prompt(normalized_url, text.slice(0, MAX_RAW_CONTENT), perspective, further_urls)
-    CveScanner::CveReferenceSummarizerAgent.new.invoke(prompt)[:output].to_s
+    Phronomy::Agent.open_scope do |agents|
+      agents.create(CveScanner::CveReferenceSummarizerAgent).invoke(prompt)[:output].to_s
+    end
   rescue StandardError => e
     "error=#{e.message}"
   end

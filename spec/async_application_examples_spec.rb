@@ -6,6 +6,7 @@ require_relative "../14_code_review/pipeline"
 
 RSpec.describe "Application result transformation and Workflow task states" do
   let(:application) { Object.new }
+  let(:agents) { instance_double(Phronomy::Agent::Scope) }
   let(:snapshot) { OpenStruct.new(priority: nil) }
 
   before do
@@ -20,20 +21,20 @@ RSpec.describe "Application result transformation and Workflow task states" do
       .and_return(Phronomy::TaskResult.completed({output: "candidate", metadata: "kept by source TaskResult"}))
     expect(CODE_OUTPUT_GUARDRAIL).to receive(:call).with("candidate")
       .and_raise(Phronomy::FilterBlockError, "warning only")
-    expect(application.send(:start_improvement, snapshot).wait_result).to eq("candidate")
+    expect(application.send(:start_improvement, snapshot, agents: agents).wait_result).to eq("candidate")
   end
 
   it "preserves optional output extraction instead of introducing a fetch requirement" do
     agent = double("ImproverAgent", invoke_async: Phronomy::TaskResult.completed({}))
     allow(application).to receive(:load_or_create_improver).and_return(agent)
     allow(CODE_OUTPUT_GUARDRAIL).to receive(:call)
-    expect(application.send(:start_improvement, snapshot).wait_result).to eq("")
+    expect(application.send(:start_improvement, snapshot, agents: agents).wait_result).to eq("")
   end
 
   it "turns a startup exception into a failed TaskResult with the original error" do
     error = RuntimeError.new("Agent could not be loaded")
     allow(application).to receive(:load_or_create_improver).and_raise(error)
-    task = application.send(:start_improvement, snapshot)
+    task = application.send(:start_improvement, snapshot, agents: agents)
     expect { task.wait_result }.to raise_error { |caught| expect(caught).to equal(error) }
   end
 
@@ -45,13 +46,33 @@ RSpec.describe "Application result transformation and Workflow task states" do
       else "0.8"
       end
     end
-    workflow = application.send(:build_pipeline)
-    halted = workflow.invoke({file_path: "sample.rb", source_code: "puts :original"})
-    expect(halted.phase).to eq(:awaiting_priority)
-    expect(halted.reviews.values).to all(eq("review finding"))
-    finished = workflow.send_event(state: halted, event: :proceed, input: {priority: "security"})
-    expect(finished.improved_code).to include("puts :improved")
-    expect(finished.quality_scores).to eq(review_quality: 8.0, improvement_quality: 8.0)
+    Phronomy::Agent.open_scope do |scope|
+      workflow = application.send(:build_pipeline, agents: scope)
+      halted = workflow.invoke({file_path: "sample.rb", source_code: "puts :original"})
+      expect(halted.phase).to eq(:awaiting_priority)
+      expect(halted.reviews.values).to all(eq("review finding"))
+      finished = workflow.send_event(state: halted, event: :proceed, input: {priority: "security"})
+      expect(finished.improved_code).to include("puts :improved")
+      expect(finished.quality_scores).to eq(review_quality: 8.0, improvement_quality: 8.0)
+    end
     expect(stub.calls.length).to eq(7)
+  end
+
+  it "reloads the same improver history in a new scope for the next review" do
+    stub = ExampleChatStub.new { |_request, index| "answer #{index}" }
+    snapshot = OpenStruct.new(file_path: "repeat-scope.rb")
+    owners = []
+    2.times do |index|
+      Phronomy::Agent.open_scope do |scope|
+        agent = application.send(:load_or_create_improver, snapshot, agents: scope)
+        owners << agent
+        agent.invoke_async({message: "review #{index}", priority: "security"})
+      end
+      expect(ImproverAgent.get("review-repeat-scope")).to be_nil
+    end
+    expect(owners.last).not_to equal(owners.first)
+    expect(owners.map(&:agent_id).uniq).to eq(["review-repeat-scope"])
+    expect(stub.calls.last.fetch("messages").map { |message| message["content"] })
+      .to include("review 0", "answer 0", "review 1")
   end
 end

@@ -65,6 +65,16 @@ def stub_llm(agent_class, responses)
 end
 
 RSpec.describe "CveScanner scan graph" do
+  let(:agents) { @agents }
+  around do |example|
+    Phronomy::Agent.open_scope do |scope|
+      @agents = scope
+      example.run
+    end
+  ensure
+    Phronomy.reset_runtime!
+  end
+
   let(:notifications) { double("notification sink", publish: nil) }
   before do
     # Suppress all ActionCable broadcasts — we only care about state mutations.
@@ -150,7 +160,7 @@ RSpec.describe "CveScanner scan graph" do
         stub_llm(CveScanner::CveAnalystAgent, [
           {decision: "need_more", proposed_commands: ["dpkg -s wpasupplicant"]}
         ])
-        new_state = CveScanner.node_propose_checks(state, notifications: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("need_more")
         expect(new_state.proposed_checks).to eq(["dpkg -s wpasupplicant"])
       end
@@ -164,7 +174,7 @@ RSpec.describe "CveScanner scan graph" do
            vulnerability_status: {"CVE-2023-52160" => "vulnerable"},
            reasoning: {"CVE-2023-52160" => "affected version"}}
         ])
-        new_state = CveScanner.node_propose_checks(state, notifications: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("done")
         expect(new_state.vulnerability_status["CVE-2023-52160"]).to eq("vulnerable")
       end
@@ -177,7 +187,7 @@ RSpec.describe "CveScanner scan graph" do
           vulnerability_status: {"CVE-2023-52160" => "unknown"}
         )
         expect(CveScanner).not_to receive(:call_agent_json)
-        new_state = CveScanner.node_propose_checks(state, notifications: nil)
+        new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
         expect(new_state.check_decision).to eq("done")
       end
     end
@@ -199,7 +209,7 @@ RSpec.describe "CveScanner scan graph" do
         messages: ["OS: Ubuntu 24.04"]
       )
     end
-    CveScanner.build_graph(notifications: notifications)
+    CveScanner.build_graph(agents: agents, notifications: notifications)
   end
 
   # Resume a halted graph from a persisted-like state.
@@ -316,7 +326,7 @@ RSpec.describe "CveScanner scan graph" do
       end
       expect(CveScanner).not_to receive(:call_agent_json)
 
-      graph = CveScanner.build_graph(notifications: nil)
+      graph = CveScanner.build_graph(agents: agents, notifications: nil)
       state = graph.invoke({cve_ids: ["CVE-9999-0001"]},
                            config: {workflow_instance_id: "test-path-c"})
 
@@ -664,7 +674,7 @@ RSpec.describe "CveScanner scan graph" do
         vulnerability_status: {"CVE-2023-52160" => "unknown"}
       )
 
-      new_state = CveScanner.node_propose_checks(state, notifications: nil)
+      new_state = CveScanner.node_propose_checks(state, agents: agents, notifications: nil)
       expect(new_state.check_decision).to eq("done")
       # LLM should NOT have been called (limit guard fires first).
       expect(CveScanner).not_to have_received(:call_agent_json)

@@ -12,29 +12,35 @@ class SummariesController < ApplicationController
       return
     end
 
-    begin
-      agent = SecureChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
-    rescue Phronomy::AgentNotFoundError => error
-      raise unless error.agent_id == agent_id
+    result = Phronomy::Agent.open_scope do |agents|
+      begin
+        agent = agents.load(SecureChatAgent, agent_id, persistence: PhronomyStore.persistence)
+      rescue Phronomy::AgentNotFoundError => error
+        raise unless error.agent_id == agent_id
 
+        next :absent
+      end
+      messages = PhronomyExamples::TranscriptMessages.read(agent)
+
+      next :empty if messages.empty?
+
+      summary_thread_id = "summary-#{agent_id}"
+      app    = SummarizationGraph.compile(agents: agents)
+      app.invoke(
+        { messages: messages },
+        config: { workflow_instance_id: summary_thread_id }
+      )
+    end
+    case result
+    when :absent
       render json: { error: "No active conversation." }, status: :unprocessable_entity
-      return
-    end
-    messages = PhronomyExamples::TranscriptMessages.read(agent)
-
-    if messages.empty?
+    when :empty
       render json: { error: "No messages to summarize." }, status: :unprocessable_entity
-      return
+    else
+      render json: { summary: result.summary }
     end
-
-    summary_thread_id = "summary-#{agent_id}"
-    app    = SummarizationGraph.compile
-    result = app.invoke(
-      { messages: messages },
-      config: { workflow_instance_id: summary_thread_id }
-    )
-
-    render json: { summary: result.summary }
+  rescue Phronomy::AgentBusyError
+    render json: {error: "Conversation is busy. Please try again."}, status: :conflict
   rescue => e
     Rails.logger.error("SummarizationGraph error: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join('\n')}")
     render json: { error: "Summarization failed. Please try again." }, status: :internal_server_error

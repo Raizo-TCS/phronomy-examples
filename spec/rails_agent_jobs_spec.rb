@@ -15,6 +15,8 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
     end
     stub_const("ApplicationJob", base)
     stub_const("DemoAgent", Class.new)
+    @agents = instance_double(Phronomy::Agent::Scope)
+    allow(Phronomy::Agent).to receive(:open_scope).and_yield(@agents)
     stub_const("AgentResultJob", Class.new(base))
     stub_const("AgentStreamingJob", Class.new(base))
     stub_const("Rails", Module.new)
@@ -32,7 +34,7 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
 
   it "publishes a basic final result on the Job thread without a listener" do
     agent = double("Agent")
-    expect(DemoAgent).to receive(:new).with(no_args).and_return(agent)
+    expect(@agents).to receive(:create).with(DemoAgent).and_return(agent)
     expect(agent).to receive(:invoke).with("hello").and_return(output: "answer")
     caller = Thread.current
     expect(@server).to receive(:broadcast).with("chat", {type: "done", output: "answer"}) do
@@ -45,7 +47,7 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
     caller = Thread.current
     listener = nil
     agent = double("Agent")
-    allow(DemoAgent).to receive(:new) do |on_event:|
+    allow(@agents).to receive(:create) do |_klass, on_event:|
       listener = on_event
       agent
     end
@@ -67,7 +69,7 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
 
   it "preserves the missing-event fallback when Agent construction fails" do
     failure = RuntimeError.new("cannot create Agent")
-    allow(DemoAgent).to receive(:new).and_raise(failure)
+    allow(@agents).to receive(:create).and_raise(failure)
     expect(@server).to receive(:broadcast).with("chat", {type: "error", message: failure.message}).once
     expect { AgentStreamingJob.new.perform("DemoAgent", "hello", stream: "chat") }
       .to raise_error { |error| expect(error).to equal(failure) }
@@ -77,7 +79,7 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
     failure = RuntimeError.new("Agent failed")
     listener = nil
     agent = double("Agent")
-    allow(DemoAgent).to receive(:new) { |on_event:|
+    allow(@agents).to receive(:create) { |_klass, on_event:|
       listener = on_event
       agent
     }
@@ -92,9 +94,54 @@ RSpec.describe "Basic and streaming Rails Agent jobs" do
 
   it "fails the Job on delivery failure while preserving an earlier Agent error" do
     original = RuntimeError.new("original Agent error")
-    allow(DemoAgent).to receive(:new).and_raise(original)
+    allow(@agents).to receive(:create).and_raise(original)
     allow(@server).to receive(:broadcast).and_raise(IOError, "delivery failed")
     expect { AgentStreamingJob.new.perform("DemoAgent", "hello", stream: "chat") }
       .to raise_error { |error| expect(error).to equal(original) }
   end
+  context "real Agent lifetime" do
+    before do
+      allow(Phronomy::Agent).to receive(:open_scope).and_call_original
+      klass = Class.new(Phronomy::Agent::Base) do
+        agent_definition id: "p6-job-acceptance", version: 1
+        model "gpt-4o-mini"
+        provider :openai
+      end
+      stub_const("DemoAgent", klass)
+      stub_const("AgentResultJob::AGENTS", {"DemoAgent" => klass})
+      @owned = []
+      allow(Phronomy::Agent).to receive(:open_scope).and_wrap_original do |original, &block|
+        original.call do |agents|
+          allow(agents).to receive(:create).and_wrap_original do |create, *args, **kwargs|
+            create.call(*args, **kwargs).tap { |agent| @owned << agent }
+          end
+          block.call(agents)
+        end
+      end
+      ExampleChatStub.new { "answer" }
+    end
+
+    it "delivers before releasing the live owner and retains its saved history" do
+      expect(@server).to receive(:broadcast).with("chat", {type: "done", output: "answer"}) do
+        expect(DemoAgent.get(@owned.first.agent_id)).to equal(@owned.first)
+      end
+      AgentResultJob.new.perform("DemoAgent", "hello", stream: "chat")
+      agent = @owned.fetch(0)
+      expect(DemoAgent.get(agent.agent_id)).to be_nil
+      expect(agent.persistence.agents.load(agent.agent_id).agent_id).to eq(agent.agent_id)
+    end
+
+    it "does not emit an error after done when only cleanup fails" do
+      failure = IOError.new("Store check failed")
+      expect(@server).to receive(:broadcast).with("chat", {type: "done", output: "answer"}).once do
+        allow(@owned.first).to receive(:unload!).and_raise(failure)
+      end
+      expect {
+        AgentResultJob.new.perform("DemoAgent", "hello", stream: "chat")
+      }.to raise_error(Phronomy::Agent::ScopeCleanupError) do |error|
+        expect(error.failures.fetch(0).fetch(:error)).to equal(failure)
+      end
+    end
+  end
+
 end

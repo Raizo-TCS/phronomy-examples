@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Feature C: Single-node summarization workflow.
-# The Workflow action fires invoke_async, then waits for the :summary_done
-# signal rather than blocking the EventLoop thread with a synchronous invoke.
+# The request owns Agent lifetimes. Workflow task states compose async work;
+# errors reach the controller instead of becoming an empty successful summary.
 class SummarizationGraph
   class State
     include Phronomy::WorkflowContext
@@ -20,52 +20,19 @@ class SummarizationGraph
   end
 
   # @return [Phronomy::Workflow]
-  def self.compile
-    wf_ref = nil
-
-    wf_ref = Phronomy::Workflow.define(State) do
+  def self.compile(agents:)
+    Phronomy::Workflow.define(State) do
       initial :summarize
 
-      # :summarize_waiting is a halt point; the Workflow resumes on :summary_done.
-      wait_state :summarize_waiting
+      task_state :summarize,
+        start: ->(state) {
+          text = state.messages.map { |m| "#{m['role']}: #{m['content']}" }.join("\n")
+          prompt = "Summarize the following conversation in 3-5 concise sentences:\n\n#{text}"
+          agents.create_async(SummarizationAgent).flat_map { |agent| agent.invoke_async(prompt) }
+        },
+        apply: ->(state, result) { state.merge(summary: result[:output].to_s) }
 
-      entry :summarize, ->(state) {
-        text = state.messages.map { |m| "#{m['role']}: #{m['content']}" }.join("\n")
-        prompt = "Summarize the following conversation in 3-5 concise sentences:\n\n#{text}"
-
-        # Bind the listener to this Agent incarnation, then start the async call.
-        agent = SummarizationAgent.new(
-          on_event: ->(event) {
-            case event.type
-            when :done
-              wf_ref.signal(
-                workflow_instance_id: state.workflow_instance_id,
-                event: :summary_done,
-                payload: { summary: event.payload[:output].to_s }
-              )
-            when :error, :timeout, :cancelled
-              wf_ref.signal(
-                workflow_instance_id: state.workflow_instance_id,
-                event: :summary_done,
-                payload: { summary: "" }
-              )
-            end
-          }
-        )
-        agent.invoke_async(prompt)
-        state  # return state unchanged; auto-transition to :summarize_waiting
-      }
-
-      transition from: :summarize, to: :summarize_waiting
-
-      transition(
-        from: :summarize_waiting,
-        to: :__finish__,
-        on: :summary_done,
-        action: ->(state, event) { state.merge(summary: event.payload[:summary]) }
-      )
+      transition from: :summarize, to: :__finish__
     end
-
-    wf_ref
   end
 end

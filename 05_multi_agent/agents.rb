@@ -42,7 +42,7 @@ class ResearchTool < Phronomy::Tool::Base
   def execute(topic:)
     t0 = Time.now
     puts "  [ResearchTool] input: #{topic.inspect[0, 80]}"
-    result = ResearcherAgent.new.invoke(topic)[:output]
+    result = Phronomy::Agent.open_scope { |agents| agents.create(ResearcherAgent).invoke_async(topic) }[:output]
     $accumulated_tool_chars = ($accumulated_tool_chars || 0) + result.length
     puts "  [ResearchTool] done: #{result.length} chars in #{(Time.now - t0).round(1)}s (total tool chars: #{$accumulated_tool_chars})"
     result
@@ -57,7 +57,7 @@ class WriteTool < Phronomy::Tool::Base
     t0 = Time.now
     puts "  [WriteTool] input: #{instructions.length} chars"
     puts "  [WriteTool] first 120: #{instructions[0, 120].inspect}"
-    result = WriterAgent.new.invoke(instructions)[:output]
+    result = Phronomy::Agent.open_scope { |agents| agents.create(WriterAgent).invoke_async(instructions) }[:output]
     $accumulated_tool_chars = ($accumulated_tool_chars || 0) + result.length
     puts "  [WriteTool] done: #{result.length} chars in #{(Time.now - t0).round(1)}s (total tool chars: #{$accumulated_tool_chars})"
     result

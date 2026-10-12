@@ -39,49 +39,51 @@ SEND_NODE = lambda do |state|
   state.merge(approved: true)
 end
 
-mail_workflow = Phronomy::Workflow.define(MailState) do
-  initial :draft
+Phronomy::Agent.open_scope do |agents|
+  mail_workflow = Phronomy::Workflow.define(MailState) do
+    initial :draft
 
-  task_state :draft,
-    start: ->(state) { DraftAgent.new.invoke_async("Topic: #{state.topic}") },
-    apply: ->(state, result) { state.merge(draft: result.fetch(:output).strip) }
+    task_state :draft,
+      start: ->(state) { agents.create_async(DraftAgent).flat_map { |agent| agent.invoke_async("Topic: #{state.topic}") } },
+      apply: ->(state, result) { state.merge(draft: result.fetch(:output).strip) }
 
-  wait_state :awaiting_approval
-  state :send, action: SEND_NODE
+    wait_state :awaiting_approval
+    state :send, action: SEND_NODE
 
-  transition from: :draft, to: :awaiting_approval
-  transition from: :awaiting_approval, on: :approve, to: :send
-  transition from: :send, to: :__finish__
+    transition from: :draft, to: :awaiting_approval
+    transition from: :awaiting_approval, on: :approve, to: :send
+    transition from: :send, to: :__finish__
+  end
+
+  puts "=== 04 Human-in-the-loop ==="
+  puts
+  puts "--- Part 1: Workflow wait_state / send_event ---"
+
+  topic = "Project completion report"
+  state = OutputValidator.validate(
+    "email draft generated",
+    check: ->(r) { r.draft.length >= 100 }
+  ) { mail_workflow.invoke({topic: topic}) }
+
+  puts state.draft
+  puts
+
+  workflow_answer = ARGV.shift
+  unless workflow_answer
+    print "Approve the Workflow draft? [yes/no]: "
+    workflow_answer = $stdin.gets&.strip&.downcase
+  end
+
+  if workflow_answer == "yes"
+    state = mail_workflow.send_event(state: state, event: :approve)
+    puts "Workflow approved=#{state.approved}"
+  else
+    puts "[WORKFLOW] Draft was not sent."
+  end
+
+  puts
+  puts "--- Part 2: Agent tool approval / live owner lookup ---"
 end
-
-puts "=== 04 Human-in-the-loop ==="
-puts
-puts "--- Part 1: Workflow wait_state / send_event ---"
-
-topic = "Project completion report"
-state = OutputValidator.validate(
-  "email draft generated",
-  check: ->(r) { r.draft.length >= 100 }
-) { mail_workflow.invoke({topic: topic}) }
-
-puts state.draft
-puts
-
-workflow_answer = ARGV.shift
-unless workflow_answer
-  print "Approve the Workflow draft? [yes/no]: "
-  workflow_answer = $stdin.gets&.strip&.downcase
-end
-
-if workflow_answer == "yes"
-  state = mail_workflow.send_event(state: state, event: :approve)
-  puts "Workflow approved=#{state.approved}"
-else
-  puts "[WORKFLOW] Draft was not sent."
-end
-
-puts
-puts "--- Part 2: Agent tool approval / live owner lookup ---"
 
 class PublishReleaseTool < Phronomy::Tool::Base
   description "Publish a software release to an environment."
@@ -121,79 +123,81 @@ end
 # remains pending while approval is required. Wait for either the nonterminal
 # approval event or an unexpected terminal completion so a model that does not
 # request the tool cannot leave the application blocked on an approval-only queue.
-approval_outcomes = Queue.new
-release_agent = ReleaseAgent.new(
-  on_event: ->(event) {
-    next unless event.type == :approval_required
+Phronomy::Agent.open_scope do |agents|
+  approval_outcomes = Queue.new
+  release_agent = agents.create(ReleaseAgent,
+    on_event: ->(event) {
+      next unless event.type == :approval_required
 
-    approval_outcomes << [:approval_required, event.payload.fetch(:request)]
-  }
-)
-original_task = release_agent.invoke_async("Publish version 2.4.0 to production.")
-original_task.on_complete do |result, error|
-  approval_outcomes << [:terminal, result, error]
-end
-
-outcome_type, outcome_value, outcome_error = approval_outcomes.pop
-if outcome_type == :terminal
-  raise outcome_error if outcome_error
-
-  raise(
-    "Expected the approval-required tool call to suspend the Agent execution, " \
-    "but the Agent completed without requesting approval. " \
-    "Output: #{outcome_value&.fetch(:output, nil).inspect}"
+      approval_outcomes << [:approval_required, event.payload.fetch(:request)]
+    }
   )
+  original_task = release_agent.invoke_async("Publish version 2.4.0 to production.")
+  original_task.on_complete do |result, error|
+    approval_outcomes << [:terminal, result, error]
+  end
+
+  outcome_type, outcome_value, outcome_error = approval_outcomes.pop
+  if outcome_type == :terminal
+    raise outcome_error if outcome_error
+
+    raise(
+      "Expected the approval-required tool call to suspend the Agent execution, " \
+      "but the Agent completed without requesting approval. " \
+      "Output: #{outcome_value&.fetch(:output, nil).inspect}"
+    )
+  end
+
+  request = outcome_value
+  item = request.items.first
+  execution_id = request.execution_id
+
+  puts "Execution suspended: true"
+  puts "Execution id:        #{execution_id}"
+  puts "Approval id:         #{request.id}"
+  puts "Tool:                #{item.tool_name}"
+  puts "Safe arguments:      #{item.arguments.inspect}"
+  puts "Approval facts:      #{item.facts.inspect}"
+  puts "Original TaskResult done:  #{original_task.done?}"
+  puts
+
+  raise "Original Agent TaskResult settled before approval" if original_task.done?
+
+  # This is intentionally a second, independent decision. Workflow approval above
+  # must never implicitly authorize a tool side effect.
+  #
+  # In a real HTTP/API application, authorize the caller BEFORE treating this
+  # execution as approvable. execution_id is routing identity, not an auth token.
+  agent_answer = ARGV.shift
+  unless agent_answer
+    print "Approve the Agent tool execution? [yes/no]: "
+    agent_answer = $stdin.gets&.strip&.downcase
+  end
+
+  approved = agent_answer == "yes"
+
+  # A later request in the same Ruby process may have only execution_id. Resolve
+  # the existing live owner; do not construct or reload a second Agent instance.
+  owner = ReleaseAgent.live_for_execution(execution_id)
+  raise "live owner mismatch" unless owner.equal?(release_agent)
+
+  # This call runs on the CLI/main thread, so the synchronous wrapper is allowed.
+  # It resumes the same suspended execution and waits for its terminal result.
+  resumed = owner.approve(
+    execution_id,
+    approval_request_id: request.id,
+    approved: approved
+  )
+
+  # The original invoke_async TaskResult observes the same logical execution and must
+  # settle to the same terminal result after approval/rejection resolution.
+  original_result = original_task.wait_result
+  raise "approval/original execution mismatch" unless
+    original_result[:execution_id] == resumed[:execution_id]
+
+  puts "Resolved live owner: #{owner.class} (same object=#{owner.equal?(release_agent)})"
+  puts "Tool approved:       #{approved}"
+  puts "Execution rejected:  #{!!resumed[:rejected]}"
+  puts "Original TaskResult done:  #{original_task.done?}"
+  puts "Agent output:        #{resumed[:output]}"
 end
-
-request = outcome_value
-item = request.items.first
-execution_id = request.execution_id
-
-puts "Execution suspended: true"
-puts "Execution id:        #{execution_id}"
-puts "Approval id:         #{request.id}"
-puts "Tool:                #{item.tool_name}"
-puts "Safe arguments:      #{item.arguments.inspect}"
-puts "Approval facts:      #{item.facts.inspect}"
-puts "Original TaskResult done:  #{original_task.done?}"
-puts
-
-raise "Original Agent TaskResult settled before approval" if original_task.done?
-
-# This is intentionally a second, independent decision. Workflow approval above
-# must never implicitly authorize a tool side effect.
-#
-# In a real HTTP/API application, authorize the caller BEFORE treating this
-# execution as approvable. execution_id is routing identity, not an auth token.
-agent_answer = ARGV.shift
-unless agent_answer
-  print "Approve the Agent tool execution? [yes/no]: "
-  agent_answer = $stdin.gets&.strip&.downcase
-end
-
-approved = agent_answer == "yes"
-
-# A later request in the same Ruby process may have only execution_id. Resolve
-# the existing live owner; do not construct or reload a second Agent instance.
-owner = ReleaseAgent.live_for_execution(execution_id)
-raise "live owner mismatch" unless owner.equal?(release_agent)
-
-# This call runs on the CLI/main thread, so the synchronous wrapper is allowed.
-# It resumes the same suspended execution and waits for its terminal result.
-resumed = owner.approve(
-  execution_id,
-  approval_request_id: request.id,
-  approved: approved
-)
-
-# The original invoke_async TaskResult observes the same logical execution and must
-# settle to the same terminal result after approval/rejection resolution.
-original_result = original_task.wait_result
-raise "approval/original execution mismatch" unless
-  original_result[:execution_id] == resumed[:execution_id]
-
-puts "Resolved live owner: #{owner.class} (same object=#{owner.equal?(release_agent)})"
-puts "Tool approved:       #{approved}"
-puts "Execution rejected:  #{!!resumed[:rejected]}"
-puts "Original TaskResult done:  #{original_task.done?}"
-puts "Agent output:        #{resumed[:output]}"

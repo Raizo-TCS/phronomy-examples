@@ -166,7 +166,9 @@ RSpec.describe CveScanner::Notifications do
       begin
         delivery.publish(type: "slow")
         pop(entered)
-        result = CveScanner::ChatAgent.new.invoke_async("question").wait_result(timeout: 3)
+        result = Phronomy::Agent.open_scope do |agents|
+          agents.create(CveScanner::ChatAgent).invoke_async("question")
+        end
         expect(result[:output]).to eq("answer")
         expect(stub.calls.length).to eq(1)
       ensure
@@ -188,13 +190,15 @@ RSpec.describe CveScanner::Notifications do
       end
     end
     expect {
-      described_class.open(scan_id: 6) do |delivery|
-        begin
-          task = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "question", notifications: delivery)
-          pop(entered)
-          task.wait_result(timeout: 3)
-        ensure
-          release << true
+      Phronomy::Agent.open_scope do |agents|
+        described_class.open(scan_id: 6) do |delivery|
+          begin
+            task = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "question", agents: agents, notifications: delivery)
+            pop(entered)
+            task.wait_result(timeout: 3)
+          ensure
+            release << true
+          end
         end
       end
     }.to raise_error(Phronomy::StreamCallbackError) do |error|

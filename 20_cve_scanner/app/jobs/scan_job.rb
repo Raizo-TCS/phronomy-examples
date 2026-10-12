@@ -6,16 +6,16 @@ class ScanJob < ApplicationJob
   queue_as :default
 
   def perform(scan_id, cve_ids)
-    self.class.with_scan(scan_id) do |scan, notifications|
+    self.class.with_scan(scan_id) do |scan, notifications, agents|
       scan.update!(status: "running")
       notifications.publish(type: "status", message: "Starting scan for: #{cve_ids.join(", ")}")
-      graph = CveScanner.build_graph(notifications: notifications)
+      graph = CveScanner.build_graph(agents: agents, notifications: notifications)
       graph.invoke({cve_ids: cve_ids}, config: {workflow_instance_id: "scan_#{scan_id}"})
     end
   end
 
   def self.resume(scan_id, approval_type:, approved_commands:, user_note: nil)
-    with_scan(scan_id) do |scan, notifications|
+    with_scan(scan_id) do |scan, notifications, agents|
       next unless scan.state_json
 
       state = restore_state(scan.state_json)
@@ -29,37 +29,39 @@ class ScanJob < ApplicationJob
 
       scan.update!(status: "running")
       notifications.publish(type: "status", message: "Resuming with #{approved_commands.size} approved command(s)...")
-      CveScanner.build_graph(notifications: notifications).resume(state: state)
+      CveScanner.build_graph(agents: agents, notifications: notifications).resume(state: state)
     end
   end
 
   def self.resume_followup(scan_id, message:)
-    with_scan(scan_id) do |scan, notifications|
+    with_scan(scan_id) do |scan, notifications, agents|
       next unless scan.state_json
 
       state = restore_state(scan.state_json).merge(followup_request: message)
       scan.update!(status: "running")
       notifications.publish(type: "status", message: "Processing follow-up...")
-      CveScanner.build_graph(notifications: notifications).resume(state: state)
+      CveScanner.build_graph(agents: agents, notifications: notifications).resume(state: state)
     end
   end
 
   # Reused application policy, not a queue or worker implementation.
   def self.with_scan(scan_id)
-    CveScanner::Notifications.open(scan_id: scan_id) do |notifications|
-      scan = nil
-      payload = begin
-        scan = Scan.find(scan_id)
-        state = yield scan, notifications
-        persist_state(scan, state) if state
-      rescue StandardError
-        record_failure(scan)
-        raise
-      end
+    Phronomy::Agent.open_scope do |agents|
+      CveScanner::Notifications.open(scan_id: scan_id) do |notifications|
+        scan = nil
+        payload = begin
+          scan = Scan.find(scan_id)
+          state = yield scan, notifications, agents
+          persist_state(scan, state) if state
+        rescue StandardError
+          record_failure(scan)
+          raise
+        end
 
-      # Outside the business/persistence rescue: a delivery error must not
-      # overwrite a successfully saved done/awaiting status.
-      notifications.publish(payload) if payload
+        # Outside the business/persistence rescue: a delivery error must not
+        # overwrite a successfully saved done/awaiting status.
+        notifications.publish(payload) if payload
+      end
     end
   end
 

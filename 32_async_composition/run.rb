@@ -10,18 +10,18 @@ raise ArgumentError, "mode must be basic or evaluated" unless %w[basic evaluated
 question = "Can automated tests help detect regressions in a Ruby application?"
 listener = ->(event) { warn "Agent event: #{event.type}" }
 
-result = if mode == "basic"
-  agents = Array.new(3) { MajorityVoter.new(on_event: listener) }
-  AsyncMajority.run_async(agents, question: question)
-else
-  pairs = Array.new(3) do
-    {voter: MajorityVoter.new(on_event: listener), evaluator: MajorityEvaluator.new(on_event: listener)}
-  end
-  AsyncMajority.run_evaluated_async(pairs, question: question)
-end
-
 begin
-  report = result.wait_result
+  report = Phronomy::Agent.open_scope do |scope|
+    if mode == "basic"
+      agents = Array.new(3) { scope.create(MajorityVoter, on_event: listener) }
+      AsyncMajority.run_async(agents, question: question)
+    else
+      pairs = Array.new(3) do
+        {voter: scope.create(MajorityVoter, on_event: listener), evaluator: scope.create(MajorityEvaluator, on_event: listener)}
+      end
+      AsyncMajority.run_evaluated_async(pairs, question: question)
+    end
+  end
   puts "Decision: #{report.fetch(:decision)}"
   puts "Votes: #{report.fetch(:counts)}"
   report.fetch(:outcomes).each do |outcome|

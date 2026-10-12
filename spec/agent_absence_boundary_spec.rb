@@ -23,12 +23,14 @@ RSpec.describe "Application Agent absence handling" do
         stub_const("PhronomyStore", Module.new)
         allow(PhronomyStore).to receive(:persistence).and_return(:store)
         load root.join("app/controllers/conversations_controller.rb")
+        @agents = instance_double(Phronomy::Agent::Scope)
+        allow(Phronomy::Agent).to receive(:open_scope).and_yield(@agents)
         @controller = ConversationsController.new
         @controller.session = {agent_id: "requested", user_id: "user"}
       end
 
       it "clears only the requested absent Agent" do
-        allow(@agent_class).to receive(:load).and_raise(Phronomy::AgentNotFoundError.new(agent_id: "requested"))
+        allow(@agents).to receive(:load).with(@agent_class, "requested", persistence: :store).and_raise(Phronomy::AgentNotFoundError.new(agent_id: "requested"))
         @controller.index
         expect(@controller.session[:agent_id]).to be_nil
         expect(@controller.instance_variable_get(:@messages)).to eq([])
@@ -36,14 +38,14 @@ RSpec.describe "Application Agent absence handling" do
 
       it "does not hide absence of another Agent inside restoration" do
         original = Phronomy::AgentNotFoundError.new(agent_id: "other")
-        allow(@agent_class).to receive(:load).and_raise(original)
+        allow(@agents).to receive(:load).with(@agent_class, "requested", persistence: :store).and_raise(original)
         expect { @controller.index }.to raise_error { |error| expect(error).to equal(original) }
         expect(@controller.session[:agent_id]).to eq("requested")
       end
 
       it "does not turn a missing transcript into an empty conversation" do
         agent = double("loaded Agent")
-        allow(@agent_class).to receive(:load).and_return(agent)
+        allow(@agents).to receive(:load).with(@agent_class, "requested", persistence: :store).and_return(agent)
         missing = Phronomy::Persistence::NotFoundError.new("missing transcript")
         allow(PhronomyExamples::TranscriptMessages).to receive(:read).with(agent).and_raise(missing)
         expect { @controller.index }.to raise_error { |error| expect(error).to equal(missing) }

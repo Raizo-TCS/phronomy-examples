@@ -6,32 +6,34 @@ class ScanChatJob < ApplicationJob
   queue_as :default
 
   def perform(scan_id, question)
-    CveScanner::Notifications.open(scan_id: scan_id) do |notifications|
-      scan = Scan.find(scan_id)
-      context = build_context(scan, question)
+    Phronomy::Agent.open_scope do |agents|
+      CveScanner::Notifications.open(scan_id: scan_id) do |notifications|
+        scan = Scan.find(scan_id)
+        context = build_context(scan, question)
 
-      accumulated = +""
+        accumulated = +""
 
-      notifications.publish(
-        type: "chat_turn_start",
-        role: "ChatAgent",
-        prompt_preview: question.slice(0, 200)
-      )
+        notifications.publish(
+          type: "chat_turn_start",
+          role: "ChatAgent",
+          prompt_preview: question.slice(0, 200)
+        )
 
-      agent = CveScanner::ChatAgent.new(
-        on_event: ->(event) {
-          next unless event.type == :token
+        agent = agents.create(CveScanner::ChatAgent,
+          on_event: ->(event) {
+            next unless event.type == :token
 
-          token = event.payload[:content].to_s
-          accumulated << token
-          notifications.publish(type: "llm_token", role: "ChatAgent", token: token)
-        }
-      )
-      result = agent.stream(context)
+            token = event.payload[:content].to_s
+            accumulated << token
+            notifications.publish(type: "llm_token", role: "ChatAgent", token: token)
+          }
+        )
+        result = agent.stream(context)
 
-      raw = (result.is_a?(Array) ? result.first : result)&.dig(:output).to_s.strip
-      content = raw.empty? ? accumulated : raw
-      notifications.publish(type: "chat_turn_done", role: "ChatAgent", content: content)
+        raw = (result.is_a?(Array) ? result.first : result)&.dig(:output).to_s.strip
+        content = raw.empty? ? accumulated : raw
+        notifications.publish(type: "chat_turn_done", role: "ChatAgent", content: content)
+      end
     end
   end
 

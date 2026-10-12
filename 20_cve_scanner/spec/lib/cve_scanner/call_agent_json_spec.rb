@@ -15,17 +15,20 @@ require "rails_helper"
 # ---------------------------------------------------------------------------
 
 RSpec.describe "CveScanner.call_agent_json" do
+  let(:agents) { instance_double(Phronomy::Agent::Scope) }
+
   # Minimal agent double: stream yields no events and returns a fixed output.
   def stub_agent_output(agent_class, output_str)
     agent_double = instance_double(agent_class)
-    allow(agent_class).to receive(:new).and_return(agent_double)
+    allow(agents).to receive(:create_async).with(agent_class, anything)
+      .and_return(Phronomy::TaskResult.completed(agent_double))
     allow(agent_double).to receive(:stream_async)
       .and_return(Phronomy::TaskResult.completed({output: output_str}))
     agent_double
   end
 
   def call_agent_result(*args, **kwargs)
-    CveScanner.call_agent_json(*args, **kwargs).wait_result(timeout: 2)
+    CveScanner.call_agent_json(*args, agents: agents, **kwargs).wait_result(timeout: 2)
   end
 
   let(:notifications) { double("notification sink") }
@@ -172,7 +175,7 @@ RSpec.describe "CveScanner.call_agent_json" do
     end
 
     it "does not instantiate the agent class" do
-      expect(CveScanner::CveAnalystAgent).not_to receive(:new)
+      expect(agents).not_to receive(:create_async)
       call_agent_result(CveScanner::CveAnalystAgent,
                                  "Analyse CVE-2023-52160.", notifications: nil)
     end

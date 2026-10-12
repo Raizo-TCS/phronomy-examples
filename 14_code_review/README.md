@@ -14,6 +14,7 @@ and tracing into one application flow.
 | Typed state | `Phronomy::WorkflowContext` | Carries source, chunks, findings, selection and result |
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
 | State-owned Task completion | `task_state` | Applies review, improvement and evaluation results before transitions |
+| Agent lifetime | `Agent.open_scope` + scoped create/load | Releases reviewers and improver after each complete review; preserves saved history |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
 | Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Result composition | `TaskResult#map` + `TaskResult.all_settled` | Extracts findings and gathers every review in input order, including failed or cancelled children |
@@ -46,7 +47,7 @@ maintained completion count.
 Warnings are emitted after **all** child results settle, in reviewer/chunk order.
 One failed or cancelled child does not cancel its peers. If every child fails,
 each reviewer still has an empty string; this does not mean that the source
-passed review. This change adds no retry, deadline or Agent cleanup. See the
+passed review. Retry and deadline policy are unchanged. DX05-E now owns Agents in one scope per review, including the priority pause and resume. The scope is injected into the Workflow; the improver history survives unloading and is loaded by the next review. See the
 [DX05-C before/after comparison and acceptance](../docs/dx05-review-composition.md).
 
 ## Run

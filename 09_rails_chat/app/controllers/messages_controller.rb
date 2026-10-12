@@ -15,10 +15,14 @@ class MessagesController < ApplicationController
       return
     end
 
-    agent = ChatAgent.load(agent_id, persistence: PhronomyStore.persistence)
-    result = agent.invoke(content)
+    result = Phronomy::Agent.open_scope do |agents|
+      agent = agents.load(ChatAgent, agent_id, persistence: PhronomyStore.persistence)
+      agent.invoke(content)
+    end
 
     render json: {reply: result[:output]}
+  rescue Phronomy::AgentBusyError
+    render json: {error: "Conversation is busy. Please try again."}, status: :conflict
   rescue Phronomy::FilterBlockError => e
     render json: {error: "Blocked by filter: #{e.message}"}, status: :unprocessable_entity
   rescue => e

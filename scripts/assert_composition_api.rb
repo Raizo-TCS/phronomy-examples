@@ -79,3 +79,8 @@ abort "The selected core lacks DX05-D Workflow task_state; set PHRONOMY_PATH to 
   Phronomy::Workflow::Builder.method_defined?(:task_state) &&
     Phronomy.const_defined?(:WorkflowTaskResumeError, false)
 puts "DX05-D Workflow task_state API preflight PASS"
+
+abort "The selected core lacks DX05-E Agent scopes; set PHRONOMY_PATH to the paired core candidate" unless
+  Phronomy::Agent.respond_to?(:open_scope) &&
+  [:create, :create_async, :load, :load_async].all? { |method| Phronomy::Agent::Scope.instance_methods.include?(method) } &&
+  Phronomy::Agent::Base.instance_methods.include?(:unload!)

@@ -82,7 +82,7 @@ end
 # Start every reviewer/chunk invocation, then compose results in input order.
 # Phronomy owns completion bookkeeping; this application owns partial-result
 # selection, reviewer grouping and chunk order. No automatic retry is added.
-def start_parallel_reviews(state)
+def start_parallel_reviews(state, agents:)
   texts = review_texts(state)
   jobs = REVIEWERS.flat_map do |key, agent_class|
     texts.each_with_index.map { |text, index| [key, agent_class, text, index] }
@@ -91,8 +91,9 @@ def start_parallel_reviews(state)
   tasks = jobs.map do |_key, agent_class, chunk_text, index|
     puts "[#{agent_class.name}] chunk #{index + 1}/#{texts.size}"
     begin
-      agent = agent_class.new(knowledge: [agent_class.review_knowledge])
-      agent.invoke_async(chunk_text).map { |result| result[:output].to_s.strip }
+      agents.create_async(agent_class, knowledge: [agent_class.review_knowledge]).flat_map do |agent|
+        agent.invoke_async(chunk_text)
+      end.map { |result| result[:output].to_s.strip }
     rescue StandardError => error
       Phronomy::TaskResult.failed(error, name: "example-14-review-start")
     end
@@ -128,14 +129,14 @@ def build_improvement_prompt(snapshot)
   )
 end
 
-def load_or_create_improver(snapshot)
+def load_or_create_improver(snapshot, agents:)
   agent_id = "review-#{File.basename(snapshot.file_path, ".rb")}"
   begin
-    ImproverAgent.load(agent_id, persistence: IMPROVER_PERSISTENCE)
+    agents.load(ImproverAgent, agent_id, persistence: IMPROVER_PERSISTENCE)
   rescue Phronomy::AgentNotFoundError => error
     raise unless error.agent_id == agent_id
 
-    ImproverAgent.create(
+    agents.create(ImproverAgent,
       agent_id: agent_id,
       knowledge: [IMPROVEMENT_POLICY],
       persistence: IMPROVER_PERSISTENCE
@@ -143,13 +144,18 @@ def load_or_create_improver(snapshot)
   end
 end
 
-def start_improvement(snapshot)
-  agent = load_or_create_improver(snapshot)
+def start_improvement(snapshot, agents:)
   user_prompt = build_improvement_prompt(snapshot)
 
   puts "
 [ImproverAgent] Generating improvements..."
-  operation = agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
+  # The load-or-create application policy runs off EventLoop. Scope owns both
+  # materializations; waiting for the Agent call never occupies this worker.
+  operation = Phronomy::Blocking.call_async do
+    load_or_create_improver(snapshot, agents: agents)
+  end.flat_map do |agent|
+    agent.invoke_async({message: user_prompt, priority: snapshot.priority || "security"})
+  end
 
   operation.map do |result|
     value = result&.dig(:output).to_s
@@ -190,20 +196,20 @@ def build_quality_scores(state)
   }
 end
 
-def build_pipeline
+def build_pipeline(agents:)
   Phronomy::Workflow.define(ReviewState) do
     initial :load_and_split
 
     state :load_and_split, action: LOAD_AND_SPLIT_NODE
 
     task_state :parallel_review,
-      start: ->(snapshot) { start_parallel_reviews(snapshot) },
+      start: ->(snapshot) { start_parallel_reviews(snapshot, agents: agents) },
       apply: ->(state, reviews) { state.merge(reviews: reviews) }
 
     wait_state :awaiting_priority
 
     task_state :improve,
-      start: ->(snapshot) { start_improvement(snapshot) },
+      start: ->(snapshot) { start_improvement(snapshot, agents: agents) },
       apply: ->(state, code) { state.merge(improved_code: code) }
 
     task_state :evaluate,

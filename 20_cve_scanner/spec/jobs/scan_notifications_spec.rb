@@ -98,7 +98,12 @@ RSpec.describe "CVE scan Job notifications" do
 
   it "fails a Chat Job with the original business error rather than swallowing it" do
     failure = IOError.new("Agent construction failed")
-    allow(CveScanner::ChatAgent).to receive(:new).and_raise(failure)
+    allow(Phronomy::Agent).to receive(:open_scope).and_wrap_original do |original, &block|
+      original.call do |agents|
+        allow(agents).to receive(:create).with(CveScanner::ChatAgent, anything).and_raise(failure)
+        block.call(agents)
+      end
+    end
     expect_same_error(failure) { ScanChatJob.new.perform(scan.id, "question") }
     expect(events.map { |event| event[:type] }).to eq(%w[chat_turn_start error])
     expect(events.last[:message]).to eq(failure.message)
@@ -189,5 +194,87 @@ RSpec.describe "CVE scan Job notifications" do
     [ScanJob, ScanChatJob, ScanResumeJob, ScanFollowupJob].each do |job|
       expect(job.rescue_handlers).to eq(ApplicationJob.rescue_handlers)
     end
+  end
+  context "Agent ownership and notification completion" do
+    let(:owned) { [] }
+
+    before do
+      allow(Phronomy::Agent).to receive(:open_scope).and_wrap_original do |original, &block|
+        original.call do |agents|
+          [:create, :create_async].each do |method|
+            allow(agents).to receive(method).and_wrap_original do |materialize, *args, **kwargs|
+              value = materialize.call(*args, **kwargs)
+              if value.is_a?(Phronomy::TaskResult)
+                value.map { |agent| owned << agent; agent }
+              else
+                owned << value
+                value
+              end
+            end
+          end
+          block.call(agents)
+        end
+      end
+    end
+
+    it "keeps the ChatAgent owned until the final transport call returns" do
+      NotificationChatStub.new { "answer" }
+      allow(server).to receive(:broadcast) do |stream, payload|
+        if payload[:type] == "chat_turn_done"
+          expect(owned.length).to eq(1)
+          expect(owned.first.class.get(owned.first.agent_id)).to equal(owned.first)
+        end
+        sent << [stream, payload]
+      end
+      ScanChatJob.new.perform(scan.id, "question")
+      expect(events.last[:type]).to eq("chat_turn_done")
+      expect(owned.length).to eq(1)
+      expect(owned.first.class.get(owned.first.agent_id)).to be_nil
+    end
+
+    it "releases all completed Workflow Agents at a halt before the next Job" do
+      NotificationChatStub.new { answer }
+      ScanJob.new.perform(scan.id, scan.cve_ids)
+      expect(scan.reload.status).to eq("awaiting_followup")
+      expect(owned).not_to be_empty
+      owned.each { |agent| expect(agent.class.get(agent.agent_id)).to be_nil }
+      before_resume = owned.length
+      ScanJob.resume_followup(scan.id, message: "done")
+      expect(scan.reload.status).to eq("done")
+      expect(owned.length).to eq(before_resume)
+    end
+
+    it "preserves a saved halt and final notification if Agent cleanup fails" do
+      failure = IOError.new("Agent Store check failed")
+      NotificationChatStub.new { answer }
+      allow(server).to receive(:broadcast) do |stream, payload|
+        if payload[:type] == "awaiting_followup"
+          owned.each { |agent| allow(agent).to receive(:unload!).and_raise(failure) }
+        end
+        sent << [stream, payload]
+      end
+      expect {
+        ScanJob.new.perform(scan.id, scan.cve_ids)
+      }.to raise_error(Phronomy::Agent::ScopeCleanupError) do |error|
+        expect(error.failures.map { |entry| entry.fetch(:error) }).to all(equal(failure))
+      end
+      expect(scan.reload.status).to eq("awaiting_followup")
+      expect(events.last[:type]).to eq("awaiting_followup")
+      expect(events.none? { |event| event[:type] == "error" }).to be(true)
+    end
+    it "preserves the delivery error when Agent cleanup also fails" do
+      primary = IOError.new("final delivery failed")
+      secondary = IOError.new("cleanup failed")
+      NotificationChatStub.new { "answer" }
+      allow(server).to receive(:broadcast) do |_stream, payload|
+        if payload[:type] == "chat_turn_done"
+          allow(owned.first).to receive(:unload!).and_raise(secondary)
+          raise primary
+        end
+      end
+      expect_same_error(primary) { ScanChatJob.new.perform(scan.id, "question") }
+      expect(owned.first.class.get(owned.first.agent_id)).to equal(owned.first)
+    end
+
   end
 end

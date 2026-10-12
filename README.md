@@ -1,5 +1,8 @@
 # Phronomy Examples
 
+Agent lifetime examples now use the reviewed core scope API. See [DX05-E P6 ownership, before/after and acceptance](docs/dx05-agent-scope-examples.md). This API remains tied to the pinned unreleased core; update the released-gem dependency when publishing.
+
+
 This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
 including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
 busy errors, plus cause-aware saved diagnostics. DX05-D adds Workflow task states.

@@ -50,3 +50,9 @@ unreturned work is not automatically registered as another JOB.
 
 This example needs the new TaskResult/Execution core commit specified by the
 application package. The old 0.25.0 API is not sufficient.
+
+## Agent lifetime
+
+The CLI now places Agent creation and the complete result composition inside `Agent.open_scope`. This lifetime scope is distinct from the cancellation/deadline group built by `Execution.open_scope`. Neither a cancelled result nor a deadline proves physical child work has stopped. An unsafe release is refused; the original error remains primary, and the remaining live owner is identified in cleanup diagnostics.
+
+See [DX05-E scope migration](../docs/dx05-agent-scope-examples.md).

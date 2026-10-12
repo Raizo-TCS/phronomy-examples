@@ -1,5 +1,8 @@
 # DX05-C Parallel review result composition
 
+> Follow-up: [DX05-E P6](dx05-agent-scope-examples.md) adds Agent ownership. The before/after code below records the earlier DX05 unit; current application graph/review builders also receive `agents:`.
+
+
 A review application should choose reviewers and decide how to use their findings.
 It should not have to synchronize a completion counter for every group of async
 calls. Example 14 now delegates that bookkeeping to the existing C13 Execution

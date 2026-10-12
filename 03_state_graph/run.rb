@@ -39,44 +39,46 @@ class ImproverAgent < Phronomy::Agent::Base
   instructions "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text."
 end
 
-workflow = Phronomy::Workflow.define(MyState) do
-  initial :evaluate
+Phronomy::Agent.open_scope do |agents|
+  workflow = Phronomy::Workflow.define(MyState) do
+    initial :evaluate
 
-  task_state :evaluate,
-    start: ->(state) {
-      prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
-      EvaluatorAgent.new.invoke_async(prompt)
-    },
-    apply: ->(state, result) {
-      score = result.fetch(:output).scan(/\d+/).first.to_i.clamp(0, 10)
-      puts "[Iteration #{state.iterations}] Score: #{score}"
-      state.merge(score: score)
-    }
+    task_state :evaluate,
+      start: ->(state) {
+        prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
+        agents.create_async(EvaluatorAgent).flat_map { |agent| agent.invoke_async(prompt) }
+      },
+      apply: ->(state, result) {
+        score = result.fetch(:output).scan(/\d+/).first.to_i.clamp(0, 10)
+        puts "[Iteration #{state.iterations}] Score: #{score}"
+        state.merge(score: score)
+      }
 
-  task_state :improve,
-    start: ->(state) { ImproverAgent.new.invoke_async(state.text) },
-    apply: ->(state, result) {
-      state.merge(text: result.fetch(:output).strip, iterations: state.iterations + 1)
-    }
+    task_state :improve,
+      start: ->(state) { agents.create_async(ImproverAgent).flat_map { |agent| agent.invoke_async(state.text) } },
+      apply: ->(state, result) {
+        state.merge(text: result.fetch(:output).strip, iterations: state.iterations + 1)
+      }
 
-  # Guards see the score already applied by the task state.
-  transition from: :evaluate, to: :__finish__,
-    guard: ->(state) { state.score >= 7 || state.iterations >= 3 },
-    action: ->(state) { puts "[Done] Final score: #{state.score}"; state }
-  transition from: :evaluate, to: :improve
-  transition from: :improve, to: :evaluate
+    # Guards see the score already applied by the task state.
+    transition from: :evaluate, to: :__finish__,
+      guard: ->(state) { state.score >= 7 || state.iterations >= 3 },
+      action: ->(state) { puts "[Done] Final score: #{state.score}"; state }
+    transition from: :evaluate, to: :improve
+    transition from: :improve, to: :evaluate
+  end
+
+  puts "=== Workflow Conditional Routing Example ==="
+  initial_text = "Ruby is ok."
+  puts "Initial text: #{initial_text.inspect}"
+  puts
+
+  final = OutputValidator.validate(
+    "improved text longer than original",
+    check: ->(r) { r.text.length > initial_text.length && r.score >= 0 }
+  ) { workflow.invoke({text: initial_text, score: 0, iterations: 0}) }
+
+  puts
+  puts "Final text:"
+  puts final.text
 end
-
-puts "=== Workflow Conditional Routing Example ==="
-initial_text = "Ruby is ok."
-puts "Initial text: #{initial_text.inspect}"
-puts
-
-final = OutputValidator.validate(
-  "improved text longer than original",
-  check: ->(r) { r.text.length > initial_text.length && r.score >= 0 }
-) { workflow.invoke({text: initial_text, score: 0, iterations: 0}) }
-
-puts
-puts "Final text:"
-puts final.text

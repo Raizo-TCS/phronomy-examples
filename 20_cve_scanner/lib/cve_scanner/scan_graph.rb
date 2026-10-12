@@ -18,10 +18,11 @@ module CveScanner
   # The default implementation returns a Phronomy completion handle. Tests may
   # stub this method with an already-parsed Hash; call_agent_json_async normalizes
   # either form without changing the Workflow control plane.
-  def self.call_agent_json(agent_class, prompt, notifications: nil, role: agent_class.name.split("::").last)
+  def self.call_agent_json(agent_class, prompt, agents:, notifications: nil, role: agent_class.name.split("::").last)
     start_agent_json_operation(
       agent_class,
       prompt,
+      agents: agents,
       notifications: notifications,
       role: role
     )
@@ -30,10 +31,11 @@ module CveScanner
   # Starts an Agent lifecycle directly through Phronomy's EventLoop/FSMSession
   # control plane. No OffloadPool worker is occupied merely waiting for
   # the child Agent to finish.
-  def self.call_agent_json_async(agent_class, prompt, notifications: nil, role: agent_class.name.split("::").last)
+  def self.call_agent_json_async(agent_class, prompt, agents:, notifications: nil, role: agent_class.name.split("::").last)
     operation = call_agent_json(
       agent_class,
       prompt,
+      agents: agents,
       notifications: notifications,
       role: role
     )
@@ -45,7 +47,7 @@ module CveScanner
     Phronomy::TaskResult.failed(error, name: "cve-scanner-agent-#{role}")
   end
 
-  def self.start_agent_json_operation(agent_class, prompt, notifications:, role:)
+  def self.start_agent_json_operation(agent_class, prompt, agents:, notifications:, role:)
     if ENV["CVE_SCANNER_MOCK_LLM"].present?
       return Phronomy::TaskResult.completed(
         mock_agent_response(agent_class, prompt, notifications: notifications, role: role),
@@ -60,7 +62,7 @@ module CveScanner
       notifications.publish(type: "chat_turn_start", role: role, prompt_preview: prompt.slice(0, 200))
     end
 
-    agent = agent_class.new(
+    materialization = agents.create_async(agent_class,
       on_event: ->(event) {
         case event.type
         when :token
@@ -78,7 +80,7 @@ module CveScanner
         end
       }
     )
-    source = agent.stream_async(prompt)
+    source = materialization.flat_map { |agent| agent.stream_async(prompt) }
 
     source.map do |result|
       parse_agent_json_result(result, accumulated, notifications: notifications, role: role)
@@ -120,7 +122,7 @@ module CveScanner
     end
   end
 
-  def self.build_graph(notifications: nil)
+  def self.build_graph(agents:, notifications: nil)
     Phronomy::Workflow.define(CveScanner::ScanState) do
       initial :gather_scan_info
 
@@ -138,7 +140,7 @@ module CveScanner
 
       task_state :propose_checks,
         start: ->(snapshot) {
-          CveScanner.node_propose_checks_async(snapshot, notifications: notifications)
+          CveScanner.node_propose_checks_async(snapshot, agents: agents, notifications: notifications)
         },
         apply: ->(_state, updated) { updated }
 
@@ -152,13 +154,13 @@ module CveScanner
 
       task_state :evaluate_checks,
         start: ->(snapshot) {
-          CveScanner.node_evaluate_checks_async(snapshot, notifications: notifications)
+          CveScanner.node_evaluate_checks_async(snapshot, agents: agents, notifications: notifications)
         },
         apply: ->(_state, updated) { updated }
 
       task_state :propose_remediation,
         start: ->(snapshot) {
-          CveScanner.node_propose_remediation_async(snapshot, notifications: notifications)
+          CveScanner.node_propose_remediation_async(snapshot, agents: agents, notifications: notifications)
         },
         apply: ->(_state, updated) { updated }
 
@@ -172,7 +174,7 @@ module CveScanner
 
       task_state :evaluate_remediation,
         start: ->(snapshot) {
-          CveScanner.node_evaluate_remediation_async(snapshot, notifications: notifications)
+          CveScanner.node_evaluate_remediation_async(snapshot, agents: agents, notifications: notifications)
         },
         apply: ->(_state, updated) { updated }
 
@@ -182,7 +184,7 @@ module CveScanner
 
       task_state :handle_followup,
         start: ->(snapshot) {
-          CveScanner.node_handle_followup_async(snapshot, notifications: notifications)
+          CveScanner.node_handle_followup_async(snapshot, agents: agents, notifications: notifications)
         },
         apply: ->(_state, updated) { updated }
 
@@ -294,7 +296,7 @@ module CveScanner
     state.merge(vulnerability_status: state.vulnerability_status.merge(pre_status), messages: messages)
   end
 
-  def self.node_propose_checks_async(state, notifications:)
+  def self.node_propose_checks_async(state, agents:, notifications:)
     iteration = state.check_iteration + 1
 
     if iteration >= MAX_LOOP_ITERATIONS
@@ -318,6 +320,7 @@ module CveScanner
     call_agent_json_async(
       CveScanner::CveAnalystAgent,
       build_check_context(state),
+      agents: agents,
       notifications: notifications,
       role: "CveAnalyst"
     ).map do |response|
@@ -344,8 +347,8 @@ module CveScanner
     end
   end
 
-  def self.node_propose_checks(state, notifications:)
-    node_propose_checks_async(state, notifications: notifications).wait_result
+  def self.node_propose_checks(state, agents:, notifications:)
+    node_propose_checks_async(state, agents: agents, notifications: notifications).wait_result
   end
 
   # Runs only inside Phronomy::Blocking.call_async.
@@ -360,7 +363,7 @@ module CveScanner
     )
   end
 
-  def self.node_evaluate_checks_async(state, notifications:)
+  def self.node_evaluate_checks_async(state, agents:, notifications:)
     return Phronomy::TaskResult.completed(state, name: "cve-scanner-evaluate-noop") if state.check_decision == "done" && state.approved_checks.empty?
 
     if state.approved_checks.empty?
@@ -385,6 +388,7 @@ module CveScanner
     call_agent_json_async(
       CveScanner::CveAnalystAgent,
       build_check_context(state),
+      agents: agents,
       notifications: notifications,
       role: "CveAnalyst"
     ).map do |response|
@@ -405,11 +409,11 @@ module CveScanner
     end
   end
 
-  def self.node_evaluate_checks(state, notifications:)
-    node_evaluate_checks_async(state, notifications: notifications).wait_result
+  def self.node_evaluate_checks(state, agents:, notifications:)
+    node_evaluate_checks_async(state, agents: agents, notifications: notifications).wait_result
   end
 
-  def self.node_propose_remediation_async(state, notifications:)
+  def self.node_propose_remediation_async(state, agents:, notifications:)
     iteration = state.remediation_iteration + 1
 
     if iteration >= MAX_LOOP_ITERATIONS
@@ -431,6 +435,7 @@ module CveScanner
     call_agent_json_async(
       CveScanner::RemediationAdvisorAgent,
       build_remediation_context(state),
+      agents: agents,
       notifications: notifications,
       role: "RemediationAdvisor"
     ).map do |response|
@@ -453,8 +458,8 @@ module CveScanner
     end
   end
 
-  def self.node_propose_remediation(state, notifications:)
-    node_propose_remediation_async(state, notifications: notifications).wait_result
+  def self.node_propose_remediation(state, agents:, notifications:)
+    node_propose_remediation_async(state, agents: agents, notifications: notifications).wait_result
   end
 
   # Runs only inside Phronomy::Blocking.call_async.
@@ -469,7 +474,7 @@ module CveScanner
     )
   end
 
-  def self.node_evaluate_remediation_async(state, notifications:)
+  def self.node_evaluate_remediation_async(state, agents:, notifications:)
     return Phronomy::TaskResult.completed(state.merge(remediation_decision: "complete"), name: "cve-scanner-remediation-noop") if state.approved_remediations.empty?
 
     notifications.publish(type: "agent_step", node: "evaluate_remediation", message: "Advisor evaluating remediation results...") if notifications
@@ -477,6 +482,7 @@ module CveScanner
     call_agent_json_async(
       CveScanner::RemediationAdvisorAgent,
       build_remediation_context(state),
+      agents: agents,
       notifications: notifications,
       role: "RemediationAdvisor"
     ).map do |response|
@@ -490,13 +496,13 @@ module CveScanner
     end
   end
 
-  def self.node_evaluate_remediation(state, notifications:)
-    node_evaluate_remediation_async(state, notifications: notifications).wait_result
+  def self.node_evaluate_remediation(state, agents:, notifications:)
+    node_evaluate_remediation_async(state, agents: agents, notifications: notifications).wait_result
   end
 
   DONE_KEYWORDS = %w[done exit quit finish end finished bye].freeze
 
-  def self.node_handle_followup_async(state, notifications:)
+  def self.node_handle_followup_async(state, agents:, notifications:)
     request = state.followup_request.to_s.strip
 
     if DONE_KEYWORDS.include?(request.downcase)
@@ -519,6 +525,7 @@ module CveScanner
     call_agent_json_async(
       CveScanner::FollowupAgent,
       build_followup_context(state, request),
+      agents: agents,
       notifications: notifications,
       role: "FollowupAgent"
     ).map do |response|
@@ -556,8 +563,8 @@ module CveScanner
     end
   end
 
-  def self.node_handle_followup(state, notifications:)
-    node_handle_followup_async(state, notifications: notifications).wait_result
+  def self.node_handle_followup(state, agents:, notifications:)
+    node_handle_followup_async(state, agents: agents, notifications: notifications).wait_result
   end
 
   def self.node_report(state, notifications: nil)

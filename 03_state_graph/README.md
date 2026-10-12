@@ -9,11 +9,10 @@ Build a self-improving text pipeline. The workflow evaluates text quality and,
 if the score is below the threshold (and the iteration cap has not been
 reached), rewrites the text and re-evaluates — up to three times.
 
-Agent execution remains independent from Workflow state. Each entry starts an
-Agent with `invoke_async`, transforms its successful TaskResult value with `TaskResult#map`,
-and converts terminal TaskResult completion into an explicit `Workflow#signal` event.
-Lifecycle events are not used because this example needs only terminal
-completion.
+Agent execution remains independent from Workflow state. Each `task_state`
+starts an Agent with `invoke_async`, applies its successful value, then evaluates
+ordinary guards against the updated state. Reentry gets a fresh completion
+reception; a result from an earlier entry cannot update the current one.
 
 ## Phronomy Features
 
@@ -24,8 +23,7 @@ completion.
 | `transition` with `guard:` | Lambda-based conditional routing |
 | `Phronomy::Agent::Base` | `EvaluatorAgent` and `ImproverAgent` subclasses |
 | `Agent#invoke_async` | Starts Agent execution without blocking the Workflow entry |
-| `TaskResult#map` / `TaskResult#on_complete` | Transforms and observes terminal completion |
-| `Workflow#signal` | Re-enters the Workflow through an explicit event |
+| `task_state` with `start:` / `apply:` | Applies the result before guard evaluation |
 
 ## State Fields
 

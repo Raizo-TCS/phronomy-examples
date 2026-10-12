@@ -2,8 +2,9 @@
 
 This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
 including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
-busy errors, plus cause-aware saved diagnostics. These APIs require the paired core candidate
-[`c673c958cd15407fb4552b6e0eca42175ec73ab7`](https://github.com/Raizo-TCS/phronomy/commit/c673c958cd15407fb4552b6e0eca42175ec73ab7);
+busy errors, plus cause-aware saved diagnostics. DX05-D adds Workflow task states.
+These APIs require the paired core candidate
+[`3aea29d22beb437e8cdf61884e27de949819bd36`](https://github.com/Raizo-TCS/phronomy/commit/3aea29d22beb437e8cdf61884e27de949819bd36);
 they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
 core checkout before updating or verifying any bundle. Complete old in-flight
 Tool executions before upgrading; see the core migration guide and
@@ -12,13 +13,19 @@ Tool executions before upgrading; see the core migration guide and
 DX05-C moves example 14's parallel-review completion bookkeeping to the existing
 `TaskResult.all_settled` API. Reviewer grouping and partial-failure policy stay in
 the application; see the [before/after comparison](docs/dx05-review-composition.md).
-It uses the same core commit above and introduces no new core API.
+DX05-C itself introduces no new core API.
 
 DX05-B routes example 20's notifications through the existing
 `OrderedEventDelivery` scope. The application chooses payloads and destinations;
 M91 handles ordering and drain outside EventLoop. Saved scan results survive a
 final notification failure. See the [before/after comparison](docs/dx05-notification-delivery.md).
-This also uses the same core commit above. DX05-D/E remain separate work.
+DX05-B itself introduces no new core API.
+
+DX05-D migrates 01/03/04/07/14/20/25/26 to `task_state(start:, apply:)`.
+Phronomy owns completion correlation and failure delivery; applications own their
+operations, result mapping and business events. See the
+[before/after and responsibility boundaries](docs/dx05-workflow-task-state.md).
+DX05-E Agent scope/unload remains separate work.
 
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and

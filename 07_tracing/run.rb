@@ -32,51 +32,19 @@ class CodeGeneratorAgent < Phronomy::Agent::Base
   instructions "You are a programming expert."
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
-
-app = nil  # declared first so the TaskResult completion callback can capture it by reference
-
-GENERATE_NODE_WITH_TRACE = ->(state) {
-  workflow_instance_id = state.workflow_instance_id
-  language = state.language
-
-  agent = CodeGeneratorAgent.new
-  task = agent.invoke_async(
-    "Write a Hello World program in #{language}. Return code only."
-  ).map do |result|
-    {output: result.fetch(:output)}
-  end
-
-  task.on_complete do |payload, error|
-    app.signal(
-      workflow_instance_id: workflow_instance_id,
-      event: :generation_completed,
-      payload: error ? {error: error} : payload
-    )
-  end
-
-  state
-}
-
 app = Phronomy::Workflow.define(CodeState) do
   initial :generate
-  state :generate
+
+  task_state :generate,
+    start: ->(state) {
+      CodeGeneratorAgent.new.invoke_async(
+        "Write a Hello World program in #{state.language}. Return code only."
+      )
+    },
+    apply: ->(state, result) { state.merge(output: result.fetch(:output)) }
+
   state :done
-
-  entry :generate, GENERATE_NODE_WITH_TRACE
-
-  transition(
-    from: :generate,
-    on: :generation_completed,
-    to: :done,
-    action: ->(ctx, event) {
-      ctx.merge(output: event_payload!(event).fetch(:output))
-    }
-  )
+  transition from: :generate, to: :done
   transition from: :done, to: :__finish__
 end
 

@@ -74,3 +74,8 @@ abort "The selected core lacks r8 unit 5 common contracts; set PHRONOMY_PATH to 
 abort "The selected core still exposes the removed VectorStore helper namespaces" if
   [:Embeddings, :Loader, :Splitter].any? { |name| Phronomy::VectorStore.const_defined?(name, false) }
 puts "r8 unit 5 VectorStore/Embeddings/Documents API preflight PASS"
+
+abort "The selected core lacks DX05-D Workflow task_state; set PHRONOMY_PATH to the paired core candidate" unless
+  Phronomy::Workflow::Builder.method_defined?(:task_state) &&
+    Phronomy.const_defined?(:WorkflowTaskResumeError, false)
+puts "DX05-D Workflow task_state API preflight PASS"

@@ -33,53 +33,23 @@ class DraftAgent < Phronomy::Agent::Base
   instructions "Write a polite business email including a subject and body."
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
-
 SEND_NODE = lambda do |state|
   puts
   puts "[WORKFLOW] Email sent."
   state.merge(approved: true)
 end
 
-mail_workflow = nil
 mail_workflow = Phronomy::Workflow.define(MailState) do
   initial :draft
 
-  state :draft
-  entry :draft, lambda { |state|
-    workflow_instance_id = state.workflow_instance_id
-
-    agent = DraftAgent.new
-    task = agent.invoke_async("Topic: #{state.topic}").map do |result|
-      {draft: result.fetch(:output).strip}
-    end
-
-    task.on_complete do |payload, error|
-      mail_workflow.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :draft_completed,
-        payload: error ? {error: error} : payload
-      )
-    end
-
-    nil
-  }
+  task_state :draft,
+    start: ->(state) { DraftAgent.new.invoke_async("Topic: #{state.topic}") },
+    apply: ->(state, result) { state.merge(draft: result.fetch(:output).strip) }
 
   wait_state :awaiting_approval
   state :send, action: SEND_NODE
 
-  transition(
-    from: :draft,
-    on: :draft_completed,
-    to: :awaiting_approval,
-    action: ->(ctx, event) {
-      ctx.merge(draft: event_payload!(event).fetch(:draft))
-    }
-  )
+  transition from: :draft, to: :awaiting_approval
   transition from: :awaiting_approval, on: :approve, to: :send
   transition from: :send, to: :__finish__
 end

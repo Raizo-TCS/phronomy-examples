@@ -4,7 +4,7 @@ require "spec_helper"
 require "ostruct"
 require_relative "../14_code_review/pipeline"
 
-RSpec.describe "Application result transformation and Workflow event mapping" do
+RSpec.describe "Application result transformation and Workflow task states" do
   let(:application) { Object.new }
   let(:snapshot) { OpenStruct.new(priority: nil) }
 
@@ -37,17 +37,21 @@ RSpec.describe "Application result transformation and Workflow event mapping" do
     expect { task.wait_result }.to raise_error { |caught| expect(caught).to equal(error) }
   end
 
-  it "lets the application choose same or different events for already finished Tasks" do
-    workflow = double("Workflow")
-    expect(workflow).to receive(:signal).with(workflow_instance_id: "one", event: :reviewed, payload: {security: "a"}).ordered
-    expect(workflow).to receive(:signal).with(workflow_instance_id: "one", event: :reviewed, payload: {performance: "b"}).ordered
-    error = RuntimeError.new("evaluation failed")
-    expect(workflow).to receive(:signal).with(workflow_instance_id: "one", event: :evaluated, payload: {error: error}).ordered
-    [[:reviewed, :security, Phronomy::TaskResult.completed("a")],
-      [:reviewed, :performance, Phronomy::TaskResult.completed("b")],
-      [:evaluated, :scores, Phronomy::TaskResult.failed(error)]].each do |event, key, task|
-      application.send(:signal_completion, workflow,
-        workflow_instance_id: "one", event: event, key: key, operation: task)
+  it "applies all three task states across the priority halt and resume" do
+    stub = ExampleChatStub.new do |_request, index|
+      case index
+      when 0..3 then "review finding"
+      when 4 then "```ruby\nputs :improved\n```"
+      else "0.8"
+      end
     end
+    workflow = application.send(:build_pipeline)
+    halted = workflow.invoke({file_path: "sample.rb", source_code: "puts :original"})
+    expect(halted.phase).to eq(:awaiting_priority)
+    expect(halted.reviews.values).to all(eq("review finding"))
+    finished = workflow.send_event(state: halted, event: :proceed, input: {priority: "security"})
+    expect(finished.improved_code).to include("puts :improved")
+    expect(finished.quality_scores).to eq(review_quality: 8.0, improvement_quality: 8.0)
+    expect(stub.calls.length).to eq(7)
   end
 end

@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Raizo-TCS/phronomy
-          ref: c673c958cd15407fb4552b6e0eca42175ec73ab7
+          ref: 3aea29d22beb437e8cdf61884e27de949819bd36
           path: core
           persist-credentials: false
       - uses: ruby/setup-ruby@v1
@@ -63,7 +63,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Raizo-TCS/phronomy
-          ref: c673c958cd15407fb4552b6e0eca42175ec73ab7
+          ref: 3aea29d22beb437e8cdf61884e27de949819bd36
           path: core
           persist-credentials: false
       - uses: ruby/setup-ruby@v1

@@ -120,146 +120,77 @@ module CveScanner
     end
   end
 
-  def self.signal_node_result(workflow, workflow_instance_id:, event:, value:, error:)
-    payload = error ? {error: error} : {state: value}
-    workflow.signal(workflow_instance_id: workflow_instance_id, event: event, payload: payload)
-  end
-
-  # For logical asynchronous work already represented by a Phronomy completion
-  # handle (Agent lifecycle, FanOut, another Workflow, ...).
-  def self.start_task_node(workflow, state, event:, &operation_builder)
-    snapshot = state.merge({})
-    workflow_instance_id = state.workflow_instance_id
-    operation = operation_builder.call(snapshot)
-
-    unless operation.respond_to?(:on_complete)
-      raise ArgumentError, "task node must return a completion handle"
-    end
-
-    operation.on_complete do |value, error|
-      signal_node_result(
-        workflow,
-        workflow_instance_id: workflow_instance_id,
-        event: event,
-        value: value,
-        error: error
-      )
-    end
-
-    state
-  rescue => error
-    workflow.signal(workflow_instance_id: state.workflow_instance_id, event: event, payload: {error: error})
-    state
-  end
-
-  # For genuinely blocking application operations such as shell commands and
-  # the synchronous Ubuntu CVE scraper. The worker belongs to Phronomy's bounded
-  # OffloadPool; the Workflow EventLoop never waits for it.
-  def self.start_blocking_node(workflow, state, event:, &operation)
-    snapshot = state.merge({})
-    workflow_instance_id = state.workflow_instance_id
-    pending = Phronomy::Blocking.call_async do
-      operation.call(snapshot)
-    end
-
-    pending.on_complete do |value, error|
-      signal_node_result(
-        workflow,
-        workflow_instance_id: workflow_instance_id,
-        event: event,
-        value: value,
-        error: error
-      )
-    end
-
-    state
-  rescue => error
-    workflow.signal(workflow_instance_id: state.workflow_instance_id, event: event, payload: {error: error})
-    state
-  end
-
-  def self.async_event_state(event)
-    payload = event.payload || {}
-    raise payload[:error] if payload[:error]
-    payload.fetch(:state)
-  end
-
   def self.build_graph(notifications: nil)
-    workflow = nil
-
-    workflow = Phronomy::Workflow.define(CveScanner::ScanState) do
+    Phronomy::Workflow.define(CveScanner::ScanState) do
       initial :gather_scan_info
 
-      state :gather_scan_info
-      entry :gather_scan_info, lambda { |state|
-        CveScanner.start_blocking_node(workflow, state, event: :gather_scan_info_done) do |snapshot|
-          CveScanner.node_gather_scan_info(snapshot, notifications: notifications)
-        end
-      }
+      task_state :gather_scan_info,
+        start: ->(snapshot) {
+          Phronomy::Blocking.call_async do
+            CveScanner.node_gather_scan_info(snapshot, notifications: notifications)
+          end
+        },
+        apply: ->(_state, updated) { updated }
 
       state :check_cve_data, action: lambda { |state|
         CveScanner.node_check_cve_data(state, notifications: notifications)
       }
 
-      state :propose_checks
-      entry :propose_checks, lambda { |state|
-        CveScanner.start_task_node(workflow, state, event: :propose_checks_done) do |snapshot|
+      task_state :propose_checks,
+        start: ->(snapshot) {
           CveScanner.node_propose_checks_async(snapshot, notifications: notifications)
-        end
-      }
+        },
+        apply: ->(_state, updated) { updated }
 
-      state :run_checks
-      entry :run_checks, lambda { |state|
-        CveScanner.start_blocking_node(workflow, state, event: :run_checks_done) do |snapshot|
-          CveScanner.node_run_checks(snapshot, notifications: notifications)
-        end
-      }
+      task_state :run_checks,
+        start: ->(snapshot) {
+          Phronomy::Blocking.call_async do
+            CveScanner.node_run_checks(snapshot, notifications: notifications)
+          end
+        },
+        apply: ->(_state, updated) { updated }
 
-      state :evaluate_checks
-      entry :evaluate_checks, lambda { |state|
-        CveScanner.start_task_node(workflow, state, event: :evaluate_checks_done) do |snapshot|
+      task_state :evaluate_checks,
+        start: ->(snapshot) {
           CveScanner.node_evaluate_checks_async(snapshot, notifications: notifications)
-        end
-      }
+        },
+        apply: ->(_state, updated) { updated }
 
-      state :propose_remediation
-      entry :propose_remediation, lambda { |state|
-        CveScanner.start_task_node(workflow, state, event: :propose_remediation_done) do |snapshot|
+      task_state :propose_remediation,
+        start: ->(snapshot) {
           CveScanner.node_propose_remediation_async(snapshot, notifications: notifications)
-        end
-      }
+        },
+        apply: ->(_state, updated) { updated }
 
-      state :run_remediation
-      entry :run_remediation, lambda { |state|
-        CveScanner.start_blocking_node(workflow, state, event: :run_remediation_done) do |snapshot|
-          CveScanner.node_run_remediation(snapshot, notifications: notifications)
-        end
-      }
+      task_state :run_remediation,
+        start: ->(snapshot) {
+          Phronomy::Blocking.call_async do
+            CveScanner.node_run_remediation(snapshot, notifications: notifications)
+          end
+        },
+        apply: ->(_state, updated) { updated }
 
-      state :evaluate_remediation
-      entry :evaluate_remediation, lambda { |state|
-        CveScanner.start_task_node(workflow, state, event: :evaluate_remediation_done) do |snapshot|
+      task_state :evaluate_remediation,
+        start: ->(snapshot) {
           CveScanner.node_evaluate_remediation_async(snapshot, notifications: notifications)
-        end
-      }
+        },
+        apply: ->(_state, updated) { updated }
 
       state :report, action: lambda { |state|
         CveScanner.node_report(state, notifications: notifications)
       }
 
-      state :handle_followup
-      entry :handle_followup, lambda { |state|
-        CveScanner.start_task_node(workflow, state, event: :handle_followup_done) do |snapshot|
+      task_state :handle_followup,
+        start: ->(snapshot) {
           CveScanner.node_handle_followup_async(snapshot, notifications: notifications)
-        end
-      }
+        },
+        apply: ->(_state, updated) { updated }
 
       wait_state :awaiting_check_approval
       wait_state :awaiting_remediation_approval
       wait_state :awaiting_followup
 
-      transition from: :gather_scan_info, on: :gather_scan_info_done, to: :check_cve_data,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :gather_scan_info, to: :check_cve_data
 
       transition from: :check_cve_data,
         guard: ->(state) {
@@ -271,67 +202,51 @@ module CveScanner
         to: :report
       transition from: :check_cve_data, to: :propose_checks
 
-      transition from: :propose_checks, on: :propose_checks_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).check_decision == "need_more" },
-        to: :awaiting_check_approval,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :propose_checks, on: :propose_checks_done, to: :report,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :propose_checks,
+        guard: ->(state) { state.check_decision == "need_more" },
+        to: :awaiting_check_approval
+      transition from: :propose_checks, to: :report
 
       transition from: :awaiting_check_approval, on: :approve_checks, to: :run_checks
-      transition from: :run_checks, on: :run_checks_done, to: :evaluate_checks,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :evaluate_checks, on: :evaluate_checks_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).check_decision == "need_more" },
-        to: :propose_checks,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :evaluate_checks, on: :evaluate_checks_done, to: :report,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :run_checks, to: :evaluate_checks
+      transition from: :evaluate_checks,
+        guard: ->(state) { state.check_decision == "need_more" },
+        to: :propose_checks
+      transition from: :evaluate_checks, to: :report
 
-      transition from: :propose_remediation, on: :propose_remediation_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).remediation_decision == "need_more" },
-        to: :awaiting_remediation_approval,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :propose_remediation, on: :propose_remediation_done, to: :report,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :propose_remediation,
+        guard: ->(state) { state.remediation_decision == "need_more" },
+        to: :awaiting_remediation_approval
+      transition from: :propose_remediation, to: :report
 
       transition from: :awaiting_remediation_approval, on: :approve_remediation, to: :run_remediation
-      transition from: :run_remediation, on: :run_remediation_done, to: :evaluate_remediation,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :evaluate_remediation, on: :evaluate_remediation_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).remediation_decision == "need_more" },
-        to: :propose_remediation,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :evaluate_remediation, on: :evaluate_remediation_done, to: :report,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :run_remediation, to: :evaluate_remediation
+      transition from: :evaluate_remediation,
+        guard: ->(state) { state.remediation_decision == "need_more" },
+        to: :propose_remediation
+      transition from: :evaluate_remediation, to: :report
 
       transition from: :report, to: :awaiting_followup
       transition from: :awaiting_followup, on: :submit_followup, to: :handle_followup
 
-      transition from: :handle_followup, on: :handle_followup_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).followup_decision == "answered" },
-        to: :awaiting_followup,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :handle_followup, on: :handle_followup_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).followup_decision == "reinvestigate" },
-        to: :gather_scan_info,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :handle_followup, on: :handle_followup_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).followup_decision == "remediate" },
-        to: :propose_remediation,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :handle_followup, on: :handle_followup_done,
-        guard: ->(_state, event) { CveScanner.async_event_state(event).followup_decision == "report" },
-        to: :report,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
-      transition from: :handle_followup, on: :handle_followup_done, to: :__finish__,
-        action: ->(_state, event) { CveScanner.async_event_state(event) }
+      transition from: :handle_followup,
+        guard: ->(state) { state.followup_decision == "answered" },
+        to: :awaiting_followup
+      transition from: :handle_followup,
+        guard: ->(state) { state.followup_decision == "reinvestigate" },
+        to: :gather_scan_info
+      transition from: :handle_followup,
+        guard: ->(state) { state.followup_decision == "remediate" },
+        to: :propose_remediation
+      transition from: :handle_followup,
+        guard: ->(state) { state.followup_decision == "report" },
+        to: :report
+      transition from: :handle_followup, to: :__finish__
     end
 
-    workflow
   end
 
-  # Runs only through start_blocking_node. The scraper and shell commands are
+  # Runs only inside Phronomy::Blocking.call_async. The scraper and shell commands are
   # blocking application I/O; they stay inside the bounded blocking pool.
   def self.node_gather_scan_info(state, notifications: nil)
     valid = state.cve_ids.select { |id| id.match?(/\ACVE-\d{4}-\d{4,}\z/i) }
@@ -433,7 +348,7 @@ module CveScanner
     node_propose_checks_async(state, notifications: notifications).wait_result
   end
 
-  # Runs only through start_blocking_node.
+  # Runs only inside Phronomy::Blocking.call_async.
   def self.node_run_checks(state, notifications: nil)
     results = state.approved_checks.map do |command|
       {cmd: command, output: CveScanner::CommandExecutorTool.new.execute(command: command)}
@@ -542,7 +457,7 @@ module CveScanner
     node_propose_remediation_async(state, notifications: notifications).wait_result
   end
 
-  # Runs only through start_blocking_node.
+  # Runs only inside Phronomy::Blocking.call_async.
   def self.node_run_remediation(state, notifications: nil)
     results = state.approved_remediations.map do |command|
       {cmd: command, output: CveScanner::CommandExecutorTool.new.execute(command: command)}

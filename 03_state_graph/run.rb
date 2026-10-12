@@ -4,13 +4,12 @@
 # 03 Workflow with Conditional Routing
 #
 # Demonstrates a self-improving loop using Phronomy::Workflow with conditional
-# event routing. The workflow evaluates a piece of text, and if its quality
+# routing. The workflow evaluates a piece of text, and if its quality
 # score is below the threshold (and the iteration cap has not been reached),
 # it rewrites the text and re-evaluates.
 #
-# Each Agent call is started in an entry action. Agent#invoke_async returns a
-# TaskResult; TaskResult completion is converted into a Workflow event. Transition actions
-# apply the Agent result to the context.
+# Each task_state starts an Agent call and applies its successful result.
+# Ordinary guards then choose the next state using the updated context.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -40,104 +39,32 @@ class ImproverAgent < Phronomy::Agent::Base
   instructions "You are a professional copywriter. Rewrite the given text to be more compelling. Return only the rewritten text."
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
-
-# workflow is captured by reference in the TaskResult completion callbacks.
-workflow = nil
 workflow = Phronomy::Workflow.define(MyState) do
   initial :evaluate
 
-  state :evaluate
-  entry :evaluate, ->(state) {
-    workflow_instance_id = state.workflow_instance_id
-    iterations = state.iterations
-    prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
-
-    agent = EvaluatorAgent.new
-    task = agent.invoke_async(prompt).map do |result|
-      score = result.fetch(:output).scan(/\d+/).first.to_i.clamp(0, 10)
-      puts "[Iteration #{iterations}] Score: #{score}"
-      {score: score}
-    end
-
-    task.on_complete do |payload, error|
-      workflow.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :evaluation_completed,
-        payload: error ? {error: error} : payload
-      )
-    end
-
-    state
-  }
-
-  state :improve
-  entry :improve, ->(state) {
-    workflow_instance_id = state.workflow_instance_id
-    iterations = state.iterations
-
-    agent = ImproverAgent.new
-    task = agent.invoke_async(state.text).map do |result|
-      {
-        text: result.fetch(:output).strip,
-        iterations: iterations + 1
-      }
-    end
-
-    task.on_complete do |payload, error|
-      workflow.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :improvement_completed,
-        payload: error ? {error: error} : payload
-      )
-    end
-
-    state
-  }
-
-  # Finish if score is good enough or iteration cap reached; apply score.
-  transition(
-    from: :evaluate,
-    on: :evaluation_completed,
-    to: :__finish__,
-    guard: ->(ctx, event) {
-      payload = event_payload!(event)
-      payload.fetch(:score) >= 7 || ctx.iterations >= 3
+  task_state :evaluate,
+    start: ->(state) {
+      prompt = "Rate the quality of the following text on a scale of 0 to 10.\n\n#{state.text}"
+      EvaluatorAgent.new.invoke_async(prompt)
     },
-    action: ->(ctx, event) {
-      score = event_payload!(event).fetch(:score)
-      puts "[Done] Final score: #{score}"
-      ctx.merge(score: score)
+    apply: ->(state, result) {
+      score = result.fetch(:output).scan(/\d+/).first.to_i.clamp(0, 10)
+      puts "[Iteration #{state.iterations}] Score: #{score}"
+      state.merge(score: score)
     }
-  )
 
-  # Otherwise move to :improve; apply new score.
-  transition(
-    from: :evaluate,
-    on: :evaluation_completed,
-    to: :improve,
-    action: ->(ctx, event) {
-      ctx.merge(score: event_payload!(event).fetch(:score))
+  task_state :improve,
+    start: ->(state) { ImproverAgent.new.invoke_async(state.text) },
+    apply: ->(state, result) {
+      state.merge(text: result.fetch(:output).strip, iterations: state.iterations + 1)
     }
-  )
 
-  # After improvement, re-evaluate with updated text and iteration count.
-  transition(
-    from: :improve,
-    on: :improvement_completed,
-    to: :evaluate,
-    action: ->(ctx, event) {
-      payload = event_payload!(event)
-      ctx.merge(
-        text: payload.fetch(:text),
-        iterations: payload.fetch(:iterations)
-      )
-    }
-  )
+  # Guards see the score already applied by the task state.
+  transition from: :evaluate, to: :__finish__,
+    guard: ->(state) { state.score >= 7 || state.iterations >= 3 },
+    action: ->(state) { puts "[Done] Final score: #{state.score}"; state }
+  transition from: :evaluate, to: :improve
+  transition from: :improve, to: :evaluate
 end
 
 puts "=== Workflow Conditional Routing Example ==="

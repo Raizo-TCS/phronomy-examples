@@ -190,86 +190,36 @@ def build_quality_scores(state)
   }
 end
 
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
-end
-
-def signal_completion(workflow, workflow_instance_id:, event:, operation:, key:)
-  operation.on_complete do |value, error|
-    workflow.signal(
-      workflow_instance_id: workflow_instance_id,
-      event: event,
-      payload: error ? {error: error} : {key => value}
-    )
-  end
-end
-
 def build_pipeline
-  workflow = nil
-
-  workflow = Phronomy::Workflow.define(ReviewState) do
+  Phronomy::Workflow.define(ReviewState) do
     initial :load_and_split
 
     state :load_and_split, action: LOAD_AND_SPLIT_NODE
 
-    state :parallel_review
-    entry :parallel_review, lambda { |state|
-      snapshot = state.merge({})
-      operation = start_parallel_reviews(snapshot)
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :reviews_completed,
-        operation: operation,
-        key: :reviews
-      )
-      state
-    }
+    task_state :parallel_review,
+      start: ->(snapshot) { start_parallel_reviews(snapshot) },
+      apply: ->(state, reviews) { state.merge(reviews: reviews) }
 
     wait_state :awaiting_priority
 
-    state :improve
-    entry :improve, lambda { |state|
-      operation = start_improvement(state.merge({}))
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :improvement_completed,
-        operation: operation,
-        key: :improved_code
-      )
-      state
-    }
+    task_state :improve,
+      start: ->(snapshot) { start_improvement(snapshot) },
+      apply: ->(state, code) { state.merge(improved_code: code) }
 
-    state :evaluate
-    entry :evaluate, lambda { |state|
-      snapshot = state.merge({})
-      operation = Phronomy::Blocking.call_async do
-        Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
-          [build_quality_scores(snapshot), nil]
+    task_state :evaluate,
+      start: ->(snapshot) {
+        Phronomy::Blocking.call_async do
+          Phronomy.configuration.tracer.trace("evaluate", input: snapshot.priority) do |_span|
+            [build_quality_scores(snapshot), nil]
+          end
         end
-      end
-      signal_completion(
-        workflow,
-        workflow_instance_id: state.workflow_instance_id,
-        event: :evaluation_completed,
-        operation: operation,
-        key: :quality_scores
-      )
-      state
-    }
+      },
+      apply: ->(state, scores) { state.merge(quality_scores: scores) }
 
     transition from: :load_and_split, to: :parallel_review
-    transition from: :parallel_review, on: :reviews_completed, to: :awaiting_priority,
-      action: ->(state, event) { state.merge(reviews: event_payload!(event).fetch(:reviews)) }
+    transition from: :parallel_review, to: :awaiting_priority
     transition from: :awaiting_priority, on: :proceed, to: :improve
-    transition from: :improve, on: :improvement_completed, to: :evaluate,
-      action: ->(state, event) { state.merge(improved_code: event_payload!(event).fetch(:improved_code)) }
-    transition from: :evaluate, on: :evaluation_completed, to: :__finish__,
-      action: ->(state, event) { state.merge(quality_scores: event_payload!(event).fetch(:quality_scores)) }
+    transition from: :improve, to: :evaluate
+    transition from: :evaluate, to: :__finish__
   end
-
-  workflow
 end

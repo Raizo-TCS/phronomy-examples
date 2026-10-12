@@ -41,7 +41,7 @@ pipeline_result = pipeline.invoke({input: "  Hello EventLoop  "})
 puts pipeline_result.result
 puts
 
-puts "--- Pattern 2: blocking I/O completes by Workflow#signal ---"
+puts "--- Pattern 2: blocking I/O completes through task_state ---"
 
 class FetchState
   include Phronomy::WorkflowContext
@@ -52,66 +52,36 @@ class FetchState
   field :error_message, type: :replace, default: ""
 end
 
-fetch_workflow = nil
 fetch_workflow = Phronomy::Workflow.define(FetchState) do
   initial :fetching
 
-  state :fetching
-  entry :fetching, lambda { |ctx|
-    workflow_instance_id = ctx.workflow_instance_id
-    url = ctx.url
+  task_state :fetching,
+    start: ->(snapshot) {
+      # Only actual blocking I/O occupies a bounded worker. Expected operation
+      # errors become application data; admission/cancellation failures propagate.
+      Phronomy::Blocking.call_async do
+        sleep 0.05
+        {response: "Content for #{snapshot.url}: blocking I/O completed outside FSM dispatch."}
+      rescue => error
+        {error_message: "#{error.class}: #{error.message}"}
+      end
+    },
+    apply: ->(state, outcome) { state.merge(outcome) }
 
-    # This block stands in for a genuinely blocking external operation. The
-    # worker belongs to Phronomy's bounded OffloadPool. The Workflow
-    # entry itself returns immediately and never waits on the EventLoop thread.
-    operation = Phronomy::Blocking.call_async do
-      sleep 0.05
-      "Content for #{url}: blocking I/O completed outside FSM dispatch."
-    end
-
-    operation.on_complete do |response, error|
-      fetch_workflow.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: error ? :fetch_failed : :fetch_done,
-        payload: {
-          response: response,
-          error: error
-        }
-      )
-    end
-
-    ctx
+  state :summarize, action: ->(state) {
+    state.merge(summary: "SUMMARY: #{state.response[0, 55]}...")
   }
-
-  state :summarize, action: lambda { |ctx|
-    ctx.merge(summary: "SUMMARY: #{ctx.response[0, 55]}...")
-  }
-
   state :failed
 
-  transition(
-    from: :fetching,
-    on: :fetch_done,
-    to: :summarize,
-    action: ->(ctx, event) { ctx.merge(response: event.payload.fetch(:response)) }
-  )
-
-  transition(
-    from: :fetching,
-    on: :fetch_failed,
-    to: :failed,
-    action: lambda { |ctx, event|
-      error = event.payload[:error]
-      ctx.merge(error_message: "#{error.class}: #{error.message}")
-    }
-  )
-
+  transition from: :fetching, to: :failed,
+    guard: ->(state) { !state.error_message.empty? }
+  transition from: :fetching, to: :summarize
   transition from: :summarize, to: :__finish__
   transition from: :failed, to: :__finish__
 end
 
 single_result = OutputValidator.validate(
-  "blocking I/O resumes Workflow through Workflow#signal",
+  "blocking I/O advances Workflow through task_state",
   check: ->(r) { r.error_message.empty? && r.summary.start_with?("SUMMARY:") }
 ) { fetch_workflow.invoke({url: "https://example.test/document"}) }
 

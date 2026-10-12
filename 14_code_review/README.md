@@ -13,7 +13,7 @@ and tracing into one application flow.
 | Workflow | `Phronomy::Workflow.define` | Models the full review lifecycle |
 | Typed state | `Phronomy::WorkflowContext` | Carries source, chunks, findings, selection and result |
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
-| Event-driven completion | `Workflow#signal` | Async work returns to the FSM as later events |
+| State-owned Task completion | `task_state` | Applies review, improvement and evaluation results before transitions |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
 | Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Result composition | `TaskResult#map` + `TaskResult.all_settled` | Extracts findings and gathers every review in input order, including failed or cancelled children |
@@ -80,12 +80,12 @@ flowchart TD
   performance --> results
   readability --> results
   abstraction --> results
-  results -->|Workflow signal| priority["Wait for review priority"]
+  results -->|task_state apply| priority["Wait for review priority"]
   priority -->|User event| improve["Improver and output filter"]
   improve --> judge["Quality judge via Blocking.call_async"]
-  judge -->|Workflow signal| done["Workflow completion"]
+  judge -->|task_state apply| done["Workflow completion"]
 ```
 
 No application `Thread.new` is required. Logical asynchronous coordination is
-represented by Phronomy completion handles and Workflow events; synchronous
+represented by Phronomy TaskResults consumed by task states; synchronous
 third-party work that must not run on EventLoop is isolated by `OffloadPool`.

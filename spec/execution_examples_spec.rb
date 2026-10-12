@@ -12,7 +12,28 @@ RSpec.describe "Example execution boundaries" do
     Object.send(:remove_const, :SEND_NODE) if name == "04_interrupt_resume" && Object.const_defined?(:SEND_NODE, false)
   end
 
-  it "completes a Workflow improvement loop through async Agent completion events" do
+  it "runs the basic pipeline with three independent Agent Tasks" do
+    stub = ExampleChatStub.new { 'puts "Hello World from the generated program"' }
+    expect { run_example("01_basic_chain") }.to output(/Language: Ruby.*Language: Python.*Language: JavaScript/m).to_stdout
+    expect(stub.calls.length).to eq(3)
+  end
+
+  it "retains tracing while task_state applies the Agent output" do
+    stub = ExampleChatStub.new { 'fmt.Println("Hello World from Go")' }
+    expect { run_example("07_tracing") }.to output(/LLM Response.*Hello World from Go/m).to_stdout
+    expect(stub.calls.length).to eq(1)
+  ensure
+    Phronomy.reset_configuration!
+  end
+
+  it "keeps Agent lifecycle observation separate from Workflow task completion" do
+    stub = ExampleChatStub.new { "おはようございます。" }
+    expect { run_example("26_agent_event_loop") }
+      .to output(/Workflow answer:.*おはようございます.*Caught:.*TimeoutError/m).to_stdout
+    expect(stub.calls.length).to eq(2)
+  end
+
+  it "completes a Workflow improvement loop through task_state results" do
     responses = ["2", "Ruby enables clear, maintainable applications with expressive code and useful libraries.", "8"]
     stub = ExampleChatStub.new { |_request, index| responses.fetch(index) }
     expect { run_example("03_state_graph") }
@@ -55,7 +76,7 @@ RSpec.describe "Example execution boundaries" do
     expect(stub.calls.length).to eq(2)
   end
 
-  it "completes external work through Workflow signals and async handles" do
+  it "completes external work through task_state and async handles" do
     expect { run_example("25_event_loop") }
       .to output(/SUMMARY:.*Completed 3 async Workflow invocations/m).to_stdout
     expect(WebMock).not_to have_requested(:any, /chat\/completions/)

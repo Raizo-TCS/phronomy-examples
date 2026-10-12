@@ -5,8 +5,7 @@ Rails-based CVE analysis example using Phronomy Workflow and Agents.
 ## Current execution model
 
 Workflow nodes coordinate the scan on Phronomy's EventLoop. Agent `stream_async`
-returns a TaskResult; the application forwards its completion through Workflow
-signals. Shell commands and the synchronous Ubuntu scraper use
+returns a TaskResult; `task_state` applies its result before normal transitions. Shell commands and the synchronous Ubuntu scraper use
 `Phronomy::Blocking.call_async` and the bounded OffloadPool. Logical waits for
 Agents do not occupy that pool. The application creates no raw Threads for
 Workflow orchestration.
@@ -33,13 +32,14 @@ retry is added. Listener overflow is observable as a `StreamCallbackError` with
 the original `OrderedEventDelivery::OverflowError` and code in its cause.
 
 See the complete [DX05-B before/after design](../docs/dx05-notification-delivery.md)
-for the responsibility boundary and failure matrix. Workflow completion helpers
-(DX05-D) and Agent scope/unload (DX05-E) are separate changes. Future Agent
-cleanup must follow producer completion and notification drain.
+for the notification responsibility boundary and failure matrix.
+[DX05-D](../docs/dx05-workflow-task-state.md) moves state-owned completion into
+`task_state`. Agent scope/unload (DX05-E) remains separate; future cleanup must
+follow producer completion and notification drain.
 
 ## Main Phronomy features
 
-- `Phronomy::Workflow.define` and `Workflow#signal`
+- `Phronomy::Workflow.define`, `task_state` and business approval events
 - Agent `stream_async` and `Phronomy::TaskResult` completion handles
 - `Phronomy::Blocking.call_async` for synchronous work
 - `Phronomy::Integrations::OrderedEventDelivery` for ordered notifications

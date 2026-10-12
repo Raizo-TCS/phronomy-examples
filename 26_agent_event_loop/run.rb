@@ -9,9 +9,9 @@
 #     Agent#invoke_async -> structured on_event lifecycle events
 #
 #   Terminal completion coordination:
-#     Agent#invoke_async -> TaskResult#on_complete -> Workflow#signal -> FSM transition
+#     Workflow#task_state -> Agent#invoke_async -> apply -> FSM transition
 #
-# Also demonstrates explicit Workflow-instance correlation and timeout classification.
+# Also demonstrates framework-owned state-entry correlation and timeout classification.
 
 require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
@@ -23,12 +23,6 @@ class TranslationAgent < Phronomy::Agent::Base
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   instructions "Translate the user's text to Japanese. Return only the translation."
-end
-
-def event_payload!(event)
-  payload = event.payload || {}
-  raise payload[:error] if payload[:error]
-  payload
 end
 
 puts "=== 26 Agent async events + Workflow coordination ==="
@@ -56,7 +50,7 @@ puts "Journal pos.:  #{direct_result[:journal_position]}"
 puts "Events:       #{events.inspect}"
 puts
 
-puts "--- Pattern 2: Agent TaskResult completion signals a Workflow ---"
+puts "--- Pattern 2: Agent TaskResult completion advances a task_state ---"
 
 class TranslationState
   include Phronomy::WorkflowContext
@@ -67,49 +61,21 @@ class TranslationState
   field :journal_position, type: :replace, default: 0
 end
 
-translation_workflow = nil
 translation_workflow = Phronomy::Workflow.define(TranslationState) do
   initial :translating
 
-  state :translating
-  entry :translating, lambda { |ctx|
-    workflow_instance_id = ctx.workflow_instance_id
-
-    agent = TranslationAgent.new
-    task = agent.invoke_async(ctx.query).map do |result|
-      {
+  task_state :translating,
+    start: ->(state) { TranslationAgent.new.invoke_async(state.query) },
+    apply: ->(state, result) {
+      state.merge(
         answer: result.fetch(:output),
         execution_id: result.fetch(:execution_id).to_s,
         journal_position: result.fetch(:journal_position)
-      }
-    end
-
-    task.on_complete do |payload, error|
-      translation_workflow.signal(
-        workflow_instance_id: workflow_instance_id,
-        event: :translation_completed,
-        payload: error ? {error: error} : payload
-      )
-    end
-
-    nil
-  }
-
-  state :complete
-
-  transition(
-    from: :translating,
-    on: :translation_completed,
-    to: :complete,
-    action: lambda { |ctx, event|
-      payload = event_payload!(event)
-      ctx.merge(
-        answer: payload.fetch(:answer),
-        execution_id: payload.fetch(:execution_id),
-        journal_position: payload.fetch(:journal_position)
       )
     }
-  )
+
+  state :complete
+  transition from: :translating, to: :complete
   transition from: :complete, to: :__finish__
 end
 

@@ -12,8 +12,7 @@ The asynchronous draft generation uses the normal completion pattern:
 ```text
 DraftAgent#invoke_async
   → Phronomy::TaskResult
-  → TaskResult#on_complete
-  → Workflow#signal(:draft_completed)
+  → task_state apply (draft result)
   → wait_state :awaiting_approval
 ```
 

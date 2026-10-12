@@ -10,6 +10,7 @@ on:
       - "shared/storage/**"
       - "shared/storage_resource_contract.rb"
       - "shared/reason_diagnostics_contract.rb"
+      - "shared/workflow_task_state_contract.rb"
       - "shared/llm_config.rb"
       - "shared/output_validator.rb"
       - "spec/**"
@@ -28,6 +29,7 @@ on:
       - "shared/storage/**"
       - "shared/storage_resource_contract.rb"
       - "shared/reason_diagnostics_contract.rb"
+      - "shared/workflow_task_state_contract.rb"
       - "shared/llm_config.rb"
       - "shared/output_validator.rb"
       - "spec/**"
@@ -89,7 +91,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Raizo-TCS/phronomy
-          ref: c673c958cd15407fb4552b6e0eca42175ec73ab7
+          ref: 3aea29d22beb437e8cdf61884e27de949819bd36
           path: core
           persist-credentials: false
 

@@ -4,7 +4,7 @@ This application-DX candidate builds on Phronomy 0.28.0 and the r8 contracts,
 including the RubyLLM 2.0 migration. DX05-A adds owned Agent absence and Team
 busy errors, plus cause-aware saved diagnostics. DX05-D adds Workflow task states.
 These APIs require the paired core candidate
-[`58b970fc650f0ac7d35a272a072e2583fd4be4da`](https://github.com/Raizo-TCS/phronomy/commit/58b970fc650f0ac7d35a272a072e2583fd4be4da);
+[`586674cac5422f945c8aeb33c2567c545a729acf`](https://github.com/Raizo-TCS/phronomy/commit/586674cac5422f945c8aeb33c2567c545a729acf);
 they are not available in the released 0.28.0 gem. Set `PHRONOMY_PATH` to that
 core checkout before updating or verifying any bundle. Complete old in-flight
 Tool executions before upgrading; see the core migration guide and

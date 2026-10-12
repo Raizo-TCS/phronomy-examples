@@ -22,5 +22,8 @@ Run root tests, both SQL suites/reload demos, Rails 09/15 history verification a
 `verify_examples.sh` against the same core candidate. Root controller tests use
 Rails plumbing doubles; they do not replace real Rails boot/controller/view tests.
 DX05-C now uses existing result composition in example 14; see
-[its application migration](docs/dx05-review-composition.md). DX05-B/D/E remain
-separate work. The error API changes described here are DX05-A.
+[its application migration](docs/dx05-review-composition.md). DX05-B uses the existing
+M91 delivery errors in example 20; see [notification delivery](docs/dx05-notification-delivery.md).
+Listener failures retain the delivery error as the cause of `StreamCallbackError`.
+Successful persistence is not reclassified as failure by a final notification error.
+DX05-D/E remain separate work. The core error API changes described here are DX05-A.

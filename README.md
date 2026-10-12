@@ -14,6 +14,12 @@ DX05-C moves example 14's parallel-review completion bookkeeping to the existing
 the application; see the [before/after comparison](docs/dx05-review-composition.md).
 It uses the same core commit above and introduces no new core API.
 
+DX05-B routes example 20's notifications through the existing
+`OrderedEventDelivery` scope. The application chooses payloads and destinations;
+M91 handles ordering and drain outside EventLoop. Saved scan results survive a
+final notification failure. See the [before/after comparison](docs/dx05-notification-delivery.md).
+This also uses the same core commit above. DX05-D/E remain separate work.
+
 Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.

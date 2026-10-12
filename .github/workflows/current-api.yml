@@ -81,3 +81,8 @@ jobs:
         run: |
           cd "${{ matrix.example }}"
           bundle exec rails runner ../scripts/verify_chat_history.rb
+      - name: Verify CVE notification scopes and scan workflows
+        if: matrix.example == '20_cve_scanner'
+        run: |
+          cd "${{ matrix.example }}"
+          bundle exec rspec spec/lib spec/jobs spec/requests

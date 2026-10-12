@@ -19,14 +19,20 @@ RSpec.describe "CveScanner.call_agent_json" do
   def stub_agent_output(agent_class, output_str)
     agent_double = instance_double(agent_class)
     allow(agent_class).to receive(:new).and_return(agent_double)
-    allow(agent_double).to receive(:stream).and_return([{output: output_str}])
+    allow(agent_double).to receive(:stream_async)
+      .and_return(Phronomy::TaskResult.completed({output: output_str}))
     agent_double
   end
 
+  def call_agent_result(*args, **kwargs)
+    CveScanner.call_agent_json(*args, **kwargs).wait_result(timeout: 2)
+  end
+
+  let(:notifications) { double("notification sink") }
   let(:broadcasts) { [] }
 
   before do
-    allow(ScanChannel).to receive(:broadcast) { |_id, payload| broadcasts << payload }
+    allow(notifications).to receive(:publish) { |payload| broadcasts << payload }
   end
 
   # ---------------------------------------------------------------------------
@@ -40,14 +46,14 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "returns the parsed hash" do
       stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       expect(result["decision"]).to eq("done")
       expect(result["vulnerability_status"]["CVE-2023-52160"]).to eq("vulnerable")
     end
 
     it "broadcasts chat_turn_done with clean JSON content" do
       stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
       expect(done_event).not_to be_nil
       expect { JSON.parse(done_event[:content]) }.not_to raise_error
@@ -65,14 +71,14 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "strips the fence and parses successfully" do
       stub_agent_output(CveScanner::CveAnalystAgent, fenced)
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       expect(result["decision"]).to eq("need_more")
       expect(result["proposed_commands"]).to eq(["dpkg -s wpasupplicant"])
     end
 
     it "broadcasts clean JSON (no fence in content)" do
       stub_agent_output(CveScanner::CveAnalystAgent, fenced)
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
       expect(done_event[:content]).not_to include("```")
     end
@@ -91,13 +97,13 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "extracts the JSON block and parses it" do
       stub_agent_output(CveScanner::CveAnalystAgent, prose_wrapped)
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       expect(result["decision"]).to eq("done")
     end
 
     it "broadcasts clean JSON without surrounding prose" do
       stub_agent_output(CveScanner::CveAnalystAgent, prose_wrapped)
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
       parsed = JSON.parse(done_event[:content])
       expect(parsed["decision"]).to eq("done")
@@ -112,7 +118,7 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "returns the json_parse_failed fallback hash" do
       stub_agent_output(CveScanner::CveAnalystAgent, garbage)
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       expect(result["decision"]).to eq("need_more")
       expect(result["error"]).to eq("json_parse_failed")
     end
@@ -120,7 +126,7 @@ RSpec.describe "CveScanner.call_agent_json" do
     it "does not raise an exception" do
       stub_agent_output(CveScanner::CveAnalystAgent, garbage)
       expect {
-        CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: 1)
+        call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
       }.not_to raise_error
     end
   end
@@ -133,7 +139,7 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "returns parsed hash without broadcasting" do
       stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt", scan_id: nil)
+      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: nil)
       expect(result["decision"]).to eq("done")
       expect(broadcasts).to be_empty
     end
@@ -147,8 +153,8 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "uses the specified role in both events" do
       stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent, "prompt",
-                                 scan_id: 99, role: "CveAnalyst")
+      call_agent_result(CveScanner::CveAnalystAgent, "prompt",
+                                 notifications: notifications, role: "CveAnalyst")
       start_event = broadcasts.find { |b| b[:type] == "chat_turn_start" }
       done_event  = broadcasts.find { |b| b[:type] == "chat_turn_done" }
       expect(start_event[:role]).to eq("CveAnalyst")
@@ -167,33 +173,33 @@ RSpec.describe "CveScanner.call_agent_json" do
 
     it "does not instantiate the agent class" do
       expect(CveScanner::CveAnalystAgent).not_to receive(:new)
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent,
-                                 "Analyse CVE-2023-52160.", scan_id: nil)
+      call_agent_result(CveScanner::CveAnalystAgent,
+                                 "Analyse CVE-2023-52160.", notifications: nil)
     end
 
     it "returns done with vulnerability_status keyed by CVE IDs in the prompt" do
-      result = CveScanner.call_agent_json(CveScanner::CveAnalystAgent,
+      result = call_agent_result(CveScanner::CveAnalystAgent,
                                           "Analyse CVE-2023-52160 and CVE-2024-00001.",
-                                          scan_id: nil)
+                                          notifications: nil)
       expect(result["decision"]).to eq("done")
       expect(result["vulnerability_status"].keys).to contain_exactly("CVE-2023-52160", "CVE-2024-00001")
     end
 
     it "broadcasts chat_turn_start and chat_turn_done when scan_id is set" do
-      CveScanner.call_agent_json(CveScanner::CveAnalystAgent,
-                                 "Analyse CVE-2023-52160.", scan_id: 7)
+      call_agent_result(CveScanner::CveAnalystAgent,
+                                 "Analyse CVE-2023-52160.", notifications: notifications)
       expect(broadcasts.map { |b| b[:type] }).to include("chat_turn_start", "chat_turn_done")
     end
 
     it "FollowupAgent returns answered" do
-      result = CveScanner.call_agent_json(CveScanner::FollowupAgent,
-                                          "Is this exploitable?", scan_id: nil)
+      result = call_agent_result(CveScanner::FollowupAgent,
+                                          "Is this exploitable?", notifications: nil)
       expect(result["decision"]).to eq("answered")
     end
 
     it "RemediationAdvisorAgent returns complete" do
-      result = CveScanner.call_agent_json(CveScanner::RemediationAdvisorAgent,
-                                          "Suggest fixes.", scan_id: nil)
+      result = call_agent_result(CveScanner::RemediationAdvisorAgent,
+                                          "Suggest fixes.", notifications: nil)
       expect(result["decision"]).to eq("complete")
     end
   end

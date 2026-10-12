@@ -1,111 +1,90 @@
 # frozen_string_literal: true
 
-# Background job that drives the CVE scanner Workflow.
-# On halt, it persists state to the DB and broadcasts an approval request.
-# On resume, it restores state and continues the workflow.
+# Each initial/resumed Job owns one notification delivery scope. A saved halt
+# or completion remains authoritative even if its final notification fails.
 class ScanJob < ApplicationJob
   queue_as :default
 
-  # Start a new scan from scratch.
-  # @param scan_id [Integer]
-  # @param cve_ids [Array<String>]
   def perform(scan_id, cve_ids)
-    scan = Scan.find(scan_id)
-    scan.update!(status: "running")
-    broadcast(scan_id, {type: "status", message: "Starting scan for: #{cve_ids.join(", ")}"})
-
-    graph = CveScanner.build_graph(scan_id: scan_id)
-    state = graph.invoke({cve_ids: cve_ids}, config: {workflow_instance_id: "scan_#{scan_id}"})
-
-    self.class.handle_state(scan, state)
-  rescue StandardError => e
-    scan&.update!(status: "error")
-    broadcast(scan_id, {type: "error", message: e.message})
-    raise
-  end
-
-  # Resume after user approves commands.
-  # @param scan_id [Integer]
-  # @param approval_type [String] "check" or "remediation"
-  # @param approved_commands [Array<String>]
-  def self.resume(scan_id, approval_type:, approved_commands:, user_note: nil)
-    scan = Scan.find(scan_id)
-    state_data = scan.state_json
-    return unless state_data
-
-    graph = CveScanner.build_graph(scan_id: scan_id)
-
-    # Restore state from persisted hash
-    meta_keys = %w[workflow_instance_id phase]
-    field_attrs = state_data
-      .reject { |k, _| meta_keys.include?(k.to_s) }
-      .transform_keys(&:to_sym)
-
-    state = CveScanner::ScanState.new(**field_attrs)
-    state.set_graph_metadata(
-      workflow_instance_id: state_data["workflow_instance_id"],
-      phase:     state_data["phase"]&.to_sym
-    )
-
-    # Inject approved commands into state
-    updates = if approval_type == "check"
-      {approved_checks: approved_commands, proposed_checks: approved_commands}
-    else
-      {approved_remediations: approved_commands, proposed_remediations: approved_commands}
+    self.class.with_scan(scan_id) do |scan, notifications|
+      scan.update!(status: "running")
+      notifications.publish(type: "status", message: "Starting scan for: #{cve_ids.join(", ")}")
+      graph = CveScanner.build_graph(notifications: notifications)
+      graph.invoke({cve_ids: cve_ids}, config: {workflow_instance_id: "scan_#{scan_id}"})
     end
-    updates[:user_notes] = [user_note.strip] if user_note.to_s.strip.length > 0
-    state = state.merge(updates)
-
-    scan.update!(status: "running")
-    broadcast(scan_id, {type: "status", message: "Resuming with #{approved_commands.size} approved command(s)..."})
-
-    new_state = graph.resume(state: state)
-    handle_state(scan, new_state)
-  rescue StandardError => e
-    scan&.update!(status: "error")
-    broadcast(scan_id, {type: "error", message: e.message})
-    raise
   end
 
-  # Resume after the user submits a post-report follow-up message.
-  # @param scan_id [Integer]
-  # @param message [String] the user's question or command
+  def self.resume(scan_id, approval_type:, approved_commands:, user_note: nil)
+    with_scan(scan_id) do |scan, notifications|
+      next unless scan.state_json
+
+      state = restore_state(scan.state_json)
+      updates = if approval_type == "check"
+        {approved_checks: approved_commands, proposed_checks: approved_commands}
+      else
+        {approved_remediations: approved_commands, proposed_remediations: approved_commands}
+      end
+      updates[:user_notes] = [user_note.strip] unless user_note.to_s.strip.empty?
+      state = state.merge(updates)
+
+      scan.update!(status: "running")
+      notifications.publish(type: "status", message: "Resuming with #{approved_commands.size} approved command(s)...")
+      CveScanner.build_graph(notifications: notifications).resume(state: state)
+    end
+  end
+
   def self.resume_followup(scan_id, message:)
-    scan = Scan.find(scan_id)
-    state_data = scan.state_json
-    return unless state_data
+    with_scan(scan_id) do |scan, notifications|
+      next unless scan.state_json
 
-    graph = CveScanner.build_graph(scan_id: scan_id)
+      state = restore_state(scan.state_json).merge(followup_request: message)
+      scan.update!(status: "running")
+      notifications.publish(type: "status", message: "Processing follow-up...")
+      CveScanner.build_graph(notifications: notifications).resume(state: state)
+    end
+  end
 
-    meta_keys = %w[workflow_instance_id phase]
-    field_attrs = state_data
-      .reject { |k, _| meta_keys.include?(k.to_s) }
-      .transform_keys(&:to_sym)
+  # Reused application policy, not a queue or worker implementation.
+  def self.with_scan(scan_id)
+    CveScanner::Notifications.open(scan_id: scan_id) do |notifications|
+      scan = nil
+      payload = begin
+        scan = Scan.find(scan_id)
+        state = yield scan, notifications
+        persist_state(scan, state) if state
+      rescue StandardError
+        record_failure(scan)
+        raise
+      end
 
-    state = CveScanner::ScanState.new(**field_attrs)
+      # Outside the business/persistence rescue: a delivery error must not
+      # overwrite a successfully saved done/awaiting status.
+      notifications.publish(payload) if payload
+    end
+  end
+
+  def self.restore_state(state_data)
+    fields = state_data.reject { |key, _| %w[workflow_instance_id phase].include?(key.to_s) }
+    state = CveScanner::ScanState.new(**fields.transform_keys(&:to_sym))
     state.set_graph_metadata(
       workflow_instance_id: state_data["workflow_instance_id"],
-      phase:     state_data["phase"]&.to_sym
+      phase: state_data["phase"]&.to_sym
     )
-    state = state.merge(followup_request: message)
-
-    scan.update!(status: "running")
-    broadcast(scan_id, {type: "status", message: "Processing follow-up..."})
-
-    new_state = graph.resume(state: state)
-    handle_state(scan, new_state)
-  rescue StandardError => e
-    scan&.update!(status: "error")
-    broadcast(scan_id, {type: "error", message: e.message})
-    raise
+    state
   end
 
-  private
+  def self.record_failure(scan)
+    scan&.update!(status: "error")
+  rescue StandardError => secondary
+    begin
+      Rails.logger.error("Scan failure status could not be saved: #{secondary.class}: #{secondary.message}")
+    rescue StandardError
+      # Preserve the original business/persistence error even if logging fails.
+    end
+  end
 
-  def self.handle_state(scan, state)
-    scan_id = scan.id
-
-    # Individual nodes now broadcast their own informational messages in
+  def self.persist_state(scan, state)
+    # Individual nodes now publish their own informational messages in
     # real-time (gather, check_cve_data, run_checks, run_remediation).
     # We no longer replay state.messages here to avoid duplicate and
     # out-of-order log lines.
@@ -123,12 +102,12 @@ class ScanJob < ApplicationJob
           status: "awaiting_check",
           state_json: persisted_state
         )
-        broadcast(scan_id, {
+        {
           type: "awaiting_approval",
           approval_type: "check",
           round: state.check_iteration,
           commands: commands
-        })
+        }
       elsif pending_phase == :awaiting_remediation_approval
         commands = state.proposed_remediations
         persisted_state = state.to_h.merge(
@@ -139,12 +118,12 @@ class ScanJob < ApplicationJob
           status: "awaiting_remediation",
           state_json: persisted_state
         )
-        broadcast(scan_id, {
+        {
           type: "awaiting_approval",
           approval_type: "remediation",
           round: state.remediation_iteration,
           commands: commands
-        })
+        }
       elsif pending_phase == :awaiting_followup
         # Report is ready; pause and wait for the user's first follow-up message
         persisted_state = state.to_h.merge(
@@ -155,7 +134,7 @@ class ScanJob < ApplicationJob
           status: "awaiting_followup",
           state_json: persisted_state
         )
-        broadcast(scan_id, {type: "awaiting_followup", message: "Scan complete. Ask a follow-up question or type 'done' to finish."})
+        {type: "awaiting_followup", message: "Scan complete. Ask a follow-up question or type 'done' to finish."}
       end
     else
       # Pipeline completed — build per-CVE detail for UI
@@ -181,21 +160,15 @@ class ScanJob < ApplicationJob
           messages: state.messages
         }
       )
-      broadcast(scan_id, {
+      {
         type: "done",
         vulnerability_status: state.vulnerability_status,
         check_iterations: state.check_iteration,
         remediation_iterations: state.remediation_iteration,
         cve_details: cve_details
-      })
+      }
     end
   end
 
-  def self.broadcast(scan_id, payload)
-    ScanChannel.broadcast(scan_id, payload)
-  end
-
-  def broadcast(scan_id, payload)
-    self.class.broadcast(scan_id, payload)
-  end
+  private_class_method :restore_state, :record_failure, :persist_state
 end

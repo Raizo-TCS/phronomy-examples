@@ -64,7 +64,9 @@ class ScansController < ApplicationController
     end
 
     # Broadcast so the UI shows the message immediately
-    ScanChannel.broadcast(scan.id, {type: "user_note", content: text})
+    CveScanner::Notifications.open(scan_id: scan.id) do |notifications|
+      notifications.publish(type: "user_note", content: text)
+    end
 
     # Respond via LLM asynchronously when scan is done or waiting for approval
     if %w[done awaiting_check awaiting_remediation].include?(scan.status)

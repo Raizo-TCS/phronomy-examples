@@ -54,14 +54,15 @@ REVIEW_PROMPT_BUILDER = lambda do |input, draft, citations|
   ].join("\n")
 end
 
-def build_pipeline
-  Phronomy::GeneratorVerifier.new(
+def with_pipeline(&block)
+  Phronomy::GeneratorVerifier.open(
     draft_agent: PolicyDraftAgent,
     review_agent: PolicyReviewAgent,
     draft_prompt_builder: DRAFT_PROMPT_BUILDER,
     review_prompt_builder: REVIEW_PROMPT_BUILDER,
     confidence_threshold: 0.7,
-    max_iterations: 3
+    max_iterations: 3,
+    &block
   )
 end
 
@@ -74,12 +75,13 @@ SCENARIOS = [
 def print_result(label, result)
   puts "=== #{label} ==="
   puts "Output    : #{result.output}"
-  puts "Trusted   : #{result.trusted?}"
-  puts format("Confidence: %.2f", result.confidence)
+  puts "Accepted  : #{result.accepted?}"
+  puts "Reason    : #{result.termination_reason}"
+  puts "Confidence: #{result.confidence.nil? ? "not evaluated" : format("%.2f", result.confidence)}"
   puts "Iterations: #{result.iterations}"
   if result.citations.any?
     puts "Citations :"
-    result.citations.each { |c| puts "  - #{c[:source]}: \"#{c[:excerpt]}\"" }
+    result.citations.each { |c| puts "  - #{c["source"]}: \"#{c["excerpt"]}\"" }
   else
     puts "Citations : (none)"
   end
@@ -88,10 +90,11 @@ end
 
 SCENARIOS.each_with_index do |question, i|
   puts "Question #{i + 1}: #{question}"
-  pipeline = build_pipeline
-  result = OutputValidator.validate(
-    "trust pipeline scenario #{i + 1}: produces answer",
-    check: ->(r) { r.output.length >= 20 }
-  ) { pipeline.invoke(question) }
+  result = with_pipeline do |pipeline|
+    OutputValidator.validate(
+      "trust pipeline scenario #{i + 1}: produces answer or explicit Tool rejection",
+      check: ->(r) { r.termination_reason == "tool_rejected" || r.output.to_s.length >= 20 }
+    ) { pipeline.invoke(question) }
+  end
   print_result("Scenario #{i + 1}", result)
 end

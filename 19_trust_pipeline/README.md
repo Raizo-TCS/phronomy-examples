@@ -38,7 +38,8 @@ bundle exec ruby 19_trust_pipeline/run.rb
 ## GeneratorVerifier lifetime and result API
 
 This example requires the GeneratorVerifier lifecycle/result update after 0.29.0.
-Use the paired core checkout via PHRONOMY_PATH until that update is published.
+This branch pins the paired core Git revision in all seven bundles until that
+update is published. PHRONOMY_PATH selects an explicit local checkout instead.
 
 Each scenario uses GeneratorVerifier.open and returns the invocation Task.
 The pipeline owns iteration of valid evaluations; no outer OutputValidator
@@ -66,6 +67,17 @@ schema validation. GeneratorVerifier owns the draft/review schemas and decides
 whether the validated evaluation satisfies the configured threshold. Application
 prompts specify the business question, evidence and review criteria. They do not
 repeat JSON templates or repair malformed model output.
+
+For a local model outside RubyLLM's catalog, declare verified capabilities through
+`PHRONOMY_MODEL_CAPABILITIES`, for example
+`function_calling,streaming,structured_output`. The approval draft Agent explicitly
+uses `LLMConfig::MODEL` and `LLMConfig::PROVIDER`; a subclass does not inherit a
+model declaration. The approval demo requires native schema and Tool support in
+the same request. The tested LM Studio configuration rejects that combination
+with `Cannot combine structured output constraints with lazy grammar`; Phronomy
+reports `LLMAdapter::StructuredOutputUnsupportedError` without executing the Tool
+or removing the schema. Use a supporting model/server configuration to exercise
+yes/no/cancel. Standalone schema examples can still run on a schema-only server.
 
 `output_failed` identifies an unavailable evaluation, including malformed JSON,
 model refusal and an incomplete answer. Its `failure` diagnostic and

@@ -70,6 +70,7 @@ RSpec.describe "GeneratorVerifier approval CLI" do
       expect { load File.expand_path("../19_trust_pipeline/approval_demo.rb", __dir__) }
         .to output(/"termination_reason": "#{approved ? "accepted" : "tool_rejected"}"/).to_stdout
       expect(chat.calls.length).to eq(approved ? 3 : 1)
+      expect(chat.calls.map { |body| body.fetch("model") }.uniq).to eq([LLMConfig::MODEL])
     ensure
       $stdin = previous_stdin
     end

@@ -51,7 +51,12 @@ module LLMConfig
     else
       fetch_loaded_context_window
     end
-    return unless BASE_URL || limit
+    capabilities = ENV["PHRONOMY_MODEL_CAPABILITIES"]
+    if capabilities
+      capabilities = capabilities.split(",").map(&:strip).reject(&:empty?).uniq
+      raise ArgumentError, "PHRONOMY_MODEL_CAPABILITIES must contain a capability" if capabilities.empty?
+    end
+    return unless BASE_URL || limit || capabilities
 
     existing = begin
       RubyLLM.models.find(MODEL, provider: PROVIDER)
@@ -66,6 +71,7 @@ module LLMConfig
       modalities: {input: ["text"], output: ["text"]},
       capabilities: ["function_calling", "streaming"]
     }).merge(context_window: limit)
+    model[:capabilities] = capabilities if capabilities
     models = (RubyLLM.models.all + RubyLLM.models.unlisted).map(&:to_h)
     models.reject! { |entry| entry[:id] == model[:id] && entry[:provider] == provider }
     models << model

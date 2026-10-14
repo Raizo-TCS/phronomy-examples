@@ -7,5 +7,5 @@ phronomy_path = ENV["PHRONOMY_PATH"]
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git", ref: "40fda020976284e7cfbfcb49224695cb824241bb"
+  gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git", ref: "7aeb5a80684ad073c71fda07769cc0f744d4e396"
 end

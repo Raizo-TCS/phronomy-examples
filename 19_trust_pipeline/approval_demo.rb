@@ -17,6 +17,8 @@ end
 
 class ApprovalPolicyDraftAgent < PolicyDraftAgent
   agent_definition id: "example-19-approved-policy-draft", version: 1
+  model LLMConfig::MODEL
+  provider LLMConfig::PROVIDER
   tools ApprovedPolicyLookup => nil
   instructions "Call approved_policy_lookup before answering. Include confidence and supporting source excerpts."
 end

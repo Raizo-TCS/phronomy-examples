@@ -18,7 +18,7 @@ end
 class ApprovalPolicyDraftAgent < PolicyDraftAgent
   agent_definition id: "example-19-approved-policy-draft", version: 1
   tools ApprovedPolicyLookup => nil
-  instructions "Call approved_policy_lookup before answering. Then return JSON with answer, confidence and citations."
+  instructions "Call approved_policy_lookup before answering. Include confidence and supporting source excerpts."
 end
 
 events = Queue.new
@@ -26,11 +26,11 @@ result = Phronomy::GeneratorVerifier.open(
   draft_agent: ApprovalPolicyDraftAgent,
   review_agent: PolicyReviewAgent,
   draft_prompt_builder: ->(input, feedback) {
-    "Question: #{input}\nPrevious review: #{feedback}\nReturn JSON: answer, confidence (0..1), citations (array)."
+    "Question: #{input}\nPrevious review: #{feedback}\nReport confidence from 0 to 1 and cite supporting policy excerpts."
   },
   review_prompt_builder: ->(input, draft, citations) {
     "Review the answer for: #{input}\nAnswer: #{draft}\nSources: #{citations.inspect}\n" \
-      "Return JSON: approved (boolean), score (0..1), feedback (string)."
+      "Report approval, a score from 0 to 1 and actionable review feedback."
   },
   max_iterations: 2,
   on_approval: ->(approval) { events << [:approval, approval] }
@@ -64,3 +64,6 @@ end
 
 puts JSON.pretty_generate(result.to_h)
 puts "Evaluation conditions met: #{result.accepted?}"
+if result.failure
+  warn "Output acquisition failed in #{result.interrupted_phase}: #{result.failure.fetch("code")} / #{result.failure.fetch("reason")}"
+end

@@ -40,13 +40,12 @@ bundle exec ruby 19_trust_pipeline/run.rb
 This example requires the GeneratorVerifier lifecycle/result update after 0.29.0.
 Use the paired core checkout via PHRONOMY_PATH until that update is published.
 
-Each scenario uses GeneratorVerifier.open. OutputValidator retries stay inside
-the block, so the same two Agent conversations are reused and then released.
-accepted? means that the configured review conditions were met; application
-publication remains a separate decision. termination_reason distinguishes accepted,
-iteration_limit and tool_rejected. A Tool rejection does not trigger a validation
-retry. Result.to_h and Result.from_h preserve evaluation facts through JSON;
-citation keys in the final Result are strings.
+Each scenario uses GeneratorVerifier.open and returns the invocation Task.
+The pipeline owns iteration of valid evaluations; no outer OutputValidator
+replays failed output acquisition. accepted? means the configured review
+conditions were met. Application publication remains a separate decision.
+termination_reason distinguishes accepted, iteration_limit, tool_rejected and
+output_failed. Result.to_h/from_h preserve those facts; citation keys are strings.
 
 For an application approval UI, configure on_approval, enqueue the notification,
 and call Approval#respond_async(approved: true/false) after the user's decision.
@@ -59,3 +58,36 @@ enqueues a request. The CLI asks for yes/no/cancel outside the callback and rout
 the explicit decision through the Approval handle. "no" returns tool_rejected;
 "cancel" cancels the invocation. The protected Tool reads only the bundled
 fictional policy document.
+
+## Declared output and output failure
+
+The paired structured-output update makes Agent responsible for strict JSON and
+schema validation. GeneratorVerifier owns the draft/review schemas and decides
+whether the validated evaluation satisfies the configured threshold. Application
+prompts specify the business question, evidence and review criteria. They do not
+repeat JSON templates or repair malformed model output.
+
+`output_failed` identifies an unavailable evaluation, including malformed JSON,
+model refusal and an incomplete answer. Its `failure` diagnostic and
+`interrupted_phase` survive Hash/JSON round trips. It is different from
+`iteration_limit`, which means valid evaluations did not meet the configured
+conditions. The example does not automatically replay Agent/Tool work after an
+output failure. `citation_schema:` can declare a different citation object shape.
+
+`GeneratorVerifier.open` waits for a directly returned TaskResult, then attempts
+to release both owned Agents. A CleanupError retains `pipeline`, `failures`,
+`result` and `primary_error`; the caller can retry `pipeline.release!` once the
+cause is resolved. `Agent.open_scope` uses the same rules, with `error.scope`.
+Arrays of Tasks and Tasks not returned from the block are not automatically awaited.
+
+Additional complete examples:
+
+```bash
+bundle exec ruby 19_trust_pipeline/structured_agent_demo.rb
+bundle exec ruby 19_trust_pipeline/lifetime_demo.rb
+```
+
+The first declares an invoice schema through `output_schema:` and receives a
+validated String-key Hash in `result[:output]`. `result[:raw_output]` retains the
+received JSON text. The second returns an asynchronous pipeline invocation from
+the synchronous lifetime block.

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# Use the paired GeneratorVerifier implementation across all seven bundles.
+# Use the paired structured-output and scope implementation across all seven bundles.
 # A local checkout can be selected explicitly with PHRONOMY_PATH.
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git", ref: "7c380bd99debd537027536ef4c270998022cbdb1"
+  gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git", ref: "40fda020976284e7cfbfcb49224695cb824241bb"
 end

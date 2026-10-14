@@ -28,7 +28,7 @@ RSpec.describe "GeneratorVerifier application composition" do
       end
     end
     expect { load File.join(example_root, "run.rb") }
-      .to output(/Accepted  : true.*Reason    : accepted.*policy.md/m).to_stdout
+      .to output(/Reason: accepted.*Accepted: true.*policy.md/m).to_stdout
     expect(chat.calls.length).to eq(6)
     expect(released).to eq([true] * 6)
   end
@@ -73,5 +73,28 @@ RSpec.describe "GeneratorVerifier approval CLI" do
     ensure
       $stdin = previous_stdin
     end
+  end
+end
+
+RSpec.describe "Structured output application recipes" do
+  it "prints validated Agent values from a directly returned Task" do
+    chat = ExampleChatStub.new { '{"invoice_id":"INV-2026-001","total":1250}' }
+    expect { load File.expand_path("../19_trust_pipeline/structured_agent_demo.rb", __dir__) }
+      .to output(/Invoice: INV-2026-001.*Total: 1250/m).to_stdout
+    expect(chat.calls.first.dig("response_format", "type")).to eq("json_schema")
+  end
+
+  it "awaits the pipeline's directly returned Task before cleanup" do
+    ExampleChatStub.new do |_body, index|
+      index.even? ? '{"answer":"supported","confidence":0.9,"citations":[]}' : '{"approved":true,"score":0.9,"feedback":""}'
+    end
+    expect { load File.expand_path("../19_trust_pipeline/lifetime_demo.rb", __dir__) }.to output("accepted\n").to_stdout
+  end
+
+  it "shows malformed output as acquisition failure without retrying that attempt" do
+    chat = ExampleChatStub.new { "malformed" }
+    expect { load File.expand_path("../19_trust_pipeline/run.rb", __dir__) }
+      .to output(/Reason: output_failed.*agent.output_invalid.*invalid_json/m).to_stdout
+    expect(chat.calls.length).to eq(3) # One request per independent scenario, no repair/review.
   end
 end

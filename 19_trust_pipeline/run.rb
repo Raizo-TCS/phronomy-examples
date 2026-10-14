@@ -2,27 +2,18 @@
 # frozen_string_literal: true
 
 require_relative "../shared/llm_config"
-require_relative "../shared/output_validator"
 require_relative "agents"
 
 DRAFT_PROMPT_BUILDER = lambda do |input, feedback|
   lines = [
     "Answer the following question as accurately as possible.",
-    "Use the Agent's persistent Knowledge and cite the embedded Source names."
+    "Use the Agent's persistent Knowledge and cite the embedded Source names.",
+    "Report your confidence from 0 to 1 and the supporting source excerpts."
   ]
-  if feedback && !feedback.strip.empty?
-    lines << ""
-    lines << "Your previous draft was reviewed and rejected. Address ALL of this feedback:"
-    lines << feedback.strip
+  unless feedback.nil? || feedback.empty?
+    lines << "Address the previous review feedback: #{feedback}"
   end
-  lines += [
-    "",
-    "Question: #{input}",
-    "",
-    "RESPOND ONLY WITH VALID JSON (no text outside the JSON block):",
-    '{"answer":"<full answer>","confidence":<0.0-1.0>,' \
-      '"citations":[{"source":"<source name>","excerpt":"<supporting excerpt>"}]}'
-  ]
+  lines << "Question: #{input}"
   lines.join("\n")
 end
 
@@ -30,27 +21,16 @@ REVIEW_PROMPT_BUILDER = lambda do |input, draft, citations|
   citation_text = if citations.empty?
     "  (none)"
   else
-    citations.map { |c| "  - #{c[:source]}: \"#{c[:excerpt]}\"" }.join("\n")
+    citations.map { |c| "  - #{c.fetch("source")}: #{c.fetch("excerpt")}" }.join("\n")
   end
   [
-    "You are a rigorous quality reviewer. Evaluate the draft answer below.",
-    "",
+    "Evaluate the draft answer for accuracy, completeness, and source support.",
+    "Approve it only when its significant claims have adequate support.",
+    "Report a score from 0 to 1 and actionable feedback.",
     "Question: #{input}",
-    "",
-    "Draft answer:",
-    draft.to_s,
-    "",
-    "Citations provided:",
-    citation_text,
-    "",
-    "Evaluation criteria:",
-    "  1. Is the answer factually accurate and complete?",
-    "  2. Is every significant claim backed by a citation?",
-    "  3. Is the self-reported confidence realistic?",
-    "",
-    "RESPOND ONLY WITH VALID JSON (no text outside the JSON block):",
-    '{"approved":<true|false>,"score":<0.0-1.0>,' \
-      '"feedback":"<specific actionable feedback, or empty string if approved>"}'
+    "Draft: #{draft}",
+    "Citations:",
+    citation_text
   ].join("\n")
 end
 
@@ -68,33 +48,34 @@ end
 
 SCENARIOS = [
   "What is the refund policy? How many days do I have to return an item?",
-  "How long does express shipping take, and what does it cost?",
+  "How long does express shipping take, and how much does it cost?",
   "Can I get a refund after 60 days if the item is unused?"
 ].freeze
 
-def print_result(label, result)
-  puts "=== #{label} ==="
-  puts "Output    : #{result.output}"
-  puts "Accepted  : #{result.accepted?}"
-  puts "Reason    : #{result.termination_reason}"
-  puts "Confidence: #{result.confidence.nil? ? "not evaluated" : format("%.2f", result.confidence)}"
-  puts "Iterations: #{result.iterations}"
-  if result.citations.any?
-    puts "Citations :"
-    result.citations.each { |c| puts "  - #{c["source"]}: \"#{c["excerpt"]}\"" }
-  else
-    puts "Citations : (none)"
+def print_result(result)
+  puts "Reason: #{result.termination_reason}"
+  puts "Accepted: #{result.accepted?}"
+  puts "Output: #{result.output}" unless result.output.nil?
+  if result.failure
+    puts "Output acquisition failed in #{result.interrupted_phase}:"
+    puts "  #{result.failure.fetch("code")} / #{result.failure.fetch("reason")}"
+    return
   end
-  puts
+  if result.termination_reason == "tool_rejected"
+    puts "A Tool was denied in #{result.interrupted_phase}; evaluation is incomplete."
+    return
+  end
+  puts "Confidence: #{format("%.2f", result.confidence)}"
+  result.citations.each do |citation|
+    puts "  #{citation.fetch("source")}: #{citation.fetch("excerpt")}"
+  end
 end
 
-SCENARIOS.each_with_index do |question, i|
-  puts "Question #{i + 1}: #{question}"
+SCENARIOS.each do |question|
+  puts "Question: #{question}"
   result = with_pipeline do |pipeline|
-    OutputValidator.validate(
-      "trust pipeline scenario #{i + 1}: produces answer or explicit Tool rejection",
-      check: ->(r) { r.termination_reason == "tool_rejected" || r.output.to_s.length >= 20 }
-    ) { pipeline.invoke(question) }
+    pipeline.invoke_async(question)
   end
-  print_result("Scenario #{i + 1}", result)
+  print_result(result)
+  puts
 end

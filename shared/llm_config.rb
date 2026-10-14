@@ -70,7 +70,8 @@ module LLMConfig
       id: MODEL, name: MODEL, provider: provider,
       modalities: {input: ["text"], output: ["text"]},
       capabilities: ["function_calling", "streaming"]
-    }).merge(context_window: limit)
+    })
+    model[:context_window] = limit if BASE_URL || limit
     model[:capabilities] = capabilities if capabilities
     models = (RubyLLM.models.all + RubyLLM.models.unlisted).map(&:to_h)
     models.reject! { |entry| entry[:id] == model[:id] && entry[:provider] == provider }

@@ -14,8 +14,15 @@ RSpec.describe "RubyLLM model registry configuration" do
       stub_request(:get, /api\/v0\/models/).to_return(status: 404)
       require_relative "shared/llm_config"
       model = RubyLLM.models.find(LLMConfig::MODEL, provider: LLMConfig::PROVIDER)
+      input_limit = begin
+        LLMConfig.input_token_limit!
+      rescue ArgumentError
+        nil
+      end
+      budget = Phronomy::LLMAdapter::RubyLLM.new.input_budget(model: LLMConfig::MODEL, provider: LLMConfig::PROVIDER)
       puts JSON.generate(provider: model.provider, context_window: model.context_window,
-        protocol: RubyLLM.config.openai_protocol, capabilities: model.capabilities)
+        protocol: RubyLLM.config.openai_protocol, capabilities: model.capabilities,
+        input_token_limit: input_limit, adapter_input_budget: budget&.effective_input_limit)
     SOURCE
     base = {"PHRONOMY_MODEL" => "gpt-4o-mini", "PHRONOMY_PROVIDER" => "openai",
             "PHRONOMY_CONTEXT_WINDOW" => nil, "PHRONOMY_BASE_URL" => nil,
@@ -67,6 +74,33 @@ RSpec.describe "RubyLLM model registry configuration" do
       PHRONOMY_MODEL_CAPABILITIES: "structured_output")
     expect(status.success?).to be(true), error
     expect(JSON.parse(output).fetch("capabilities")).to eq(["structured_output"])
+  end
+
+  [nil, "openai"].each do |provider|
+    it "preserves cloud input metadata when only capabilities change with provider=#{provider.inspect}" do
+      output, error, status = config_in_process(PHRONOMY_PROVIDER: provider,
+        PHRONOMY_MODEL_CAPABILITIES: "function_calling,structured_output")
+      expect(status.success?).to be(true), error
+      expect(JSON.parse(output)).to include("context_window" => 128_000,
+        "input_token_limit" => 128_000, "adapter_input_budget" => 128_000,
+        "capabilities" => %w[function_calling structured_output])
+    end
+  end
+
+  it "uses an explicit input limit when cloud capabilities also change" do
+    output, error, status = config_in_process(PHRONOMY_CONTEXT_WINDOW: "4096",
+      PHRONOMY_MODEL_CAPABILITIES: "structured_output")
+    expect(status.success?).to be(true), error
+    expect(JSON.parse(output)).to include("context_window" => 4096,
+      "input_token_limit" => 4096, "adapter_input_budget" => 4096)
+  end
+
+  it "keeps a known cloud model's local input limit unknown when only capabilities are supplied" do
+    output, error, status = config_in_process(PHRONOMY_BASE_URL: "https://example.test/v1",
+      PHRONOMY_MODEL_CAPABILITIES: "structured_output")
+    expect(status.success?).to be(true), error
+    expect(JSON.parse(output)).to include("context_window" => nil,
+      "input_token_limit" => nil, "adapter_input_budget" => nil)
   end
 
   ["", " , , "].each do |declaration|

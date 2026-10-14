@@ -57,6 +57,10 @@ from verified model/server capabilities: an OpenAI-compatible URL alone does not
 establish native schema support. Supporting schemas and Tools individually does
 not guarantee their combination. A server rejection remains an explicit failure.
 
+Capability-only changes preserve a cloud model's registered context window.
+With a custom endpoint, unavailable local context metadata remains unknown unless
+`PHRONOMY_CONTEXT_WINDOW` supplies an explicit limit.
+
 Agent `max_output_tokens` controls generation only. The old output-reserve setting
 and `LLMConfig.apply_phronomy_defaults!` have been removed. Cloud OpenAI uses
 RubyLLM 2's default Responses protocol; custom OpenAI-compatible endpoints use

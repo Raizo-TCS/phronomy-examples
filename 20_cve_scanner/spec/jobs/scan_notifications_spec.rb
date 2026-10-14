@@ -272,7 +272,13 @@ RSpec.describe "CVE scan Job notifications" do
           raise primary
         end
       end
-      expect_same_error(primary) { ScanChatJob.new.perform(scan.id, "question") }
+      expect { ScanChatJob.new.perform(scan.id, "question") }.to raise_error(Phronomy::Agent::ScopeCleanupError) do |error|
+        expect(error.primary_error).to equal(primary)
+        expect(error.cause).to equal(primary)
+        expect(error.failures.map { |entry| entry.fetch(:error) }).to include(secondary)
+        expect(error.scope).to respond_to(:release!)
+        expect(error.result).to be_nil
+      end
       expect(owned.first.class.get(owned.first.agent_id)).to equal(owned.first)
     end
 

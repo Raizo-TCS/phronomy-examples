@@ -103,3 +103,55 @@ The first declares an invoice schema through `output_schema:` and receives a
 validated String-key Hash in `result[:output]`. `result[:raw_output]` retains the
 received JSON text. The second returns an asynchronous pipeline invocation from
 the synchronous lifetime block.
+
+## Content fidelity and reproducible live acceptance
+
+The invoice demo compares its fixed fixture against an independent expected
+identifier and total. A schema-valid transcription error exits 1. It does not
+repair values, constrain the schema to the expected identifier, or retry until
+the fixture passes. This belongs to application acceptance; Agent's schema
+guarantee and GeneratorVerifier's accepted result do not certify business truth.
+
+Run these cases independently with the intended model and server:
+
+```bash
+bundle exec ruby scripts/verify_trust_pipeline.rb --case invoice --report tmp/trust/invoice.json
+bundle exec ruby scripts/verify_trust_pipeline.rb --case accepted --report tmp/trust/accepted.json
+bundle exec ruby scripts/verify_trust_pipeline.rb --case iteration_limit --report tmp/trust/iteration-limit.json
+bundle exec ruby scripts/verify_trust_pipeline.rb --case approval-yes --report tmp/trust/approval-yes.json
+bundle exec ruby scripts/verify_trust_pipeline.rb --case approval-no --report tmp/trust/approval-no.json
+bundle exec ruby scripts/verify_trust_pipeline.rb --case approval-cancel --report tmp/trust/approval-cancel.json
+```
+
+The runner supplies the explicit approval input to the existing CLI. The only
+Tool is the bundled fictional policy lookup. A case cannot pass by skipping the
+Tool call and returning a plausible answer. Yes requires one approval, one Tool
+execution and valid completion (accepted or iteration_limit); the separate
+accepted case checks adoption. No/cancel require zero Tool effects and release.
+
+Exit codes: 0 passed, 1 failed, 2 blocked by native-schema capability rejection.
+A blocked approval is not an OK. Retain failed trials when comparing settings;
+this small fixed set does not establish general model accuracy. An existing
+report path is rejected: use a fresh path for every trial.
+
+Use the usual PHRONOMY_MODEL, PHRONOMY_PROVIDER, PHRONOMY_BASE_URL and credentials.
+Declare only verified capabilities. Set PHRONOMY_SERVER_VERSION to the observed
+server version; unknown remains null. Separate capability flags do not establish
+schema-plus-Tool combination support; the approval cases test the actual request.
+
+Reports include SDK timeout/retry settings, requests/responses, physical HTTP
+attempts, Tool effects, approvals, results and release outcomes. Ruby thread
+stacks are written every 30 seconds; --snapshot-interval changes observation
+frequency only. The runner neither shortens SDK timeouts nor adds cancellation.
+It uses diagnostic bindings to the pinned SDK. An observer failure invalidates
+the report instead of masking the application exception.
+
+For a long wait, preserve the running report and server logs before interrupting.
+Correlate UTC times, endpoint path and payload hash/content. External signals,
+including those wrapped in cleanup failures, are recorded as interrupted.
+They do not count as successful cancellation/release. Sampling adds overhead.
+Reports contain prompt/response data and should be retained as test evidence.
+
+The original historical wait remains unexplained without its server logs.
+A subsequent fast response cannot identify its cause. These are additional
+acceptance checks; verify_examples.sh success does not imply they passed.

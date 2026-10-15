@@ -78,6 +78,16 @@ RSpec.describe "GeneratorVerifier approval CLI" do
 end
 
 RSpec.describe "Structured output application recipes" do
+  it "rejects schema-valid but unfaithful invoice extraction without repairing or replaying it" do
+    chat = ExampleChatStub.new { '{"invoice_id":"INV-2026-01","total":1250}' }
+    expect {
+      expect { load File.expand_path("../19_trust_pipeline/structured_agent_demo.rb", __dir__) }
+        .to raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+    }.to output(/Invoice fidelity failed.*INV-2026-001.*INV-2026-01/).to_stderr
+    expect(chat.calls.length).to eq(1)
+    expect(chat.calls.first.dig("response_format", "json_schema", "schema", "properties", "invoice_id")).to eq({"type" => "string"})
+  end
+
   it "prints validated Agent values from a directly returned Task" do
     chat = ExampleChatStub.new { '{"invoice_id":"INV-2026-001","total":1250}' }
     expect { load File.expand_path("../19_trust_pipeline/structured_agent_demo.rb", __dir__) }

@@ -1,10 +1,11 @@
 GIT
   remote: https://github.com/Raizo-TCS/phronomy.git
-  revision: 420fa3353fa72a4095ba4a2455efc396215ff4bc
-  ref: 420fa3353fa72a4095ba4a2455efc396215ff4bc
+  revision: e96bd6370c199fe839e12a35c68c8ed34e599b51
+  ref: e96bd6370c199fe839e12a35c68c8ed34e599b51
   specs:
     phronomy (0.29.0)
-      faraday (~> 2.1)
+      faraday (~> 2.14, >= 2.14.4)
+      faraday-net_http (~> 3.4, >= 3.4.4)
       json (>= 2.21.2, < 3)
       json_schemer (~> 2.5)
       mcp (~> 1.0)

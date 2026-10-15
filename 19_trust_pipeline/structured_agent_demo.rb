@@ -8,7 +8,8 @@ class InvoiceExtractionAgent < Phronomy::Agent::Base
   agent_definition id: "example-19-invoice-extraction", version: 1
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
-  instructions "Extract the invoice identifier and total from the supplied text."
+  instructions "Extract the invoice identifier and total from the supplied text. " \
+    "Copy the identifier exactly, preserving every character and leading zero. Do not normalize or invent values."
 end
 
 INVOICE_SCHEMA = {
@@ -30,6 +31,13 @@ begin
     )
   end
   invoice = result.fetch(:output)
+  # This fixed example has an independent acceptance oracle. Schema validity
+  # alone cannot establish faithful extraction of business facts.
+  expected = {"invoice_id" => "INV-2026-001", "total" => 1250}
+  unless invoice == expected
+    warn "Invoice fidelity failed: expected #{expected.inspect}; received #{invoice.inspect}"
+    exit 1
+  end
   puts "Invoice: #{invoice.fetch("invoice_id")}"
   puts "Total: #{invoice.fetch("total")}"
 rescue Phronomy::Agent::OutputError => error

@@ -18,7 +18,7 @@ class TrustAcceptanceObserver
     @wake = ConditionVariable.new
     @origin = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     @records = {started_at: Time.now.utc.iso8601(6), requests: [], responses: [], http_attempts: [],
-                approvals: [], decisions: [], tool_executions: 0, releases: [], results: [], exceptions: [], snapshots: [], observer_errors: []}
+                approvals: [], decisions: [], tool_executions: 0, releases: [], results: [], pipelines: [], exceptions: [], snapshots: [], observer_errors: []}
     # Reserve a new report rather than overwrite evidence from a previous trial.
     File.open(path, File::WRONLY | File::CREAT | File::EXCL, 0o600) {}
   end
@@ -52,6 +52,13 @@ class TrustAcceptanceObserver
 
   def write
     @lock.synchronize { write_locked }
+  end
+
+  def annotate(values)
+    @lock.synchronize do
+      @records.merge!(values)
+      write_locked
+    end
   end
 
   def exception(error)
@@ -120,8 +127,10 @@ class TrustAcceptanceObserver
         @records[:tool_executions] += 1
         write_locked
       }
+    elsif owner == "Phronomy::GeneratorVerifier" && event.method_id == :initialize && event.event == :call
+      record(:pipelines, id: event.binding.receiver.object_id)
     elsif event.method_id == :release! && event.event == :return && ["Phronomy::GeneratorVerifier", "Phronomy::Agent::Scope"].include?(owner)
-      record(:releases, owner: owner, value: event.return_value)
+      record(:releases, owner: owner, id: event.binding.receiver.object_id, value: event.return_value)
     elsif owner == "Phronomy::GeneratorVerifier" && event.method_id == :build_result && event.event == :return
       record(:results, value: event.return_value.to_h)
     elsif event.event == :raise && event.raised_exception.is_a?(StandardError)

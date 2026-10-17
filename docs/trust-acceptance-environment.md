@@ -69,15 +69,83 @@ acceptance. The real credentials and deployed model remain environment inputs.
 
 ## Remaining wait investigation
 
-The previous long review wait remains unexplained. Capture the matching LM
-Studio/server logs and the runner's time-stamped request and thread snapshots
-if it recurs. The runner already writes diagnostic snapshots while waiting.
-Successful later calls, a different provider, or this configuration fix do not
-establish the cause of the historical wait.
+The previous long review wait and the separate CLI 19 cutoff remain unexplained.
+The normal CLI guard is still 240 seconds (with the existing per-example
+overrides). It can fire before the SDK's observed 300-second request timeout,
+which also has three configured retries. An outer cutoff does not demonstrate
+an SDK timeout, a framework deadlock, or successful cleanup.
+
+`verify_examples.sh` now preserves a fresh `tmp/cli-<example>.*` directory for
+every CLI run: `stdout.log`, `stderr.log`, `syntax.log`, and `execution.json`.
+For CLI 19, `observation.json` additionally records requests, response bodies,
+actual HTTP attempts, SDK settings, exceptions, pipeline identities and releases,
+and Ruby thread stacks every five seconds. Files are private to their owner.
+The guard sends TERM at the existing limit, then KILL after ten further seconds
+if termination has not completed. It signals only its own command process group.
+
+Read the parent `execution.json` first. Exit 124 means the outer cutoff was
+reached; 137 means the process was killed, but alone does not identify who sent
+KILL. Both fail verification. The last observation can still say `running` after
+a forced kill. An earlier scenario's successful release does not establish
+cleanup of the pending scenario. `all_observed_pipelines_released` matches
+pipeline identities; false/null or a missing final value is unconfirmed cleanup,
+not proof of a resource leak. A final snapshot is possible only when the child
+gets to finish its diagnostic handler; periodic snapshots survive forced kills.
+
+To observe SDK timeout/exception/cleanup behavior separately, run the same CLI
+without the normal 240-second verification guard. This command deliberately
+does not override SDK timeouts, retries, prompts or schemas:
+
+```bash
+mkdir -p tmp
+diagnostic_dir=$(mktemp -d "$PWD/tmp/trust-cli-diagnostic.XXXXXX")
+diagnostic_status=0
+(umask 077
+ bundle exec ruby scripts/observe_trust_cli.rb \
+   --report "$diagnostic_dir/observation.json" --snapshot-interval 5 \
+   > "$diagnostic_dir/stdout.log" 2> "$diagnostic_dir/stderr.log") || diagnostic_status=$?
+printf '%s\n' "$diagnostic_status" > "$diagnostic_dir/exit-code.txt"
+```
+
+This diagnostic has no outer deadline. Run it under supervision. If an outer
+guard is needed, record its value and exit status separately; reaching that
+guard is another interrupted observation, not a completed SDK timeout test.
+The wrapper rejects an existing report path. Its `completed` status means the
+original CLI exited successfully; it does not mean all answers were accepted or
+correct. Inspect each `results` entry. The separate six-case live suite remains
+the acceptance authority, and a longer diagnostic does not replace a failed
+240-second verification result.
+
+Correlate UTC timestamps, request payload/hash and pending thread stack with the
+matching LM Studio/server log. Report what the evidence establishes and what
+remains unknown. Do not attribute a wait to the server solely because an HTTP
+request started. Successful later calls or a different provider do not establish
+the cause of the historical wait. Keep failed and blocked trials alongside the
+new run's evidence while investigating the unresolved issue; do not overwrite
+them with a successful later run.
+
+## Approval acceptance handoff
+
+Run `integration/trust_pipeline_spec.rb` in the actual compatible environment
+described above, then the full verification with exactly the same configuration.
+The normal offline unit/integration CI and controlled HTTP fixture tests do not
+establish that a deployed model/server supports the combination. Do not mark
+live approval cases complete based only on those tests.
+
+For each approval case, inspect its JSON and log: yes must reach approval, record
+one positive decision and one Tool execution; no must record one negative decision,
+zero Tool executions and `tool_rejected`; cancel must reach approval, record no
+decision, execute no Tool and retain cancellation. All require successful release.
+The existing runner checks these conditions. Rejection before approval remains
+`blocked` and fails the suite. Also retain failed `accepted`/`iteration_limit`
+trials: a schema violation detected by Agent is correct rejection, while the
+expected live outcome remains unmet. Do not weaken schemas or replay until a
+favorable result appears.
 
 ## Responsibility boundary
 
 Provider selection and credentials belong to example application composition.
-This correction changes no core Contract, Agent, Generation, Engine or Execution
-behavior. It introduces no fallback generation, schema weakening or automatic
-acceptance replay. Contract diagram relationships are unchanged.
+Provider configuration and diagnostic observation change no core Contract, Agent,
+Generation, Engine or Execution behavior. They introduce no fallback generation,
+schema weakening or automatic acceptance replay. Contract diagram relationships
+are unchanged.

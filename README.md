@@ -57,6 +57,12 @@ the live suite explicitly, and `--preflight-only` runs no acceptance tests.
 with protocol stubs or controlled local HTTP servers. They validate the suite's
 success/failure propagation but do not establish acceptance with a real model.
 
+CLI runs retain stdout/stderr and exit/cutoff metadata in `tmp/cli-<example>.*`.
+CLI 19 also records LLM requests/responses and periodic Ruby thread stacks.
+The existing 240-second outer limit is distinct from SDK request timeouts.
+See [wait diagnostics and approval handoff](docs/trust-acceptance-environment.md#remaining-wait-investigation)
+for a separate diagnostic run and the evidence needed to resolve a wait.
+
 ## LLM token settings
 
 `shared/llm_config.rb` configures RubyLLM and its model registry. Use

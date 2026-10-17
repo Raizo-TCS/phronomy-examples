@@ -20,13 +20,22 @@ RSpec.describe "RubyLLM model registry configuration" do
         nil
       end
       budget = Phronomy::LLMAdapter::RubyLLM.new.input_budget(model: LLMConfig::MODEL, provider: LLMConfig::PROVIDER)
+      selected = model.provider
+      expected_key = ENV["PHRONOMY_API_KEY"] || ENV["#{selected.to_s.upcase}_API_KEY"]
       puts JSON.generate(provider: model.provider, context_window: model.context_window,
         protocol: RubyLLM.config.openai_protocol, capabilities: model.capabilities,
-        input_token_limit: input_limit, adapter_input_budget: budget&.effective_input_limit)
+        input_token_limit: input_limit, adapter_input_budget: budget&.effective_input_limit,
+        selected_base: RubyLLM.config.public_send("#{selected}_api_base"),
+        selected_key_matches: RubyLLM.config.public_send("#{selected}_api_key") == expected_key,
+        openai_key_present: !RubyLLM.config.openai_api_key.nil?,
+        openai_base: RubyLLM.config.openai_api_base,
+        request_timeout: RubyLLM.config.request_timeout, max_retries: RubyLLM.config.max_retries)
     SOURCE
     base = {"PHRONOMY_MODEL" => "gpt-4o-mini", "PHRONOMY_PROVIDER" => "openai",
             "PHRONOMY_CONTEXT_WINDOW" => nil, "PHRONOMY_BASE_URL" => nil,
-            "PHRONOMY_MODEL_CAPABILITIES" => nil}
+            "PHRONOMY_MODEL_CAPABILITIES" => nil, "PHRONOMY_API_KEY" => "test-only",
+            "OPENAI_API_KEY" => nil, "AZURE_API_KEY" => nil, "ANTHROPIC_API_KEY" => nil,
+            "GEMINI_API_KEY" => nil, "OLLAMA_API_KEY" => nil}
     Open3.capture3(base.merge(environment.transform_keys(&:to_s)), RbConfig.ruby, "-e", source,
       chdir: File.expand_path("..", __dir__))
   end
@@ -109,5 +118,49 @@ RSpec.describe "RubyLLM model registry configuration" do
       expect(status.success?).to be(false)
       expect(error).to include("PHRONOMY_MODEL_CAPABILITIES must contain a capability")
     end
+  end
+
+  %w[azure anthropic gemini ollama].each do |provider|
+    it "applies endpoint and credentials to #{provider} without configuring OpenAI" do
+      output, error, status = config_in_process(PHRONOMY_PROVIDER: provider,
+        PHRONOMY_MODEL: "custom-deployment", PHRONOMY_BASE_URL: "https://selected.example.test/v1",
+        PHRONOMY_CONTEXT_WINDOW: "4096")
+      expect(status.success?).to be(true), error
+      expect(JSON.parse(output)).to include("provider" => provider,
+        "selected_base" => "https://selected.example.test/v1", "selected_key_matches" => true,
+        "openai_key_present" => false, "openai_base" => nil, "protocol" => nil,
+        "context_window" => 4096, "request_timeout" => 300, "max_retries" => 3)
+    end
+  end
+
+  it "uses the selected provider's environment key when no generic key is supplied" do
+    output, error, status = config_in_process(PHRONOMY_PROVIDER: "azure",
+      PHRONOMY_MODEL: "custom-deployment", PHRONOMY_BASE_URL: "https://selected.example.test/openai/v1",
+      PHRONOMY_API_KEY: nil, AZURE_API_KEY: "azure-test-only", OPENAI_API_KEY: "unrelated-test-only")
+    expect(status.success?).to be(true), error
+    expect(JSON.parse(output)).to include("selected_key_matches" => true, "openai_key_present" => false)
+  end
+
+  it "uses the registered model's provider when the provider is omitted" do
+    model = RubyLLM.models.all.find { |entry| entry.provider == "anthropic" }
+    output, error, status = config_in_process(PHRONOMY_PROVIDER: nil, PHRONOMY_MODEL: model.id,
+      PHRONOMY_API_KEY: nil, ANTHROPIC_API_KEY: "anthropic-test-only", OPENAI_API_KEY: "unrelated-test-only")
+    expect(status.success?).to be(true), error
+    expect(JSON.parse(output)).to include("provider" => "anthropic",
+      "selected_key_matches" => true, "openai_key_present" => false)
+  end
+
+  it "does not substitute OpenAI credentials for missing Azure credentials" do
+    output, error, status = config_in_process(PHRONOMY_PROVIDER: "azure",
+      PHRONOMY_MODEL: "custom-deployment", PHRONOMY_BASE_URL: "https://selected.example.test/openai/v1",
+      PHRONOMY_API_KEY: nil, OPENAI_API_KEY: "unrelated-test-only")
+    expect(status.success?).to be(true), error
+    expect(JSON.parse(output)).to include("selected_key_matches" => true, "openai_key_present" => false)
+  end
+
+  it "rejects generic credentials for providers without a matching SDK setting" do
+    _output, error, status = config_in_process(PHRONOMY_PROVIDER: "unknown-provider")
+    expect(status.success?).to be(false)
+    expect(error).to include("PHRONOMY_API_KEY cannot configure provider unknown-provider")
   end
 end

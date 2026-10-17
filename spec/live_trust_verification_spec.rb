@@ -41,13 +41,16 @@ RSpec.describe "Live trust acceptance verification wiring" do
     [out, err, status, summary]
   end
 
-  def with_controlled_http(variant)
+  def with_controlled_http(variant, provider: "openai")
     requests = []
+    headers = []
+    api_path = (provider == "azure") ? "/openai/v1" : "/v1"
     server = WEBrick::HTTPServer.new(BindAddress: "127.0.0.1", Port: 0,
       Logger: WEBrick::Log.new(File::NULL), AccessLog: [])
-    server.mount_proc("/v1/chat/completions") do |request, response|
+    server.mount_proc("#{api_path}/chat/completions") do |request, response|
       payload = JSON.parse(request.body)
       requests << payload
+      headers << {"api-key" => request["api-key"], "authorization" => request["authorization"]}
       response["Content-Type"] = "application/json"
       if variant == :unsupported && !Array(payload["tools"]).empty?
         response.status = 400
@@ -75,12 +78,12 @@ RSpec.describe "Live trust acceptance verification wiring" do
         usage: {prompt_tokens: 10, completion_tokens: 5, total_tokens: 15})
     end
     thread = Thread.new { server.start }
-    env = {"PHRONOMY_MODEL" => "live-suite-fixture", "PHRONOMY_PROVIDER" => "openai",
-           "PHRONOMY_BASE_URL" => "http://127.0.0.1:#{server.config.fetch(:Port)}/v1",
+    env = {"PHRONOMY_MODEL" => "live-suite-fixture", "PHRONOMY_PROVIDER" => provider,
+           "PHRONOMY_BASE_URL" => "http://127.0.0.1:#{server.config.fetch(:Port)}#{api_path}",
            "PHRONOMY_API_KEY" => "test-only", "PHRONOMY_CONTEXT_WINDOW" => "8192",
            "PHRONOMY_MODEL_CAPABILITIES" => "function_calling,streaming,structured_output",
            "PHRONOMY_SERVER_VERSION" => "controlled-http-not-a-live-model"}
-    yield env, requests
+    yield env, requests, headers
   ensure
     server&.shutdown
     thread&.join
@@ -110,6 +113,21 @@ RSpec.describe "Live trust acceptance verification wiring" do
       expect(summary.fetch("counts")).to eq("passed" => 3, "blocked" => 3)
       %w[approval-yes approval-no approval-cancel].each do |name|
         expect(summary.fetch("cases").fetch(name).fetch("exit_code")).to eq(2)
+      end
+    end
+  end
+
+  it "runs all six cases through the selected Azure SDK provider and credentials" do
+    with_controlled_http(:valid, provider: "azure") do |env, requests, headers|
+      out, err, status, summary = run_gate(env)
+      expect(status.success?).to be(true), "#{out}\n#{err}"
+      expect(summary.fetch("counts")).to eq("passed" => 6)
+      expect(requests.length).to eq(10)
+      expect(headers).to all(eq("api-key" => "test-only", "authorization" => nil))
+      summary.fetch("cases").each_value do |item|
+        report = JSON.parse(File.read(item.fetch("report")))
+        expect(report.fetch("provider")).to eq("azure")
+        expect(report.fetch("webmock_loaded")).to be(false)
       end
     end
   end

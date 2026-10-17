@@ -12,14 +12,27 @@ module LLMConfig
   MODEL = ENV.fetch("PHRONOMY_MODEL", "gpt-4o-mini")
   BASE_URL = ENV["PHRONOMY_BASE_URL"].then { |value| value unless value.to_s.empty? }
   PROVIDER = ENV["PHRONOMY_PROVIDER"].then do |value|
-    value.to_s.empty? ? (BASE_URL ? :openai : nil) : value.to_sym
+    if value.to_s.empty?
+      BASE_URL ? :openai : nil
+    else
+      value.to_sym
+    end
   end
-  API_KEY = ENV["PHRONOMY_API_KEY"] || ENV["OPENAI_API_KEY"]
+  CONFIG_PROVIDER = PROVIDER || RubyLLM.models.find(MODEL).provider.to_sym
+  API_KEY = ENV["PHRONOMY_API_KEY"] || ENV["#{CONFIG_PROVIDER.to_s.upcase}_API_KEY"]
 
   RubyLLM.configure do |config|
-    config.openai_api_key = API_KEY if API_KEY
-    config.openai_api_base = BASE_URL if BASE_URL
-    if BASE_URL
+    {api_key: API_KEY, api_base: BASE_URL}.each do |setting, value|
+      next unless value
+
+      writer = "#{CONFIG_PROVIDER}_#{setting}="
+      unless config.respond_to?(writer)
+        variable = (setting == :api_key) ? "PHRONOMY_API_KEY" : "PHRONOMY_BASE_URL"
+        raise ArgumentError, "#{variable} cannot configure provider #{CONFIG_PROVIDER}; use its SDK-specific configuration"
+      end
+      config.public_send(writer, value)
+    end
+    if BASE_URL && CONFIG_PROVIDER == :openai
       config.openai_protocol = :chat_completions
       config.openai_use_system_role = true
     end
@@ -36,7 +49,7 @@ module LLMConfig
 
     value = JSON.parse(response.body)["loaded_context_length"]
     value if value.is_a?(Integer) && value.positive?
-  rescue StandardError
+  rescue
     nil
   end
 
@@ -66,11 +79,11 @@ module LLMConfig
     provider = PROVIDER&.to_s || existing&.provider
     raise ArgumentError, "Set PHRONOMY_PROVIDER for a custom model" unless provider
 
-    model = (existing&.to_h || {
+    model = existing&.to_h || {
       id: MODEL, name: MODEL, provider: provider,
       modalities: {input: ["text"], output: ["text"]},
       capabilities: ["function_calling", "streaming"]
-    })
+    }
     model[:context_window] = limit if BASE_URL || limit
     model[:capabilities] = capabilities if capabilities
     models = (RubyLLM.models.all + RubyLLM.models.unlisted).map(&:to_h)

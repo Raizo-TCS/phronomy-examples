@@ -120,6 +120,11 @@ overall verification exit nonzero. Reports still distinguish `blocked` from
 `--syntax-only` explicitly skips all six live cases. `--preflight-only` does not
 run acceptance tests.
 
+If the selected server rejects schema plus Tools, follow the
+[acceptance environment setup](../docs/trust-acceptance-environment.md).
+Changing providers applies the endpoint and credentials to that provider's SDK
+configuration. It does not remove the schema or change the approval criteria.
+
 Run the complete live suite independently with the intended model and server:
 
 ```bash

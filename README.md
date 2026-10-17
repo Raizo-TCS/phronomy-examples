@@ -60,8 +60,15 @@ success/failure propagation but do not establish acceptance with a real model.
 ## LLM token settings
 
 `shared/llm_config.rb` configures RubyLLM and its model registry. Use
-`PHRONOMY_MODEL`, `PHRONOMY_PROVIDER`, `PHRONOMY_API_KEY` (or OPENAI_API_KEY)
-and optionally `PHRONOMY_BASE_URL` for a local Chat Completions endpoint.
+`PHRONOMY_MODEL`, `PHRONOMY_PROVIDER`, `PHRONOMY_API_KEY`
+and optionally `PHRONOMY_BASE_URL` select the model, provider and endpoint.
+The key and URL configure the selected provider's RubyLLM settings. If the
+generic key is absent, its provider-specific environment variable is used,
+such as `OPENAI_API_KEY`, `AZURE_API_KEY`, or `ANTHROPIC_API_KEY`. Credentials
+are never borrowed from another provider. Without an explicit provider, a
+custom URL selects OpenAI compatibility; otherwise the model registry selects
+the provider. Providers with additional authentication requirements need their
+SDK-specific configuration. See [acceptance environment setup](docs/trust-acceptance-environment.md).
 `PHRONOMY_CONTEXT_WINDOW` supplies model input metadata to the registry;
 unavailable local metadata remains unknown instead of falling back to 8192.
 It is not a Phronomy Agent DSL override. Code-review chunking needs known metadata.

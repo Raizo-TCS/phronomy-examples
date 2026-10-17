@@ -112,7 +112,29 @@ repair values, constrain the schema to the expected identifier, or retry until
 the fixture passes. This belongs to application acceptance; Agent's schema
 guarantee and GeneratorVerifier's accepted result do not certify business truth.
 
-Run these cases independently with the intended model and server:
+The default `bash scripts/verify_examples.sh` automatically runs all six cases
+as the RSpec integration suite `integration/trust_pipeline_spec.rb`. A blocked
+case is an unmet acceptance criterion: it fails the RSpec example and makes the
+overall verification exit nonzero. Reports still distinguish `blocked` from
+`failed`; a server capability rejection does not establish a framework defect.
+`--syntax-only` explicitly skips all six live cases. `--preflight-only` does not
+run acceptance tests.
+
+Run the complete live suite independently with the intended model and server:
+
+```bash
+bundle exec rspec integration/trust_pipeline_spec.rb --format documentation
+```
+
+Each suite run creates a new `tmp/trust-live-*` directory containing per-case
+JSON evidence, stdout/stderr logs and `summary.json`. The suite runs each CLI in
+a separate process and inherits the caller's model, provider and credentials.
+It does not load the offline `spec/spec_helper.rb`, change SDK timeouts/retries,
+or retry failed acceptance cases. The usual offline CI still runs `spec/`:
+its controlled HTTP regressions check this live-suite wiring without claiming
+real-model acceptance.
+
+For diagnosis, individual cases remain available with fresh report paths:
 
 ```bash
 bundle exec ruby scripts/verify_trust_pipeline.rb --case invoice --report tmp/trust/invoice.json
@@ -153,5 +175,6 @@ They do not count as successful cancellation/release. Sampling adds overhead.
 Reports contain prompt/response data and should be retained as test evidence.
 
 The original historical wait remains unexplained without its server logs.
-A subsequent fast response cannot identify its cause. These are additional
-acceptance checks; verify_examples.sh success does not imply they passed.
+A subsequent fast response cannot identify its cause. Only the full default
+`verify_examples.sh` run includes these live acceptance cases; offline CI,
+`--syntax-only` and `--preflight-only` do not establish live acceptance.

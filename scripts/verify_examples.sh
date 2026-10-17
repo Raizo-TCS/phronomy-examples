@@ -7,6 +7,8 @@
 #   - active-documentation stale-API preflight
 #   - CLI samples: actual LLM run with timeout (default)
 #                  OR Ruby syntax check only (--syntax-only)
+#   - live trust acceptance: six RSpec integration cases (default), including
+#     approval yes/no/cancel; failed or blocked cases make verification fail
 #   - Rails apps: db:migrate, Zeitwerk check, server boot, health check,
 #                 Playwright GUI smoke test
 #
@@ -52,6 +54,7 @@ PASS=0; FAIL=0; SKIP=0
 FAILURES=()
 SERVER_PIDS=()
 source "$SCRIPT_DIR/verification_processes.sh"
+source "$SCRIPT_DIR/verification_trust.sh"
 
 pass()  { echo -e "  ${GREEN}[PASS]${NC} $1"; PASS=$((PASS + 1)); }
 fail()  { echo -e "  ${RED}[FAIL]${NC} $1"; FAIL=$((FAIL + 1)); FAILURES+=("$1"); }
@@ -535,6 +538,8 @@ else
   exit 1
 fi
 
+verify_live_trust_acceptance
+
 for example in "${CLI_EXAMPLES[@]}"; do
   if $WITH_LLM; then
     verify_cli_run "$example"
@@ -577,8 +582,10 @@ fi
 echo -e "${BOLD}======================================================"
 if $WITH_LLM; then
   echo -e "  CLI: syntax + LLM run (default timeout 240s)"
+  echo -e "  Trust acceptance: all 6 live cases required; blocked is not a pass"
 else
   echo -e "  CLI: syntax-only (no LLM required)"
+  echo -e "  Trust acceptance: all 6 live cases skipped"
 fi
 echo -e "  Rails: db + Zeitwerk + server + health + Playwright GUI"
 echo -e "======================================================${NC}"

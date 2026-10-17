@@ -40,6 +40,23 @@ checkout or `PHRONOMY_PATH` override is used. To verify a local framework checko
 export `PHRONOMY_PATH` and run
 `scripts/update_phronomy.sh` first.
 
+## Verification scope
+
+`bash scripts/verify_examples.sh` runs the configured LLM and automatically
+includes all six trust-pipeline acceptance cases, including approval yes/no/cancel.
+Failed or blocked acceptance makes the overall command exit nonzero. Its summary
+counts this RSpec suite as one check; the suite output and saved JSON list the six
+individual outcomes. See [live acceptance](19_trust_pipeline/README.md#content-fidelity-and-reproducible-live-acceptance).
+
+`bundle exec rspec integration/trust_pipeline_spec.rb --format documentation`
+runs only that live suite. It preserves the caller's model/server settings and
+records evidence in a fresh `tmp/trust-live-*` directory. `--syntax-only` skips
+the live suite explicitly, and `--preflight-only` runs no acceptance tests.
+
+`bash scripts/verify_offline.sh` and ordinary CI run deterministic regressions
+with protocol stubs or controlled local HTTP servers. They validate the suite's
+success/failure propagation but do not establish acceptance with a real model.
+
 ## LLM token settings
 
 `shared/llm_config.rb` configures RubyLLM and its model registry. Use

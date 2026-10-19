@@ -72,12 +72,74 @@ For a local model outside RubyLLM's catalog, declare verified capabilities throu
 `PHRONOMY_MODEL_CAPABILITIES`, for example
 `function_calling,streaming,structured_output`. The approval draft Agent explicitly
 uses `LLMConfig::MODEL` and `LLMConfig::PROVIDER`; a subclass does not inherit a
-model declaration. The approval demo requires native schema and Tool support in
-the same request. The tested LM Studio configuration rejects that combination
-with `Cannot combine structured output constraints with lazy grammar`; Phronomy
-reports `LLMAdapter::StructuredOutputUnsupportedError` without executing the Tool
-or removing the schema. Use a supporting model/server configuration to exercise
-yes/no/cancel. Standalone schema examples can still run on a schema-only server.
+model declaration. In the default `native` mode, the approval demo requires
+native schema and Tool support in the same request. An earlier LM Studio
+configuration rejected that combination with `Cannot combine structured output
+constraints with lazy grammar`; Phronomy reports
+`LLMAdapter::StructuredOutputUnsupportedError`. The subsequent gpt-oss-20b
+diagnosis received HTTP 200 but no native Tool calls when schemas were present.
+Neither response proves that the required approval/Tool operation happened.
+Declaring both capabilities does not establish that they work together.
+
+### Application-selected compatibility for the approval demo
+
+For an environment that supports Tools and native schemas separately, select:
+
+```bash
+PHRONOMY_TRUST_LLM_MODE=tool_then_schema \
+  bundle exec ruby 19_trust_pipeline/approval_demo.rb
+```
+
+This modifies the **existing approval demo**, retaining its GeneratorVerifier,
+draft/review Agents, schemas, approval handles, cancellation and Result. The
+application's `llm_compatibility.rb` uses the public `LLMAdapter::Base` extension
+and `Phronomy.configure { |c| c.llm_adapter = ... }` API. It delegates actual
+transport to the existing RubyLLM backend. No core/SDK class is patched.
+
+| Existing step | `tool_then_schema` HTTP payload |
+| --- | --- |
+| Draft requests the policy lookup | Tool declaration, no response schema |
+| Application approves and Agent executes the Tool | No extra LLM call |
+| Same draft Agent receives the correlated Tool result | Original native draft schema, no Tools |
+| Review Agent evaluates the validated draft | Original native review schema, no Tools |
+
+Each Agent LLM operation still makes one backend operation: a successful
+single-iteration approval demo has three model calls. SDK retries are separate
+and unchanged. A normal answer without the required Tool request is rejected;
+no approval or Tool call is synthesized. Denial and cancellation remain in
+GeneratorVerifier/Agent and never start the final draft or review request.
+The adapter executes no Tools and makes no approval decisions.
+
+GeneratorVerifier still passes the original `output_schema` to Agent on every
+draft/review invocation. Agent's stored output contract and final strict
+validation are unchanged. This explicit application transport policy omits
+native schema constraints only on the intermediate Tool-selection turn, then
+sends the unchanged schema for the final answer. It is not the default backend's
+promise to send both on every turn, and is not a prompt-only JSON fallback.
+Refusal, truncation, invalid JSON and schema mismatch remain failures; failed
+output is not automatically repaired or replayed.
+
+The policy is intentionally specific to this demo: OpenAI-compatible Chat
+Completions, the configured model, one `approved_policy_lookup` per draft,
+non-streaming execution. It rejects extra/unknown Tool calls and uncorrelated
+results. Phase selection uses the current request/history, not an in-memory
+counter; a new draft still needs its own lookup. The original instruction is
+clarified to request exactly one lookup before answering.
+
+Select the mode before starting the CLI. Configuration is process-wide and
+must not be changed while Agents are running. It is installed only by
+`approval_demo.rb`; unrelated CLI processes and schema-only examples retain
+their existing backend. An already customized backend is not overwritten.
+This trial uses the existing in-memory CLI environment; persistent restart and
+streaming acceptance are not claimed. A dedicated process should be used for
+each run, as in the existing acceptance runner.
+
+Unset the variable or set `PHRONOMY_TRUST_LLM_MODE=native` for the original
+combined transport. Unknown mode names fail rather than silently selecting a
+fallback. There is no automatic server/model detection or retry in another mode.
+See [the environment guide](../docs/trust-acceptance-environment.md) for real-LLM
+evaluation of the same six acceptance cases. HTTP fixtures validate this wiring;
+the target LM Studio/model still needs to be evaluated with the mode enabled.
 
 `output_failed` identifies an unavailable evaluation, including malformed JSON,
 model refusal and an incomplete answer. Its `failure` diagnostic and

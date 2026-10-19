@@ -1,14 +1,71 @@
 # Trust acceptance environment setup
 
-The six live cases verify the configured model and server together with Phronomy.
-Approval yes/no/cancel require a server that accepts native response schemas and
-Tools in the same request. Declaring `structured_output` and `function_calling`
-in the model registry does not add this capability to a server.
+The six live cases verify the configured model and server together with Phronomy
+and the example application's explicitly selected transport mode. The default
+`native` mode sends native response schemas and Tools together for approval
+yes/no/cancel. `tool_then_schema` uses the existing approval demo's application
+adapter to send them on separate turns of the same draft Agent. Declaring
+`structured_output` and `function_calling` in the model registry does not add
+combined support to a server.
 
-The observed LM Studio configuration rejected the combination before producing
-an approval notification. Keeping that rejection as `blocked` is intentional.
-Do not remove the schema, replace the model with a stub, or convert blocked
-cases to a pass when assessing live acceptance.
+An earlier LM Studio configuration rejected the combination before approval;
+the later gpt-oss-20b diagnosis returned HTTP 200 with no native Tool call in the
+combined requests. Neither satisfies approval acceptance. Keep these historical
+results. Do not remove final output validation, replace the real model with a
+stub, or convert blocked/failed cases to a pass when assessing live acceptance.
+
+## Evaluate the example 19 adaptation with the current LM Studio environment
+
+Keep the current server/model settings and connection variables. Record the
+loaded model and context through the same metadata API used in the diagnosis,
+before and after evaluation (expected current model gpt-oss-20b, context 131072).
+Record runtime/server details as unknown if not verified. Server/model logs are
+useful when available but are not a prerequisite for this evaluation. Do not
+change SDK timeout/retry settings or the server configuration for this trial.
+
+First run the actual existing approval case once:
+
+```bash
+export PHRONOMY_TRUST_LLM_MODE=tool_then_schema
+mkdir -p tmp
+trial_reports=$(mktemp -d "$PWD/tmp/trust19-adaptation.XXXXXX")
+bundle exec ruby scripts/verify_trust_pipeline.rb \
+  --case approval-yes --report "$trial_reports/approval-yes.json"
+```
+
+Require `status=passed`, one approval/positive decision, one actual Tool execution,
+a validated GeneratorVerifier result (`accepted` or `iteration_limit`), successful
+release, and `observation_complete=true`. The report must identify
+`llm_compatibility_mode=tool_then_schema`, the application adapter, and
+`combined_tool_schema_requests=0`. Its first HTTP request has Tools without
+`response_format`; the next has the original draft schema and correlated Tool
+result, without Tools; review has the original review schema without Tools.
+HTTP 200 alone is not a pass.
+
+If this first case succeeds, run the existing six-case suite in the same
+environment and then the full existing verification. Each run has a new report
+directory; retain failures as well as successes. Stop and diagnose failed,
+blocked, interrupted or incomplete runs rather than repeating until they pass.
+
+```bash
+PHRONOMY_TRUST_REPORT_DIR="$trial_reports/six-cases" \
+  bundle exec rspec integration/trust_pipeline_spec.rb --format documentation
+# After all six pass, keep PHRONOMY_TRUST_LLM_MODE=tool_then_schema:
+bash scripts/verify_examples.sh
+```
+
+The six cases and their pass/fail rules are unchanged. The full verification
+inherits this mode for the approval acceptance subprocesses. Normal `run.rb`
+already has schema-only draft/review Agents, so it needs no transport adjustment.
+Passing this mode certifies the observed application-adapted path, not native
+Tool+Schema support. `native` remains available for an explicit comparison in a
+fresh process; it is never an automatic fallback.
+
+The new policy uses Phronomy's existing LLMAdapter extension API and keeps the
+GeneratorVerifier composition. It is limited to one policy lookup per draft,
+OpenAI-compatible Chat Completions and non-streaming invocation. It does not
+promise arbitrary multi-Tool loops or cross-process recovery. Detailed transport
+and contract boundaries are in [example 19](../19_trust_pipeline/README.md).
 
 ## Provider configuration
 
@@ -32,9 +89,9 @@ does not change request timeouts, retries, output schemas or Tool approval.
 Custom endpoint context metadata stays unknown unless an explicit verified
 limit is supplied; only the OpenAI-compatible path probes LM Studio metadata.
 
-## Re-run with an available compatible environment
+## Alternatively evaluate native mode with a compatible environment
 
-1. Record the actual server/runtime version and model deployment. Verify that
+1. Select `PHRONOMY_TRUST_LLM_MODE=native`. Record the actual server/runtime version and model deployment. Verify that
    their combination supports native schemas and Tools together. This document
    does not assert that a particular LM Studio update fixes the observed refusal.
 2. Set model, provider, endpoint and credentials for that environment. Clear
@@ -53,6 +110,7 @@ reports. If using `PHRONOMY_API_KEY` instead, it must be the Azure key.
 ```bash
 unset PHRONOMY_API_KEY PHRONOMY_CONTEXT_WINDOW PHRONOMY_MODEL_CAPABILITIES PHRONOMY_SERVER_VERSION
 export PHRONOMY_PROVIDER=azure
+export PHRONOMY_TRUST_LLM_MODE=native
 export PHRONOMY_MODEL='<deployment-name>'
 export PHRONOMY_BASE_URL='https://<resource>.openai.azure.com/openai/v1'
 # For a custom deployment name, declare capabilities only after checking them:
@@ -126,8 +184,8 @@ them with a successful later run.
 
 ## Approval acceptance handoff
 
-Run `integration/trust_pipeline_spec.rb` in the actual compatible environment
-described above, then the full verification with exactly the same configuration.
+Run `integration/trust_pipeline_spec.rb` with the selected mode in the actual
+environment described above, then the full verification with exactly the same configuration.
 The normal offline unit/integration CI and controlled HTTP fixture tests do not
 establish that a deployed model/server supports the combination. Do not mark
 live approval cases complete based only on those tests.
@@ -144,8 +202,10 @@ favorable result appears.
 
 ## Responsibility boundary
 
-Provider selection and credentials belong to example application composition.
-Provider configuration and diagnostic observation change no core Contract, Agent,
-Generation, Engine or Execution behavior. They introduce no fallback generation,
-schema weakening or automatic acceptance replay. Contract diagram relationships
-are unchanged.
+Provider selection, credentials and the explicit example 19 transport policy
+belong to application composition. Core/SDK source is unchanged. Agent still
+owns approval/execution and strict final-schema validation; Generation still
+owns draft/review evaluation and its Result. The application adapter changes
+native request fields at the existing transport extension point only. Default
+native behavior and the schema definitions are unchanged; there is no fallback
+generation, schema weakening or automatic acceptance replay.

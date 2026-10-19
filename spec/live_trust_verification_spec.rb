@@ -52,13 +52,13 @@ RSpec.describe "Live trust acceptance verification wiring" do
       requests << payload
       headers << {"api-key" => request["api-key"], "authorization" => request["authorization"]}
       response["Content-Type"] = "application/json"
-      if variant == :unsupported && !Array(payload["tools"]).empty?
+      if variant == :unsupported && !Array(payload["tools"]).empty? && payload["response_format"]
         response.status = 400
         response.body = JSON.generate(error: "Cannot combine structured output constraints with lazy grammar")
         next
       end
 
-      properties = payload.fetch("response_format").fetch("json_schema").fetch("schema").fetch("properties")
+      properties = payload.dig("response_format", "json_schema", "schema", "properties") || {}
       missing = payload.fetch("messages").to_json.include?("fictional missing region Z")
       message = {role: "assistant"}
       if properties.key?("invoice_id")
@@ -113,6 +113,24 @@ RSpec.describe "Live trust acceptance verification wiring" do
       expect(summary.fetch("counts")).to eq("passed" => 3, "blocked" => 3)
       %w[approval-yes approval-no approval-cancel].each do |name|
         expect(summary.fetch("cases").fetch(name).fetch("exit_code")).to eq(2)
+      end
+    end
+  end
+
+  it "passes the same six cases with example 19's explicit adaptation on a combination-rejecting fixture" do
+    with_controlled_http(:unsupported) do |env, requests|
+      env["PHRONOMY_TRUST_LLM_MODE"] = "tool_then_schema"
+      out, err, status, summary = run_gate(env)
+      expect(status.success?).to be(true), "#{out}\n#{err}"
+      expect(summary.fetch("counts")).to eq("passed" => 6)
+      expect(requests.length).to eq(10)
+      expect(requests).to all(satisfy { |body| Array(body["tools"]).empty? || body["response_format"].nil? })
+      summary.fetch("cases").each_value do |item|
+        report = JSON.parse(File.read(item.fetch("report")))
+        expect(report["llm_compatibility_mode"]).to eq("tool_then_schema")
+        expect(report["combined_tool_schema_requests"]).to eq(0)
+        expect(report["webmock_loaded"]).to be(false)
+        expect(report["observation_complete"]).to be(true)
       end
     end
   end

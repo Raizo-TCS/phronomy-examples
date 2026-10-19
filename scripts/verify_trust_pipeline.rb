@@ -5,6 +5,7 @@ require "optparse"
 require "stringio"
 require_relative "../shared/llm_config"
 require_relative "support/trust_acceptance_observer"
+require_relative "../19_trust_pipeline/llm_compatibility"
 
 options = {interval: 30}
 cases = %w[invoice accepted iteration_limit approval-yes approval-no approval-cancel]
@@ -22,6 +23,7 @@ records[:case] = options[:case]
 records[:status] = "running"
 records[:model] = LLMConfig::MODEL
 records[:provider] = LLMConfig::PROVIDER
+records[:llm_compatibility_mode] = TrustLlmCompatibility.mode
 records[:server_version] = ENV["PHRONOMY_SERVER_VERSION"] # Record unknown as null.
 records[:webmock_loaded] = !!defined?(WebMock)
 records[:versions] = %w[phronomy ruby_llm faraday faraday-net_http].to_h { |name| [name, Gem.loaded_specs[name]&.version&.to_s] }
@@ -48,6 +50,11 @@ ensure
 end
 
 records[:primary_error] = failure && observer.exception(failure)
+records[:adapter_name] = Phronomy.configuration.llm_adapter.class.name
+records[:combined_tool_schema_requests] = records[:requests].count do |request|
+  payload = request.fetch(:payload)
+  !Array(payload["tools"]).empty? && !payload["response_format"].nil?
+end
 result = JSON.parse(JSON.generate(records[:results].last&.fetch(:value)))
 released = records[:releases].any? { |release| release[:value] == true }
 approved = records[:approvals].length
@@ -73,6 +80,9 @@ interrupted = records[:primary_error]&.any? { |item| item[:signal] }
 records[:observation_complete] = records[:observer_errors].empty? && !records[:requests].empty? &&
   (records[:webmock_loaded] || records[:http_attempts].length >= records[:requests].length)
 passed &&= records[:observation_complete]
+if records[:llm_compatibility_mode] == "tool_then_schema"
+  passed &&= records[:combined_tool_schema_requests].zero?
+end
 records[:status] = if interrupted
   "interrupted"
 elsif !records[:observer_errors].empty?

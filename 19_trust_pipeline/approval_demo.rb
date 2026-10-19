@@ -3,6 +3,9 @@
 
 require "json"
 require_relative "agents"
+require_relative "llm_compatibility"
+
+TrustLlmCompatibility.configure!
 
 class ApprovedPolicyLookup < Phronomy::Tool::Base
   tool_name "approved_policy_lookup"
@@ -20,7 +23,9 @@ class ApprovalPolicyDraftAgent < PolicyDraftAgent
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   tools ApprovedPolicyLookup => nil
-  instructions "Call approved_policy_lookup before answering. Include confidence and supporting source excerpts."
+  instructions "Call approved_policy_lookup exactly once before answering each question. " \
+    "After its result arrives, answer from that result without calling another Tool. " \
+    "Include confidence and supporting source excerpts."
 end
 
 events = Queue.new

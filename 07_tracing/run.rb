@@ -10,6 +10,12 @@ require_relative "../shared/llm_config"
 require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "tracer"
+require_relative "llm_compatibility"
+
+single_attempt = TracingLLMCompatibility.configure!(
+  mode: ENV.fetch("PHRONOMY_TRACING_LLM_MODE", "native"),
+  model: LLMConfig::MODEL, provider: LLMConfig::PROVIDER, base_url: LLMConfig::BASE_URL
+)
 
 Phronomy.configure do |c|
   c.tracer = ConsoleTracer.new
@@ -51,10 +57,15 @@ Phronomy::Agent.open_scope do |agents|
 
   puts "=== Tracing Example ==="
   puts
-  result = OutputValidator.validate(
-    "Go Hello World code generated with tracing",
-    check: ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
-  ) { app.invoke({language: "Go"}) }
+  check = ->(r) { r.output.length >= 20 && r.output.match?(/[\w(){}]/) }
+  generate = -> { app.invoke({language: "Go"}) }
+  result = if single_attempt
+    generate.call.tap do |response|
+      raise "Go code output validation failed (single attempt; no retry)" unless check.call(response)
+    end
+  else
+    OutputValidator.validate("Go Hello World code generated with tracing", check: check, &generate)
+  end
   puts
   puts "--- LLM Response ---"
   puts result.output

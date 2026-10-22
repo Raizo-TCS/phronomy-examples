@@ -22,6 +22,33 @@ elapsed time, making the graph's execution flow visible.
 bundle exec ruby 07_tracing/run.rb
 ```
 
+For the current LM Studio gpt-oss setup, explicitly select its bounded
+provider-output-failure policy:
+
+```bash
+PHRONOMY_BASE_URL=http://127.0.0.1:1234/v1 \
+PHRONOMY_PROVIDER=openai \
+PHRONOMY_MODEL=openai/gpt-oss-20b \
+PHRONOMY_API_KEY=lm-studio \
+bundle exec ruby 07_tracing/run_lm_studio.rb
+```
+
+This entry point requires the core `LLMAdapter::LMStudio` implementation. It
+selects at most one additional request for a recognized provider output parsing
+failure, with the same request JSON. The original `run.rb` keeps its default
+backend. No prompt, temperature, repeat penalty, Tool or schema workaround is
+introduced. The logical tracing spans remain unchanged.
+
+The selected backend disables SDK retries in its own context, including ordinary
+429/500/network retries. Unknown error envelopes fail without retry. Every
+failed attempt is logged even if the second attempt succeeds. The earlier failed
+HTTP envelope is unavailable, so offline tests use explicitly synthetic envelopes;
+this feature does not claim the PEG root cause or recurrence is resolved.
+
+Custom tracers that read `usage` now receive a plain counts Hash, for example
+`usage[:input]` and `usage[:output]`, rather than an LLM domain object. This
+example's ConsoleTracer does not inspect usage and needs no change.
+
 ## Expected Output (approximate)
 
 ```

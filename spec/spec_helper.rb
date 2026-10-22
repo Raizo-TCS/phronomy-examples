@@ -8,7 +8,6 @@ ENV["PHRONOMY_CONTEXT_WINDOW"] = "8192"
 # Offline examples use an explicit baseline; compatibility cases opt in locally.
 # The live integration suite does not load this helper and inherits the caller.
 ENV["PHRONOMY_TRUST_LLM_MODE"] = "native"
-ENV["PHRONOMY_TRACING_LLM_MODE"] = "native"
 
 require "phronomy"
 require "webmock/rspec"

@@ -1,15 +1,18 @@
 # Phronomy Examples
 
-These examples use Phronomy 0.29.0 from RubyGems, including the r8 contracts
-and RubyLLM 2.0 migration. DX05-A provides owned Agent absence and Team busy
-errors with saved cause diagnostics; DX05-D provides Workflow task states;
+These examples use published Phronomy 0.30.0 from RubyGems through
+`Gemfile.phronomy` and all seven lockfiles, including structured Agent output,
+GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.
+The baseline includes the r8 contracts and RubyLLM 2.0 migration.
+DX05-A provides owned Agent absence and Team busy errors with saved cause
+diagnostics; DX05-D provides Workflow task states;
 DX05-E provides application-owned Agent scopes and safe incarnation release.
 See [Agent ownership and acceptance](docs/dx05-agent-scope-examples.md) and
 [error API changes](ERROR-API.md).
 
-The default dependency is `~> 0.29.0` in all seven bundles. Complete old in-flight
-Tool executions before upgrading; see the core migration guide. Local framework
-development can still select a checkout explicitly with `PHRONOMY_PATH`.
+Complete old in-flight Tool executions before upgrading; see the core migration
+guide. Local framework development can still select a checkout explicitly with
+`PHRONOMY_PATH`.
 
 DX05-C moves example 14's parallel-review completion bookkeeping to the existing
 `TaskResult.all_settled` API. Reviewer grouping and partial-failure policy stay in
@@ -32,19 +35,61 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI installs the released Phronomy gem using the committed lockfiles. No core
-checkout or `PHRONOMY_PATH` override is used in the release CI jobs. To verify
-a local framework checkout, export `PHRONOMY_PATH` and run
+CI installs the published core gem using the committed lockfiles. No local
+checkout or `PHRONOMY_PATH` override is used. To verify a local framework checkout,
+export `PHRONOMY_PATH` and run
 `scripts/update_phronomy.sh` first.
+
+## Verification scope
+
+`bash scripts/verify_examples.sh` runs the configured LLM and automatically
+includes all six trust-pipeline acceptance cases, including approval yes/no/cancel.
+Failed or blocked acceptance makes the overall command exit nonzero. Its summary
+counts this RSpec suite as one check; the suite output and saved JSON list the six
+individual outcomes. See [live acceptance](19_trust_pipeline/README.md#content-fidelity-and-reproducible-live-acceptance).
+
+`bundle exec rspec integration/trust_pipeline_spec.rb --format documentation`
+runs only that live suite. It preserves the caller's model/server settings and
+records evidence in a fresh `tmp/trust-live-*` directory. `--syntax-only` skips
+the live suite explicitly, and `--preflight-only` runs no acceptance tests.
+
+`bash scripts/verify_offline.sh` and ordinary CI run deterministic regressions
+with protocol stubs or controlled local HTTP servers. They validate the suite's
+success/failure propagation but do not establish acceptance with a real model.
+
+CLI runs retain stdout/stderr and exit/cutoff metadata in `tmp/cli-<example>.*`.
+CLI 19 also records LLM requests/responses and periodic Ruby thread stacks.
+The existing 240-second outer limit is distinct from SDK request timeouts.
+See [wait diagnostics and approval handoff](docs/trust-acceptance-environment.md#remaining-wait-investigation)
+for a separate diagnostic run and the evidence needed to resolve a wait.
 
 ## LLM token settings
 
 `shared/llm_config.rb` configures RubyLLM and its model registry. Use
-`PHRONOMY_MODEL`, `PHRONOMY_PROVIDER`, `PHRONOMY_API_KEY` (or OPENAI_API_KEY)
-and optionally `PHRONOMY_BASE_URL` for a local Chat Completions endpoint.
+`PHRONOMY_MODEL`, `PHRONOMY_PROVIDER`, `PHRONOMY_API_KEY`
+and optionally `PHRONOMY_BASE_URL` select the model, provider and endpoint.
+The key and URL configure the selected provider's RubyLLM settings. If the
+generic key is absent, its provider-specific environment variable is used,
+such as `OPENAI_API_KEY`, `AZURE_API_KEY`, or `ANTHROPIC_API_KEY`. Credentials
+are never borrowed from another provider. Without an explicit provider, a
+custom URL selects OpenAI compatibility; otherwise the model registry selects
+the provider. Providers with additional authentication requirements need their
+SDK-specific configuration. See [acceptance environment setup](docs/trust-acceptance-environment.md).
 `PHRONOMY_CONTEXT_WINDOW` supplies model input metadata to the registry;
 unavailable local metadata remains unknown instead of falling back to 8192.
 It is not a Phronomy Agent DSL override. Code-review chunking needs known metadata.
+
+`PHRONOMY_MODEL_CAPABILITIES` optionally declares the model's capabilities as a
+comma-separated list, for example `function_calling,streaming,structured_output`.
+The declaration replaces the selected registry entry's capability list; omitting
+it preserves the existing behavior. Empty declarations are rejected. Set it only
+from verified model/server capabilities: an OpenAI-compatible URL alone does not
+establish native schema support. Supporting schemas and Tools individually does
+not guarantee their combination. A server rejection remains an explicit failure.
+
+Capability-only changes preserve a cloud model's registered context window.
+With a custom endpoint, unavailable local context metadata remains unknown unless
+`PHRONOMY_CONTEXT_WINDOW` supplies an explicit limit.
 
 Agent `max_output_tokens` controls generation only. The old output-reserve setting
 and `LLMConfig.apply_phronomy_defaults!` have been removed. Cloud OpenAI uses
@@ -140,9 +185,9 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-The default dependency resolves the released Phronomy 0.29 series from RubyGems.
-Keep `PHRONOMY_PATH` unset to update and verify all seven bundles against the
-published gem:
+The released baseline uses the Phronomy 0.30 series from RubyGems, with all
+seven lockfiles selecting 0.30.0. Keep `PHRONOMY_PATH` unset to update and verify
+that dependency:
 
 ```bash
 unset PHRONOMY_PATH

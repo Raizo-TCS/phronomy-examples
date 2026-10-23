@@ -221,9 +221,10 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    phronomy (0.29.0)
-      faraday (~> 2.1)
-      json (< 3)
+    phronomy (0.30.0)
+      faraday (~> 2.14, >= 2.14.4)
+      faraday-net_http (~> 3.4, >= 3.4.4)
+      json (>= 2.21.2, < 3)
       json_schemer (~> 2.5)
       mcp (~> 1.0)
       ruby_llm (~> 2.0.0)
@@ -416,7 +417,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
-  phronomy (~> 0.29.0)
+  phronomy (~> 0.30.0)
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.3)

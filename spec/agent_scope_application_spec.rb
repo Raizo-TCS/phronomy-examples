@@ -118,7 +118,10 @@ RSpec.describe "Request-owned Agent lifetimes" do
           end
           SummarizationGraph.compile(agents: agents).invoke({messages: [{"role" => "user", "content" => "hello"}]})
         end
-      }.to raise_error(Faraday::ConnectionFailed, /summary unavailable/)
+      }.to raise_error(Phronomy::LLMAdapter::TransportError, /summary unavailable/) { |error|
+        expect(error.cause).to be_a(Faraday::ConnectionFailed)
+        expect(error.cause.cause).to be_a(IOError)
+      }
       expect(child).not_to be_nil
       expect(SummarizationGraph::SummarizationAgent.get(child.agent_id)).to be_nil
     end

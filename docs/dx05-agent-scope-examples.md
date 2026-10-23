@@ -26,9 +26,11 @@ automatic retry, cancellation group or durable message queue.
 | Application | Choose operation boundaries, Agent class/ID, shared Store, payloads, retry and business status |
 | C04 Agent scope | Own newly materialized incarnations, await a returned TaskResult, attempt safe release of each owned Agent, preserve primary failures |
 | C02 Workflow | Own task-state progress and result application; the application injects the Agent scope into start callbacks |
-| C13 Execution / C01 Engine | Existing completion and physical work semantics; no new scheduler or blocking EventLoop work |
+| C13 Execution | Existing TaskResult completion, cancellation and physical-completion contracts |
+| Engine (execution implementation, not C01) | Runs the existing EventLoop and work; no new scheduler or blocking EventLoop work |
 | M91 OrderedEventDelivery | Existing ordered buffering and drain; no knowledge of Rails, scan status or Agent ownership |
-| C07 Storage | Existing neutral transactions and resources; no Agent- or Rails-specific release policy |
+| C07 Persistence | Existing persistence and transaction contracts; no Agent- or Rails-specific release policy |
+| C12 Storage | Physical storage and resource access below persistence; no application lifecycle policy |
 
 Core source, RBS and Contract dependency pairs are unchanged from P5.
 Scopes remain in application closures, never in Workflow state, session storage,
@@ -126,6 +128,7 @@ in the same application components.
 | 05 Agent-as-Tool | Each outer validation attempt and each application-owned nested Agent call |
 | 09 / 15 Rails conversations | Each create/read/message/clear request; session ID and shared Store survive |
 | 14 review pipeline | One complete review, including priority selection/resume; the next review reloads the improver's saved history |
+| 14 batch review (follow-up) | One source chunk; acquire four reviewers before starting calls, await every started call, then release |
 | 15 summary | Request scope injected into the summary task state |
 | 18 Rails Agent Jobs | One Job including final delivery; streaming delivery is the inner scope |
 | 20 CVE Jobs | One initial/resumed/chat Job; nested reference summarization owns a separate local scope |
@@ -218,3 +221,31 @@ Application acceptance passed root 93, CVE 79, SQLite 145 and PostgreSQL 136
 cases, both fresh-pool reloads, all 13 CI jobs and the full 99-check verification
 script. Core dependencies and all seven lockfiles now select released Phronomy
 0.29.0; CI repeats the normal suites against the published gem.
+
+## v0.29.0 follow-up: batch review ownership
+
+The original P6 inventory missed `14_code_review/batch_review.rb`. The full
+review pipeline had a scope, but the independent batch entry point retained
+four live Agents per source chunk. This follow-up uses the released 0.29.0 API;
+it changes no core code, public API or Contract dependency pair.
+
+Before, the batch constructed each reviewer and immediately started it. After,
+it opens one Agent scope per chunk, acquires all four reviewers, starts their
+calls, waits for every started call and exits the scope. Findings, reviewer
+order, chunk order, prompts and partial-success warnings are preserved.
+Acquisition failure releases previously acquired idle Agents without starting
+work. A synchronous start failure is re-raised after the already-started work
+settles; its original exception remains primary. Asynchronous failures still
+produce warnings and allow the remaining findings to be reported.
+
+This CLI waits outside EventLoop. A scope does not cancel work or equate a
+Task's cancellation with physical completion. An unsafe unload still fails
+closed under the existing core contract. No timeout, retry, durable close or
+purge policy is added by this change.
+
+The four `spec/batch_review_scope_spec.rb` cases exercise the actual entry
+point, Agents, Tasks and Store. They check two files with two chunks each,
+partial failure, construction failure and synchronous start failure. Only
+input discovery/splitting and the HTTP provider are controlled. These four
+cases belong to the normal root suite; the earlier 93-case result above is
+historical. Current follow-up results are recorded in the application package.

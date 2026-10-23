@@ -9,6 +9,6 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2"
   spec.files = Dir["lib/**/*.rb", "db/**/*.rb", "README.md"]
   spec.require_paths = ["lib"]
-  spec.add_dependency "phronomy", "~> 0.29.0"
+  spec.add_dependency "phronomy", "~> 0.30.0"
   spec.add_dependency "activerecord", ">= 7.1", "< 9"
 end

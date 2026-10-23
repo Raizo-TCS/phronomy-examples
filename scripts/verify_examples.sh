@@ -7,6 +7,8 @@
 #   - active-documentation stale-API preflight
 #   - CLI samples: actual LLM run with timeout (default)
 #                  OR Ruby syntax check only (--syntax-only)
+#   - live trust acceptance: six RSpec integration cases (default), including
+#     approval yes/no/cancel; failed or blocked cases make verification fail
 #   - Rails apps: db:migrate, Zeitwerk check, server boot, health check,
 #                 Playwright GUI smoke test
 #
@@ -52,6 +54,8 @@ PASS=0; FAIL=0; SKIP=0
 FAILURES=()
 SERVER_PIDS=()
 source "$SCRIPT_DIR/verification_processes.sh"
+source "$SCRIPT_DIR/verification_trust.sh"
+source "$SCRIPT_DIR/verification_cli.sh"
 
 pass()  { echo -e "  ${GREEN}[PASS]${NC} $1"; PASS=$((PASS + 1)); }
 fail()  { echo -e "  ${RED}[FAIL]${NC} $1"; FAIL=$((FAIL + 1)); FAILURES+=("$1"); }
@@ -325,36 +329,6 @@ verify_cli() {
   fi
 }
 
-verify_cli_run() {
-  local name="$1"
-  local dir="$BASE_DIR/$name"
-  header "$name [CLI + LLM]"
-
-  if [[ ! -f "$dir/run.rb" ]]; then
-    skip "no run.rb found"
-    return
-  fi
-
-  if ! (cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" > /dev/null 2>&1); then
-    local err
-    err=$(cd "$BASE_DIR" && bundle exec ruby -c "$name/run.rb" 2>&1 || true)
-    fail "syntax error: $err"
-    return
-  fi
-
-  local llm_timeout=${EXAMPLE_TIMEOUTS[$name]:-240}
-  local extra_args=${EXAMPLE_ARGS[$name]:-}
-  local run_out run_rc=0
-  run_out=$(cd "$BASE_DIR" && timeout "$llm_timeout" bundle exec ruby "$name/run.rb" $extra_args < /dev/null 2>&1) || run_rc=$?
-  if [[ $run_rc -eq 0 ]]; then
-    pass "run OK (exit 0)"
-  elif [[ $run_rc -eq 124 ]]; then
-    fail "run timed out (>${llm_timeout}s)"
-  else
-    fail "run failed (exit $run_rc): ${run_out: -300}"
-  fi
-}
-
 verify_rails() {
   local name="$1"
   local port="$2"
@@ -535,6 +509,8 @@ else
   exit 1
 fi
 
+verify_live_trust_acceptance
+
 for example in "${CLI_EXAMPLES[@]}"; do
   if $WITH_LLM; then
     verify_cli_run "$example"
@@ -577,8 +553,10 @@ fi
 echo -e "${BOLD}======================================================"
 if $WITH_LLM; then
   echo -e "  CLI: syntax + LLM run (default timeout 240s)"
+  echo -e "  Trust acceptance: all 6 live cases required; blocked is not a pass"
 else
   echo -e "  CLI: syntax-only (no LLM required)"
+  echo -e "  Trust acceptance: all 6 live cases skipped"
 fi
 echo -e "  Rails: db + Zeitwerk + server + health + Playwright GUI"
 echo -e "======================================================${NC}"

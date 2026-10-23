@@ -14,7 +14,7 @@ and tracing into one application flow.
 | Typed state | `Phronomy::WorkflowContext` | Carries source, chunks, findings, selection and result |
 | Workflow HITL | `wait_state` + `transition on:` | Pauses until the user chooses a review priority |
 | State-owned Task completion | `task_state` | Applies review, improvement and evaluation results before transitions |
-| Agent lifetime | `Agent.open_scope` + scoped create/load | Releases reviewers and improver after each complete review; preserves saved history |
+| Agent lifetime | `Agent.open_scope` + scoped create/load | Releases reviewers and improver after each complete review; batch reviewers after each chunk; preserves saved history |
 | Agent | `Phronomy::Agent::Base` | Four reviewers plus a stateful improver |
 | Agent async lifecycle | `Agent#invoke_async` | Reviewer and Improver work never blocks a Workflow EventLoop action |
 | Result composition | `TaskResult#map` + `TaskResult.all_settled` | Extracts findings and gathers every review in input order, including failed or cancelled children |
@@ -67,6 +67,13 @@ Batch review:
 ```bash
 bundle exec ruby 14_code_review/batch_review.rb
 ```
+
+The batch command opens one Agent scope per source chunk. It acquires all four
+reviewers before starting calls, waits for all calls it started, then releases
+their live ownership. Saved Agent data is not deleted. A provider failure keeps
+partial findings and warnings; a construction or synchronous start failure
+aborts with its original exception after safe cleanup is attempted. See the
+[batch follow-up and acceptance](../docs/dx05-agent-scope-examples.md#v0290-follow-up-batch-review-ownership).
 
 ## Flow
 

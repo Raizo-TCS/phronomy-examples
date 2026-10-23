@@ -66,23 +66,35 @@ target_files.each_with_index do |path, idx|
   chunk_texts.each_with_index do |chunk, cidx|
     print chunk_texts.size > 1 ? "\n  [chunk #{cidx + 1}] " : ""
 
-    operations = REVIEWERS.map do |key, agent_class|
-      agent = agent_class.new(knowledge: [agent_class.review_knowledge])
-      [key, agent.invoke_async(chunk)]
-    end
-
-    # This script is the external CLI caller, not an EventLoop callback, so
-    # waiting for the already-started Agent Tasks here is valid. No raw Threads
-    # are created by the application.
-    operations.each do |key, task|
-      begin
-        result = task.wait_result
-        findings[key] << result[:output].to_s
-      rescue Phronomy::LLMAdapter::ContextLengthError, Phronomy::LLMAdapter::TransportError => e
-        warn "\n  [SKIP #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
-      rescue => e
-        warn "\n  [ERROR #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
+    Phronomy::Agent.open_scope do |agents|
+      # Acquire all owners before starting work. A construction failure can
+      # release the already-created, idle Agents without leaving active work.
+      reviewers = REVIEWERS.map do |key, agent_class|
+        [key, agents.create(agent_class, knowledge: [agent_class.review_knowledge])]
       end
+      operations = []
+      start_error = nil
+      begin
+        reviewers.each do |key, agent|
+          operations << [key, agent.invoke_async(chunk)]
+        end
+      rescue => error
+        start_error = error
+      end
+
+      # This external CLI caller waits for every operation it started, even
+      # after a synchronous start failure, before the scope attempts release.
+      operations.each do |key, task|
+        begin
+          result = task.wait_result
+          findings[key] << result[:output].to_s
+        rescue Phronomy::LLMAdapter::ContextLengthError, Phronomy::LLMAdapter::TransportError => e
+          warn "\n  [SKIP #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
+        rescue => e
+          warn "\n  [ERROR #{key} chunk #{cidx + 1}] #{e.class}: #{e.message}"
+        end
+      end
+      raise start_error if start_error
     end
   end
 

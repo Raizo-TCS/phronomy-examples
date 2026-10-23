@@ -1,9 +1,9 @@
 # Phronomy Examples
 
-This development branch pins an unreleased Phronomy Git revision in
-`Gemfile.phronomy` and all seven lockfiles for structured Agent output and
-GeneratorVerifier lifetimes. Published Phronomy 0.29.0 does not include these
-new APIs. The baseline includes the r8 contracts and RubyLLM 2.0 migration.
+These examples use published Phronomy 0.30.0 from RubyGems through
+`Gemfile.phronomy` and all seven lockfiles, including structured Agent output,
+GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.
+The baseline includes the r8 contracts and RubyLLM 2.0 migration.
 DX05-A provides owned Agent absence and Team busy errors with saved cause
 diagnostics; DX05-D provides Workflow task states;
 DX05-E provides application-owned Agent scopes and safe incarnation release.
@@ -35,7 +35,7 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI installs the pinned core revision using the committed lockfiles. No local
+CI installs the published core gem using the committed lockfiles. No local
 checkout or `PHRONOMY_PATH` override is used. To verify a local framework checkout,
 export `PHRONOMY_PATH` and run
 `scripts/update_phronomy.sh` first.
@@ -185,9 +185,9 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-The released main baseline uses the Phronomy 0.29 series from RubyGems. This
-development branch instead keeps all seven bundles on its pinned core Git
-revision. Keep `PHRONOMY_PATH` unset to update and verify that dependency:
+The released baseline uses the Phronomy 0.30 series from RubyGems, with all
+seven lockfiles selecting 0.30.0. Keep `PHRONOMY_PATH` unset to update and verify
+that dependency:
 
 ```bash
 unset PHRONOMY_PATH

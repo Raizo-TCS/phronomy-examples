@@ -1,6 +1,6 @@
 # Phronomy Examples
 
-These examples pin the unreleased core revision `66c44228b6baa44ed9bee073022bbcd5706bea6c`
+These examples pin the unreleased core revision `a1b7f6fd8ffea74ca55f4bb6289108337372ab40`
 through `Gemfile.phronomy` and all seven lockfiles. It adds explicit schema
 delivery and durable transcript Message reads to structured Agent output,
 GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.

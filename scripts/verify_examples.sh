@@ -10,7 +10,9 @@
 #   - live trust acceptance: six RSpec integration cases (default), including
 #     approval yes/no/cancel; failed or blocked cases make verification fail
 #   - Rails apps: db:migrate, Zeitwerk check, server boot, health check,
-#                 Playwright GUI smoke test
+#                 Playwright GUI smoke test (skipped with --syntax-only)
+#   - --syntax-only retains preflight, offline specs and SQLite specs;
+#     it does not run CLI examples, live trust acceptance or Rails smoke tests.
 #
 # Usage:
 #   cd phronomy-examples
@@ -336,6 +338,11 @@ verify_rails() {
   local dir="$BASE_DIR/$name"
   header "$name [Rails, port $port]"
 
+  if ! $WITH_LLM; then
+    skip "Rails smoke tests not run (--syntax-only): $name"
+    return
+  fi
+
   if [[ ! -d "$dir" ]]; then
     skip "directory not found: $dir"
     return
@@ -554,11 +561,13 @@ echo -e "${BOLD}======================================================"
 if $WITH_LLM; then
   echo -e "  CLI: syntax + LLM run (default timeout 240s)"
   echo -e "  Trust acceptance: all 6 live cases required; blocked is not a pass"
+  echo -e "  Rails: db + Zeitwerk + server + health + Playwright GUI"
 else
   echo -e "  CLI: syntax-only (no LLM required)"
   echo -e "  Trust acceptance: all 6 live cases skipped"
+  echo -e "  Rails: all 4 smoke tests skipped (no database setup, server or GUI)"
 fi
-echo -e "  Rails: db + Zeitwerk + server + health + Playwright GUI"
+echo -e "  Offline regressions and SQLite specs: included in both modes"
 echo -e "======================================================${NC}"
 
 [[ $FAIL -eq 0 ]]

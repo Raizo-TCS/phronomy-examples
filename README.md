@@ -50,8 +50,16 @@ individual outcomes. See [live acceptance](19_trust_pipeline/README.md#content-f
 
 `bundle exec rspec integration/trust_pipeline_spec.rb --format documentation`
 runs only that live suite. It preserves the caller's model/server settings and
-records evidence in a fresh `tmp/trust-live-*` directory. `--syntax-only` skips
-the live suite explicitly, and `--preflight-only` runs no acceptance tests.
+records evidence in a fresh `tmp/trust-live-*` directory.
+
+`bash scripts/verify_examples.sh --syntax-only` retains dependency/source
+preflight, offline regressions, CLI Ruby syntax checks and the SQLite spec suite.
+It explicitly skips the six live trust cases and all four Rails smoke tests,
+including their database setup, server startup, health requests and browser
+interactions. This mode does not execute CLI examples or call a live LLM, even
+when provider credentials are present. Skipped checks are reported as skipped,
+not passed; failures in the retained checks still make the command fail.
+`--preflight-only` stops after preflight and runs no acceptance tests.
 
 `bash scripts/verify_offline.sh` and ordinary CI run deterministic regressions
 with protocol stubs or controlled local HTTP servers. They validate the suite's

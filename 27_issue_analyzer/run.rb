@@ -148,6 +148,31 @@ end.join("\n")
 class IssueClassifierAgent < Phronomy::Agent::Base
   agent_definition id: "example-27-issue-classifier-agent", version: 2
 
+  OUTPUT_SCHEMA = {
+    type: "object",
+    properties: {
+      results: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            number: {type: "integer"},
+            pairs: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {type: {type: "string"}, component: {type: "string"}},
+                required: %w[type component], additionalProperties: true
+              }
+            }
+          },
+          required: %w[number pairs], additionalProperties: true
+        }
+      }
+    },
+    required: ["results"], additionalProperties: true
+  }.freeze
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 
@@ -229,13 +254,10 @@ else
     begin
       # Each batch owns a fresh Agent and releases its live incarnation afterwards.
       result = Phronomy::Agent.open_scope do |agents|
-        agents.create(IssueClassifierAgent).invoke_async(payload.to_json)
+        agents.create(IssueClassifierAgent).invoke_async(payload.to_json,
+          output_schema: IssueClassifierAgent::OUTPUT_SCHEMA, schema_delivery: :none)
       end
-      raw = result[:output].to_s.strip
-        .gsub(/\A```(?:json)?\n?/, "")
-        .gsub(/\n?```\z/, "")
-        .strip
-      parsed = JSON.parse(raw)
+      parsed = result.fetch(:output)
       parsed["results"].each do |r|
         pairs = Array(r["pairs"]).filter_map do |p|
           type = p["type"]
@@ -246,7 +268,7 @@ else
           [["(unrecognized)", "Cross-cutting / Framework-wide"]] : pairs
       end
       puts "OK (#{batch.size} classified)"
-    rescue JSON::ParserError => e
+    rescue Phronomy::Agent::OutputError => e
       puts "PARSE ERROR: #{e.message[0, 60]}"
       parse_error_count += batch.size
       batch.each { |i| issue_pairs[i["number"]] = [["(parse error)", "(parse error)"]] }

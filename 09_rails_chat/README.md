@@ -40,7 +40,7 @@ so they are not tied to the lifetime of one Rails process.
 | Agent lifecycle | `scope.create` / `scope.load` | `ConversationsController` creates; subsequent requests load by durable `agent_id` |
 | External durable Persistence | `PhronomyExamples::Persistence::ActiveRecordSQLite` | `PhronomyStore.persistence` injects the Rails primary connection pool |
 | LLM invocation | `agent.invoke(content)` | `MessagesController` runs the normal Agent → LLM execution path |
-| Transcript read-back | `agent.transcript` | `ConversationsController#index` reloads the logical transcript from durable Journal state |
+| Transcript read-back | `agent.transcript_messages` | `ConversationsController#index` reloads the logical transcript from durable Journal state |
 
 There is intentionally no application-level ActiveRecord model for Phronomy
 Agent state. The Persistence backend owns its `phronomy_*` storage tables and

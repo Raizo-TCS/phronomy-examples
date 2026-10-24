@@ -84,3 +84,15 @@ docs/issue_analysis.csv
 
 Section 1 and 2 count unique issues. Section 3 counts semantic
 `(type, component)` pairs, so its totals can exceed the number of unique issues.
+
+## Validated classification output
+
+`IssueClassifierAgent::OUTPUT_SCHEMA` describes the result shape. Each batch uses
+`output_schema:` with `schema_delivery: :none`: Agent performs strict final-output
+validation, while the provider receives the existing prompt without native schema
+settings. The application consumes the frozen `result[:output]` value directly.
+It no longer strips Markdown fences or parses JSON independently.
+
+`Phronomy::Agent::OutputError` follows the existing failed-batch counting path.
+Unknown classifications still use the application's existing fallback categories;
+validation does not add a new category policy or retry failed batches.

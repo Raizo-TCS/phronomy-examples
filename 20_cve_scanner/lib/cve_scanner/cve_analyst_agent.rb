@@ -5,6 +5,19 @@
 class CveScanner::CveAnalystAgent < Phronomy::Agent::Base
   agent_definition id: "example-20-cve-analyst-agent", version: 2
 
+  # Validate the response shape; routing and missing-field policy stay in the app.
+  OUTPUT_SCHEMA = {
+    type: "object",
+    properties: {
+      decision: {type: "string"},
+      proposed_commands: {type: "array", items: {type: "string"}},
+      vulnerability_status: {type: "object", additionalProperties: {type: "string"}},
+      reasoning: {type: "object", additionalProperties: {type: "string"}}
+    },
+    required: %w[decision],
+    additionalProperties: true
+  }.freeze
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

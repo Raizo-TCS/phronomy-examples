@@ -1,7 +1,8 @@
 # Phronomy Examples
 
-These examples use published Phronomy 0.30.1 from RubyGems through
-`Gemfile.phronomy` and all seven lockfiles, including structured Agent output,
+These examples pin the unreleased core revision `443d42ed44548d70355fb6e3d11a59cdf0618f95`
+through `Gemfile.phronomy` and all seven lockfiles. It adds explicit schema
+delivery and durable transcript Message reads to structured Agent output,
 GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.
 The baseline includes the r8 contracts and RubyLLM 2.0 migration.
 DX05-A provides owned Agent absence and Team busy errors with saved cause
@@ -35,10 +36,23 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI installs the published core gem using the committed lockfiles. No local
+CI installs the pinned core Git revision using the committed lockfiles. No local
 checkout or `PHRONOMY_PATH` override is used. To verify a local framework checkout,
 export `PHRONOMY_PATH` and run
 `scripts/update_phronomy.sh` first.
+
+## DX1 and DX2
+
+Examples 20 and 27 declare their output shape and consume Agent-validated JSON
+with `schema_delivery: :none`. Prompt content and business policy stay in the
+application; there is no implicit provider fallback, JSON repair or Tool replay.
+Examples 09 and 15 read `transcript_messages`; Agent restores the Message values,
+while the shared application helper selects visible roles and text.
+
+The new structured executions use AgentExecution format 0.3. Existing format
+0.2 records remain readable; old readers explicitly reject the new format.
+Do not downgrade a store containing new-format executions. See the core
+structured-output guide for the compatibility boundary.
 
 ## Verification scope
 
@@ -193,8 +207,9 @@ Every Gemfile reads the Phronomy dependency from one file:
 Gemfile.phronomy
 ```
 
-The released baseline uses the Phronomy 0.30 series from RubyGems, with all
-seven lockfiles selecting 0.30.1. Keep `PHRONOMY_PATH` unset to update and verify
+DX1/DX2 require the unreleased core revision pinned above; released 0.30.1
+does not expose these APIs. All seven lockfiles select the same revision. Publish
+the core branch before running examples CI. Keep `PHRONOMY_PATH` unset to verify
 that dependency:
 
 ```bash

@@ -5,6 +5,17 @@
 class CveScanner::RemediationAdvisorAgent < Phronomy::Agent::Base
   agent_definition id: "example-20-remediation-advisor-agent", version: 1
 
+  # Validate the response shape; routing and missing-field policy stay in the app.
+  OUTPUT_SCHEMA = {
+    type: "object",
+    properties: {
+      decision: {type: "string"},
+      proposed_commands: {type: "array", items: {type: "string"}}
+    },
+    required: %w[decision],
+    additionalProperties: true
+  }.freeze
+
   model    LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

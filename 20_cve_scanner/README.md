@@ -48,7 +48,7 @@ follow producer completion and notification drain.
 
 ## Development and verification
 
-Use released Phronomy 0.29.0 by default. Set `PHRONOMY_PATH` only when testing an explicit local framework checkout, as described in the root README.
+Use the core revision pinned in the root `Gemfile.phronomy` by default. Set `PHRONOMY_PATH` only when testing an explicit local framework checkout, as described in the root README.
 From this directory:
 
 ```bash
@@ -86,3 +86,15 @@ a live LLM or external Cable backend connectivity test.
 Each initial/resumed/chat Job owns an Agent scope outside its notification scope. Graph builders receive `agents:` explicitly, and task states materialize Agents asynchronously. Completed children are released after notification drain even at an approval/follow-up halt; the next Job creates its own scope. Saved state contains data, never a scope or live Agent. Cleanup-only failure preserves a saved done/awaiting status.
 
 See [DX05-E scope migration](../docs/dx05-agent-scope-examples.md).
+
+## Validated Agent output
+
+The analyst, remediation and follow-up Agents declare `OUTPUT_SCHEMA` and use
+`output_schema:` with `schema_delivery: :none`. The provider receives the existing
+prompt and Tools without native schema settings. Agent validates the final output
+as strict JSON and returns the frozen value through `result[:output]`.
+Token and Tool notifications remain provisional; `chat_turn_done` is published
+only after validation succeeds. Invalid JSON, fenced JSON, duplicate keys,
+schema mismatches, refusals and incomplete output follow the existing error path.
+The application does not repair JSON or replay Tools. Business routing and
+operator decisions remain in `ScanGraph`.

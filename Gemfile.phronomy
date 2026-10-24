@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
-# Use the published Phronomy 0.30 series across all seven bundles.
+# DX1 and DX2 require this unreleased core revision across all seven bundles.
 # A local checkout can be selected explicitly with PHRONOMY_PATH.
 phronomy_path = ENV["PHRONOMY_PATH"]
 
 if phronomy_path && !phronomy_path.empty?
   gem "phronomy", path: File.expand_path(phronomy_path, __dir__)
 else
-  gem "phronomy", "~> 0.30.1"
+  gem "phronomy", git: "https://github.com/Raizo-TCS/phronomy.git",
+    ref: "a1b7f6fd8ffea74ca55f4bb6289108337372ab40"
 end

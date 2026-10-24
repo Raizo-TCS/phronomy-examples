@@ -9,7 +9,7 @@ A Rails application showing trust boundaries around a stateful Phronomy Agent.
 | Prompt-injection filter | `Phronomy::Filter::PromptInjectionFilter` | Blocks common instruction-override patterns before the LLM boundary |
 | Application PII policy | `Phronomy::Filter::Base` | Demonstrates custom input/output Filters |
 | Stateful Agent | `scope.create` / `scope.load` | Gives each browser session an independent Agent identity |
-| Canonical transcript | `agent.transcript` | Reads Journal-backed conversation state |
+| Canonical transcript | `agent.transcript_messages` | Reads Journal-backed conversation state |
 | Caller metadata | `config: { user_id: }` | Propagates the supported caller identity metadata into the invocation |
 | Async summarization | `invoke_async` + `Workflow#signal` | Keeps Workflow state transitions event-driven |
 | Logical context clear | `agent.clear_transcript!` | Advances transcript generation without deleting Journal history |

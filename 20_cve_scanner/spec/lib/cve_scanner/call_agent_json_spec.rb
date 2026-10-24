@@ -2,35 +2,8 @@
 
 require "rails_helper"
 
-# ---------------------------------------------------------------------------
-# Unit tests for CveScanner.call_agent_json
-#
-# This method is the single point where LLM output enters the pipeline.
-# It must reliably:
-#   1. Parse clean JSON from the agent output.
-#   2. Strip markdown code fences before parsing.
-#   3. Extract the first {...} block when the LLM wraps JSON in prose.
-#   4. Fall back gracefully when the output is completely unparseable.
-#   5. Always broadcast chat_turn_done with clean, normalised JSON content.
-# ---------------------------------------------------------------------------
-
+# Real Agent execution and output validation; only the HTTP response is fixed.
 RSpec.describe "CveScanner.call_agent_json" do
-  let(:agents) { instance_double(Phronomy::Agent::Scope) }
-
-  # Minimal agent double: stream yields no events and returns a fixed output.
-  def stub_agent_output(agent_class, output_str)
-    agent_double = instance_double(agent_class)
-    allow(agents).to receive(:create_async).with(agent_class, anything)
-      .and_return(Phronomy::TaskResult.completed(agent_double))
-    allow(agent_double).to receive(:stream_async)
-      .and_return(Phronomy::TaskResult.completed({output: output_str}))
-    agent_double
-  end
-
-  def call_agent_result(*args, **kwargs)
-    CveScanner.call_agent_json(*args, agents: agents, **kwargs).wait_result(timeout: 2)
-  end
-
   let(:notifications) { double("notification sink") }
   let(:broadcasts) { [] }
 
@@ -38,172 +11,92 @@ RSpec.describe "CveScanner.call_agent_json" do
     allow(notifications).to receive(:publish) { |payload| broadcasts << payload }
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-01: clean JSON is parsed and rebroadcast verbatim.
-  # ---------------------------------------------------------------------------
-  describe "TC-01: clean JSON output" do
-    let(:json_str) do
-      '{"decision":"done","vulnerability_status":{"CVE-2023-52160":"vulnerable"},' \
-        '"reasoning":{"CVE-2023-52160":"host is vulnerable"}}'
-    end
+  after { Phronomy.reset_runtime! }
 
-    it "returns the parsed hash" do
-      stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      expect(result["decision"]).to eq("done")
-      expect(result["vulnerability_status"]["CVE-2023-52160"]).to eq("vulnerable")
-    end
-
-    it "broadcasts chat_turn_done with clean JSON content" do
-      stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
-      expect(done_event).not_to be_nil
-      expect { JSON.parse(done_event[:content]) }.not_to raise_error
-      expect(JSON.parse(done_event[:content])["decision"]).to eq("done")
+  def call_agent_result(agent_class = CveScanner::CveAnalystAgent, prompt = "prompt", **options)
+    Phronomy::Agent.open_scope do |agents|
+      CveScanner.call_agent_json(agent_class, prompt, agents: agents, notifications: notifications, **options)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-02: JSON wrapped in ```json ... ``` code fence.
-  # ---------------------------------------------------------------------------
-  describe "TC-02: JSON in markdown code fence" do
-    let(:fenced) do
-      "```json\n{\"decision\":\"need_more\",\"proposed_commands\":[\"dpkg -s wpasupplicant\"]}\n```"
-    end
+  it "returns an immutable validated object and publishes completion after tokens" do
+    value = {"decision" => "done", "vulnerability_status" => {"CVE-2023-52160" => "vulnerable"}, "reasoning" => {"CVE-2023-52160" => "affected version"}}
+    stub = NotificationChatStub.new { value.to_json }
+    result = call_agent_result
+    expect(result).to eq(value)
+    expect(result).to be_frozen
+    expect(broadcasts.first[:type]).to eq("chat_turn_start")
+    expect(broadcasts.map { |item| item[:type] }).to include("llm_token")
+    expect(broadcasts.last[:type]).to eq("chat_turn_done")
+    expect(JSON.parse(broadcasts.last[:content])).to eq(value)
+    expect(stub.calls.length).to eq(1)
+    expect(stub.calls.first).not_to have_key("response_format")
+    expect(stub.calls.first.fetch("tools")).not_to be_empty
+  end
 
-    it "strips the fence and parses successfully" do
-      stub_agent_output(CveScanner::CveAnalystAgent, fenced)
-      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      expect(result["decision"]).to eq("need_more")
-      expect(result["proposed_commands"]).to eq(["dpkg -s wpasupplicant"])
-    end
-
-    it "broadcasts clean JSON (no fence in content)" do
-      stub_agent_output(CveScanner::CveAnalystAgent, fenced)
-      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
-      expect(done_event[:content]).not_to include("```")
+  [["```json\n{\"decision\":\"done\"}\n```", "invalid_json"],
+    ['Prose {"decision":"done"} after', "invalid_json"],
+    ['{"decision":"done"', "invalid_json"],
+    ["unparseable", "invalid_json"],
+    ['{"decision":"done","decision":"need_more"}', "invalid_json"],
+    ['{"decision":4}', "schema_mismatch"],
+    ['{"decision":"need_more","proposed_commands":"uname -r"}', "schema_mismatch"]].each do |body, reason|
+    it "reports #{reason} without repair, fallback business values or completion notifications" do
+      stub = NotificationChatStub.new { body }
+      expect { call_agent_result }.to raise_error(Phronomy::Agent::OutputError) { |error| expect(error.reason).to eq(reason) }
+      expect(broadcasts.map { |item| item[:type] }).not_to include("chat_turn_done")
+      expect(stub.calls.length).to eq(1)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-03: JSON preceded and followed by prose (the bug observed in Scan 51).
-  # ---------------------------------------------------------------------------
-  describe "TC-03: JSON wrapped in prose" do
-    let(:prose_wrapped) do
-      'Based on my analysis of the available data:\n\n' \
-        '{"decision":"done","vulnerability_status":{"CVE-2023-52160":"vulnerable"},' \
-        '"reasoning":{"CVE-2023-52160":"affected version installed"}}\n\n' \
-        'This concludes my assessment.'
-    end
-
-    it "extracts the JSON block and parses it" do
-      stub_agent_output(CveScanner::CveAnalystAgent, prose_wrapped)
-      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      expect(result["decision"]).to eq("done")
-    end
-
-    it "broadcasts clean JSON without surrounding prose" do
-      stub_agent_output(CveScanner::CveAnalystAgent, prose_wrapped)
-      call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      done_event = broadcasts.find { |b| b[:type] == "chat_turn_done" }
-      parsed = JSON.parse(done_event[:content])
-      expect(parsed["decision"]).to eq("done")
-    end
+  it "keeps custom roles and does not require a notification sink" do
+    NotificationChatStub.new { '{"decision":"need_more","proposed_commands":["uname -r"]}' }
+    result = call_agent_result(role: "CveAnalyst")
+    expect(result["proposed_commands"]).to eq(["uname -r"])
+    expect(broadcasts.values_at(0, -1).map { |event| event[:role] }).to eq(%w[CveAnalyst CveAnalyst])
+    broadcasts.clear
+    expect(call_agent_result(notifications: nil)["decision"]).to eq("need_more")
+    expect(broadcasts).to be_empty
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-04: completely unparseable output — falls back to need_more error marker.
-  # ---------------------------------------------------------------------------
-  describe "TC-04: completely unparseable output" do
-    let(:garbage) { "I cannot determine the vulnerability status from the available data." }
-
-    it "returns the json_parse_failed fallback hash" do
-      stub_agent_output(CveScanner::CveAnalystAgent, garbage)
-      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      expect(result["decision"]).to eq("need_more")
-      expect(result["error"]).to eq("json_parse_failed")
-    end
-
-    it "does not raise an exception" do
-      stub_agent_output(CveScanner::CveAnalystAgent, garbage)
-      expect {
-        call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: notifications)
-      }.not_to raise_error
-    end
+  it "validates remediation and follow-up shapes through the same operation" do
+    NotificationChatStub.new { |_body, index| index.zero? ? '{"decision":"complete"}' : '{"decision":"answered","answer":"Details"}' }
+    expect(call_agent_result(CveScanner::RemediationAdvisorAgent)["decision"]).to eq("complete")
+    expect(call_agent_result(CveScanner::FollowupAgent)["answer"]).to eq("Details")
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-05: scan_id nil — no broadcast, just returns the parsed hash.
-  # ---------------------------------------------------------------------------
-  describe "TC-05: scan_id nil — no broadcast" do
-    let(:json_str) { '{"decision":"done","vulnerability_status":{}}' }
-
-    it "returns parsed hash without broadcasting" do
-      stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      result = call_agent_result(CveScanner::CveAnalystAgent, "prompt", notifications: nil)
-      expect(result["decision"]).to eq("done")
-      expect(broadcasts).to be_empty
+  it "retains Tool notification order and does not replay the Tool after invalid output" do
+    count = 0
+    tool = Class.new(Phronomy::Tool::Base) do
+      tool_name "read_fixture"
+      description "A controlled read"
+      define_method(:execute) { count += 1; "fixture" }
     end
+    klass = Class.new(CveScanner::CveAnalystAgent) do
+      agent_definition id: "cve-json-tool-test", version: 1
+      tools tool => nil
+    end
+    stub_const("CveJsonToolAgent", klass)
+    stub = NotificationChatStub.new do |_body, index|
+      index.zero? ? {role: "assistant", content: nil, tool_calls: [{id: "test-read", type: "function", function: {name: "read_fixture", arguments: "{}"}}]} : "invalid"
+    end
+    expect { call_agent_result(klass) }.to raise_error(Phronomy::Agent::OutputError)
+    types = broadcasts.map { |event| event[:subtype] || event[:type] }
+    expect(types.index("tool_call")).to be < types.index("tool_result")
+    expect(types).not_to include("chat_turn_done")
+    expect(count).to eq(1)
+    expect(stub.calls.length).to eq(2)
+    expect(stub.calls).to all(satisfy { |body| !body.key?("response_format") })
   end
 
-  # ---------------------------------------------------------------------------
-  # TC-06: role label appears in chat_turn_start and chat_turn_done broadcasts.
-  # ---------------------------------------------------------------------------
-  describe "TC-06: role is propagated to broadcasts" do
-    let(:json_str) { '{"decision":"done","vulnerability_status":{}}' }
-
-    it "uses the specified role in both events" do
-      stub_agent_output(CveScanner::CveAnalystAgent, json_str)
-      call_agent_result(CveScanner::CveAnalystAgent, "prompt",
-                                 notifications: notifications, role: "CveAnalyst")
-      start_event = broadcasts.find { |b| b[:type] == "chat_turn_start" }
-      done_event  = broadcasts.find { |b| b[:type] == "chat_turn_done" }
-      expect(start_event[:role]).to eq("CveAnalyst")
-      expect(done_event[:role]).to eq("CveAnalyst")
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # TC-07: CVE_SCANNER_MOCK_LLM=1 — returns deterministic fixed responses
-  #        without calling the real LLM agent at all.
-  # ---------------------------------------------------------------------------
-  describe "TC-07: mock mode (CVE_SCANNER_MOCK_LLM set)" do
-    around do |example|
-      ClimateControl.modify(CVE_SCANNER_MOCK_LLM: "1") { example.run }
-    end
-
-    it "does not instantiate the agent class" do
-      expect(agents).not_to receive(:create_async)
-      call_agent_result(CveScanner::CveAnalystAgent,
-                                 "Analyse CVE-2023-52160.", notifications: nil)
-    end
-
-    it "returns done with vulnerability_status keyed by CVE IDs in the prompt" do
-      result = call_agent_result(CveScanner::CveAnalystAgent,
-                                          "Analyse CVE-2023-52160 and CVE-2024-00001.",
-                                          notifications: nil)
-      expect(result["decision"]).to eq("done")
-      expect(result["vulnerability_status"].keys).to contain_exactly("CVE-2023-52160", "CVE-2024-00001")
-    end
-
-    it "broadcasts chat_turn_start and chat_turn_done when scan_id is set" do
-      call_agent_result(CveScanner::CveAnalystAgent,
-                                 "Analyse CVE-2023-52160.", notifications: notifications)
-      expect(broadcasts.map { |b| b[:type] }).to include("chat_turn_start", "chat_turn_done")
-    end
-
-    it "FollowupAgent returns answered" do
-      result = call_agent_result(CveScanner::FollowupAgent,
-                                          "Is this exploitable?", notifications: nil)
-      expect(result["decision"]).to eq("answered")
-    end
-
-    it "RemediationAdvisorAgent returns complete" do
-      result = call_agent_result(CveScanner::RemediationAdvisorAgent,
-                                          "Suggest fixes.", notifications: nil)
-      expect(result["decision"]).to eq("complete")
+  it "retains the explicit deterministic mock mode" do
+    ClimateControl.modify(CVE_SCANNER_MOCK_LLM: "1") do
+      expect(CveScanner::CveAnalystAgent).not_to receive(:create)
+      value = call_agent_result(CveScanner::CveAnalystAgent, "CVE-2023-52160 and CVE-2024-00001")
+      expect(value["vulnerability_status"].keys).to contain_exactly("CVE-2023-52160", "CVE-2024-00001")
+      expect(call_agent_result(CveScanner::FollowupAgent)["decision"]).to eq("answered")
+      expect(call_agent_result(CveScanner::RemediationAdvisorAgent)["decision"]).to eq("complete")
+      expect(broadcasts.map { |event| event[:type] }).to include("chat_turn_start", "chat_turn_done")
     end
   end
 end

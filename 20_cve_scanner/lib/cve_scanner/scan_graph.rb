@@ -55,7 +55,6 @@ module CveScanner
       )
     end
 
-    accumulated = +""
     last_tool_name = +"unknown"
 
     if notifications
@@ -67,7 +66,6 @@ module CveScanner
         case event.type
         when :token
           token = event.payload[:content].to_s
-          accumulated << token
           notifications.publish(type: "llm_token", role: role, token: token) if notifications
         when :tool_call
           tool_call = event.payload[:tool_call]
@@ -80,46 +78,18 @@ module CveScanner
         end
       }
     )
-    source = materialization.flat_map { |agent| agent.stream_async(prompt) }
+    source = materialization.flat_map do |agent|
+      agent.stream_async(prompt, output_schema: agent_class::OUTPUT_SCHEMA, schema_delivery: :none)
+    end
 
     source.map do |result|
-      parse_agent_json_result(result, accumulated, notifications: notifications, role: role)
+      # Only a validated final value can publish completion. Tokens are provisional.
+      parsed = result.fetch(:output)
+      notifications.publish(type: "chat_turn_done", role: role, content: parsed.to_json) if notifications
+      parsed
     end
   rescue => error
     Phronomy::TaskResult.failed(error, name: "cve-scanner-agent-#{role}")
-  end
-
-  def self.parse_agent_json_result(result, accumulated, notifications:, role:)
-    raw = result&.dig(:output).to_s.strip
-    raw = accumulated.strip if raw.empty?
-    raw = raw.gsub(/\A```(?:json)?\s*/i, "").gsub(/\s*```\z/, "").strip
-
-    parsed = begin
-      JSON.parse(raw)
-    rescue JSON::ParserError
-      match = raw.match(/\{.*\}/m)
-      if match
-        candidate = match[0]
-        repaired = nil
-        (0..5).each do |count|
-          begin
-            repaired = JSON.parse(candidate + ("}" * count))
-            break
-          rescue JSON::ParserError
-            next
-          end
-        end
-        repaired
-      end
-    end
-
-    if parsed
-      notifications.publish(type: "chat_turn_done", role: role, content: parsed.to_json) if notifications
-      parsed
-    else
-      notifications.publish(type: "chat_turn_done", role: role, content: accumulated) if notifications
-      {"decision" => "need_more", "proposed_commands" => [], "error" => "json_parse_failed"}
-    end
   end
 
   def self.build_graph(agents:, notifications: nil)

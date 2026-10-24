@@ -4,6 +4,17 @@
 class CveScanner::FollowupAgent < Phronomy::Agent::Base
   agent_definition id: "example-20-followup-agent", version: 2
 
+  # Validate the response shape; routing and missing-field policy stay in the app.
+  OUTPUT_SCHEMA = {
+    type: "object",
+    properties: {
+      decision: {type: "string"},
+      answer: {type: "string"}
+    },
+    required: %w[decision answer],
+    additionalProperties: true
+  }.freeze
+
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
 

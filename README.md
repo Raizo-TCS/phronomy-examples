@@ -1,6 +1,6 @@
 # Phronomy Examples
 
-These examples use published Phronomy 0.30.0 from RubyGems through
+These examples use published Phronomy 0.30.1 from RubyGems through
 `Gemfile.phronomy` and all seven lockfiles, including structured Agent output,
 GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.
 The baseline includes the r8 contracts and RubyLLM 2.0 migration.
@@ -186,7 +186,7 @@ Gemfile.phronomy
 ```
 
 The released baseline uses the Phronomy 0.30 series from RubyGems, with all
-seven lockfiles selecting 0.30.0. Keep `PHRONOMY_PATH` unset to update and verify
+seven lockfiles selecting 0.30.1. Keep `PHRONOMY_PATH` unset to update and verify
 that dependency:
 
 ```bash

@@ -39,7 +39,7 @@ GEM
       uri (>= 0.11.1)
     net-protocol (0.4.0)
       timeout
-    phronomy (0.30.0)
+    phronomy (0.30.1)
       faraday (~> 2.14, >= 2.14.4)
       faraday-net_http (~> 3.4, >= 3.4.4)
       json (>= 2.21.2, < 3)
@@ -100,7 +100,7 @@ PLATFORMS
   x86_64-linux-gnu
 
 DEPENDENCIES
-  phronomy (~> 0.30.0)
+  phronomy (~> 0.30.1)
   rspec (~> 3.13)
   simplecov
   simplecov-lcov
@@ -130,7 +130,7 @@ CHECKSUMS
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.10.0) sha256=1a2ff6e37a05724973c43f2bf7bf105f59c36a4cd0a7e9b1c021a0a566987c27
   net-protocol (0.4.0) sha256=f9f90c8c6f64794a45160bf422177a336db12809de3beeeaa26b88fcd2e8c853
-  phronomy (0.30.0) sha256=ecf4ec60c3db95404c432cf899372e967a58bfc14da16d071ffdea0d54885869
+  phronomy (0.30.1) sha256=8cb83d3af987e338186f8146c0578a5d9042fdee38500c9fb6501c9aef1a7daa
   public_suffix (7.0.5) sha256=1a8bb08f1bbea19228d3bed6e5ed908d1cb4f7c2726d18bd9cadf60bc676f623
   regexp_parser (2.13.1) sha256=5aedb6b7c35688f51e86eef17a15374dfd287c83f4ca644b2c5f3ec50a33b44b
   rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142

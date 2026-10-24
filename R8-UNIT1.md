@@ -1,6 +1,6 @@
-# r8第1適用版に対応するexamples
+# Examples for r8 unit 1
 
-この変更はcore `653e255a` に対するr8第1適用版と組み合わせる。coreのリリース番号は変更していないため、検証時は次のように明示的にcheckoutを選ぶ。
+Use this change together with the first r8 implementation unit based on core `653e255a`. The core release number has not changed, so explicitly select the checkout during verification:
 
 ```bash
 export PHRONOMY_PATH=/absolute/path/to/phronomy
@@ -9,6 +9,6 @@ bundle install
 bash scripts/verify_offline.sh
 ```
 
-PromptTemplateとbefore_llm_inputの値は `Phronomy::Context` 所属となる。Toolの公開入口は `Phronomy::Tool::Base`。旧Agent内の別名は残さない。
+PromptTemplate and before_llm_input values now belong to `Phronomy::Context`. The public Tool entry point is `Phronomy::Tool::Base`. The old aliases under Agent are not retained.
 
-preflightはr8第1適用版のAPIを確認する。標準gemの既存バージョンだけを選んでも新しいAPIが存在するとは限らない。SQLite検証にはGemfileのRuby要件を満たす環境が必要である。PostgreSQLサーバーと実LLMへの接続はoffline検証に含まない。
+Preflight checks the APIs introduced in r8 unit 1. Selecting an existing published gem version alone does not ensure that these new APIs are available. SQLite verification requires an environment satisfying the Gemfile's Ruby requirement. Offline verification does not include connections to a PostgreSQL server or a live LLM.

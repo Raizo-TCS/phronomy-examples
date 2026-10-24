@@ -55,8 +55,6 @@ module CveScanner
       )
     end
 
-    last_tool_name = +"unknown"
-
     if notifications
       notifications.publish(type: "chat_turn_start", role: role, prompt_preview: prompt.slice(0, 200))
     end
@@ -69,12 +67,13 @@ module CveScanner
           notifications.publish(type: "llm_token", role: role, token: token) if notifications
         when :tool_call
           tool_call = event.payload[:tool_call]
-          last_tool_name.replace(tool_call.respond_to?(:name) ? tool_call.name.to_s : "tool")
+          tool_name = tool_call.respond_to?(:name) ? tool_call.name.to_s : "tool"
           args = tool_call.respond_to?(:arguments) ? tool_call.arguments.inspect.slice(0, 120) : ""
-          notifications.publish(type: "log", subtype: "tool_call", message: "#{role} -> calling #{last_tool_name}: #{args}") if notifications
+          notifications.publish(type: "log", subtype: "tool_call", message: "#{role} -> calling #{tool_name}: #{args}") if notifications
         when :tool_result
+          tool_name = event.payload.fetch(:tool_name).to_s
           result_text = event.payload[:tool_result].to_s
-          notifications.publish(type: "log", subtype: "tool_result", message: "#{role} <- #{last_tool_name} result (#{result_text.length} chars)") if notifications
+          notifications.publish(type: "log", subtype: "tool_result", message: "#{role} <- #{tool_name} result (#{result_text.length} chars)") if notifications
         end
       }
     )

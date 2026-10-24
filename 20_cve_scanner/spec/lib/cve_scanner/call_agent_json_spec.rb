@@ -83,10 +83,56 @@ RSpec.describe "CveScanner.call_agent_json" do
     expect { call_agent_result(klass) }.to raise_error(Phronomy::Agent::OutputError)
     types = broadcasts.map { |event| event[:subtype] || event[:type] }
     expect(types.index("tool_call")).to be < types.index("tool_result")
+    expect(broadcasts.find { |event| event[:subtype] == "tool_result" }.fetch(:message))
+      .to include("read_fixture result (7 chars)")
     expect(types).not_to include("chat_turn_done")
     expect(count).to eq(1)
     expect(stub.calls.length).to eq(2)
     expect(stub.calls).to all(satisfy { |body| !body.key?("response_format") })
+  end
+
+  [[%w[first_read second_read], true], [%w[first_read first_read], true],
+    [%w[first_read second_read], false]].each do |names, notify|
+    it "attributes #{names.join(', ')} results to their own events with notifications=#{notify}" do
+      counts = Hash.new(0)
+      tool_classes = %w[first_read second_read].map do |name|
+        Class.new(Phronomy::Tool::Base) do
+          tool_name name
+          description "Read a controlled fixture"
+          define_method(:execute) { counts[name] += 1; "#{name}-result" }
+        end
+      end
+      klass = Class.new(CveScanner::CveAnalystAgent) do
+        agent_definition id: "cve-batch-tool-log", version: 1
+        tools tool_classes[0] => nil, tool_classes[1] => nil
+      end
+      stub_const("CveBatchToolLogAgent", klass)
+      stub = NotificationChatStub.new do |_body, index|
+        if index.zero?
+          {role: "assistant", content: nil, tool_calls: names.each_with_index.map { |name, call_index|
+            {id: "batch-#{call_index}", type: "function", function: {name: name, arguments: "{}"}}
+          }}
+        else
+          '{"decision":"done"}'
+        end
+      end
+      result = call_agent_result(klass, "read the fixtures",
+        role: "Analyst", notifications: notify ? notifications : nil)
+      expect(result.fetch("decision")).to eq("done")
+      expect(counts).to eq(names.tally)
+      expect(stub.calls.length).to eq(2)
+      expect(stub.calls).to all(satisfy { |body| body["stream"] && !body.key?("response_format") })
+      if notify
+        logs = broadcasts.select { |event| %w[tool_call tool_result].include?(event[:subtype]) }
+        expect(logs.map { |event| event[:subtype] }).to eq(%w[tool_call tool_call tool_result tool_result])
+        expect(logs.last(2).map { |event| event[:message] }).to eq(names.map { |name|
+          "Analyst <- #{name} result (#{"#{name}-result".length} chars)"
+        })
+        expect(broadcasts.last).to include(type: "chat_turn_done", role: "Analyst")
+      else
+        expect(broadcasts).to be_empty
+      end
+    end
   end
 
   it "retains the explicit deterministic mock mode" do

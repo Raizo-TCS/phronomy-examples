@@ -1,0 +1,4 @@
+# frozen_string_literal: true
+
+# Use the same ActiveRecord adapter, database driver and HTTP fixtures as example 30.
+eval_gemfile File.expand_path("../30_sqlite_persistence/Gemfile", __dir__)

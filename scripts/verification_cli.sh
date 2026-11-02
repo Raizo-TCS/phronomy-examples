@@ -3,7 +3,11 @@
 # Sourced by verify_examples.sh. Evidence belongs to verification, not core.
 verify_cli_run() {
   local name="$1"
-  header "$name [CLI + LLM]"
+  if [[ "$name" == 34_worker_approval ]]; then
+    header "$name [CLI + HTTP fixtures]"
+  else
+    header "$name [CLI + LLM]"
+  fi
   if [[ ! -f "$BASE_DIR/$name/run.rb" ]]; then
     skip "no run.rb found"
     return
@@ -23,6 +27,11 @@ verify_cli_run() {
   local grace=${CLI_KILL_GRACE_SECONDS:-10}
   local observation=""
   local -a command=(bundle exec ruby "$name/run.rb") arguments=()
+  if [[ "$name" == 34_worker_approval ]]; then
+    # Example 34 shares example 30's dependencies and selected core checkout.
+    command=(env BUNDLE_GEMFILE="$BASE_DIR/30_sqlite_persistence/Gemfile"
+      bundle exec ruby "$name/run.rb")
+  fi
   if [[ -n "${EXAMPLE_ARGS[$name]:-}" ]]; then
     read -r -a arguments <<< "${EXAMPLE_ARGS[$name]}"
     command+=("${arguments[@]}")

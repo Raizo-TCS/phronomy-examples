@@ -471,6 +471,7 @@ CLI_EXAMPLES=(
   27_issue_analyzer
   28_filter
   29_unified_persistence
+  34_worker_approval
 )
 
 echo -e "${BOLD}======================================================${NC}"

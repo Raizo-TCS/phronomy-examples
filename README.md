@@ -273,6 +273,7 @@ usable without a PostgreSQL server.
 | `26_agent_event_loop` | Agent async events → Workflow signal; timeout |
 | `23_bounded_parallel` | Bounded child-Agent fan-out |
 | `32_async_composition` | Basic and asynchronously evaluated majority voting with Execution and TaskResult |
+| [34_worker_approval](34_worker_approval/README.md) | Standalone approval across two Ruby workers, including pre-ACK process loss |
 
 ### Multi-agent
 

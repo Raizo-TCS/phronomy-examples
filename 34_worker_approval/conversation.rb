@@ -9,11 +9,13 @@ module WorkerApproval
     self.abstract_class = true
   end
 
-  def self.store(path, install: false)
+  def self.store(path, install: false) = stores(path, install: install).agent
+
+  def self.stores(path, install: false)
     Record.establish_connection(adapter: "sqlite3", database: path, pool: 8, timeout: 5_000)
     pool = Record.connection_pool
     PhronomyActiveRecord::Persistence::SQLiteSchema.apply!(pool) if install
-    PhronomyActiveRecord.build(connection_pool: pool, dialect: :sqlite).agent
+    PhronomyActiveRecord.build(connection_pool: pool, dialect: :sqlite)
   end
 
   class ApplyRequest < Phronomy::Tool::Base

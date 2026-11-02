@@ -32,6 +32,38 @@ jobs:
       - name: Check APIs, run CLI stubs, and validate SQLite persistence
         run: bash scripts/verify_offline.sh
 
+  hosted-workers:
+    name: Hosted Worker examples (Ruby 3.3, SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PHRONOMY_PATH: ${{ github.workspace }}/phronomy
+      BUNDLE_GEMFILE: ${{ github.workspace }}/examples/30_sqlite_persistence/Gemfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: examples
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Raizo-TCS/phronomy
+          # These examples exercise unreleased APIs. Pin the reviewed core commit.
+          ref: 8bb078bc7fcaa08db82b222dad2a474c486452b5
+          path: phronomy
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          working-directory: examples/30_sqlite_persistence
+      - name: Install SQLite bundle with the paired core
+        run: |
+          bundle install
+          bundle exec ruby -rphronomy -e 'abort "Wrong core checkout" unless File.realpath(Gem.loaded_specs.fetch("phronomy").full_gem_path) == File.realpath(ENV.fetch("PHRONOMY_PATH"))'
+      - name: Exercise Agent and Workflow handoffs with fixed HTTP responses
+        run: |
+          bundle exec ruby 34_worker_approval/run.rb
+          bundle exec ruby 35_workflow_child_approval/run.rb
+
   rails:
     runs-on: ubuntu-latest
     strategy:

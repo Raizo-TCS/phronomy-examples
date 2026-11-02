@@ -25,15 +25,7 @@ class Inbox
   end
 
   def submit(id, target, body)
-    Database.open(@database) do |db|
-      db.execute("INSERT INTO inbox(request_id,target,body) VALUES(?,?,?) ON CONFLICT(request_id) DO NOTHING",
-        [id, target, JSON.generate(body)])
-      row = db.get_first_row("SELECT * FROM inbox WHERE request_id=?", [id])
-      unless row.fetch("target") == target && JSON.parse(row.fetch("body")) == body
-        raise ConflictingRequest, "request ID reused with different contents"
-      end
-      row
-    end
+    Database.open(@database) { |db| insert_or_lookup(db, id, target, body) }
   end
 
   def claim
@@ -55,14 +47,28 @@ class Inbox
   end
 
   def finish(job, result)
-    Database.open(@database) do |db|
-      db.execute("UPDATE inbox SET status='done',result=? WHERE seq=? AND owner=? AND status='running'",
-        [JSON.generate(result), job.fetch("seq"), job.fetch("owner")])
-      raise StaleAcknowledgement, "stale acknowledgement" unless db.changes == 1
-    end
+    Database.open(@database) { |db| finish_claim(db, job, status: "done", result: result) }
   end
 
   def lookup(id)
     Database.open(@database) { |db| db.get_first_row("SELECT * FROM inbox WHERE request_id=?", [id]) }
+  end
+
+  protected
+
+  def finish_claim(db, job, status:, result:)
+    db.execute("UPDATE inbox SET status=?,result=? WHERE seq=? AND owner=? AND status='running'",
+      [status, JSON.generate(result), job.fetch("seq"), job.fetch("owner")])
+    raise StaleAcknowledgement, "stale acknowledgement" unless db.changes == 1
+  end
+
+  def insert_or_lookup(db, id, target, body)
+    db.execute("INSERT INTO inbox(request_id,target,body) VALUES(?,?,?) ON CONFLICT(request_id) DO NOTHING",
+      [id, target, JSON.generate(body)])
+    row = db.get_first_row("SELECT * FROM inbox WHERE request_id=?", [id])
+    unless row.fetch("target") == target && JSON.parse(row.fetch("body")) == body
+      raise ConflictingRequest, "request ID reused with different contents"
+    end
+    row
   end
 end

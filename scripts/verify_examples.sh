@@ -472,6 +472,7 @@ CLI_EXAMPLES=(
   28_filter
   29_unified_persistence
   34_worker_approval
+  35_workflow_child_approval
 )
 
 echo -e "${BOLD}======================================================${NC}"

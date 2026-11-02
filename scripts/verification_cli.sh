@@ -3,7 +3,11 @@
 # Sourced by verify_examples.sh. Evidence belongs to verification, not core.
 verify_cli_run() {
   local name="$1"
-  if [[ "$name" == 34_worker_approval ]]; then
+  local sqlite_worker=false
+  case "$name" in
+    34_worker_approval|35_workflow_child_approval) sqlite_worker=true ;;
+  esac
+  if [[ "$sqlite_worker" == true ]]; then
     header "$name [CLI + HTTP fixtures]"
   else
     header "$name [CLI + LLM]"
@@ -27,8 +31,8 @@ verify_cli_run() {
   local grace=${CLI_KILL_GRACE_SECONDS:-10}
   local observation=""
   local -a command=(bundle exec ruby "$name/run.rb") arguments=()
-  if [[ "$name" == 34_worker_approval ]]; then
-    # Example 34 shares example 30's dependencies and selected core checkout.
+  if [[ "$sqlite_worker" == true ]]; then
+    # Worker examples use example 30's SQLite dependencies and selected core checkout.
     command=(env BUNDLE_GEMFILE="$BASE_DIR/30_sqlite_persistence/Gemfile"
       bundle exec ruby "$name/run.rb")
   fi

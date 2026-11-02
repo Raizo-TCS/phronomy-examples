@@ -274,6 +274,7 @@ usable without a PostgreSQL server.
 | `23_bounded_parallel` | Bounded child-Agent fan-out |
 | `32_async_composition` | Basic and asynchronously evaluated majority voting with Execution and TaskResult |
 | [34_worker_approval](34_worker_approval/README.md) | Standalone approval across two Ruby workers, including pre-ACK process loss |
+| [35_workflow_child_approval](35_workflow_child_approval/README.md) | Two Workflows share one Agent and receive their own durable child results across workers |
 
 ### Multi-agent
 

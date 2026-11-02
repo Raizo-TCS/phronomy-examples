@@ -39,23 +39,28 @@ module WorkflowChild
   class Supervisor
     def initialize(path)
       @path = path
+      @inflight = {}
       @inbox = DispatchInbox.new(path)
       @inbox.setup
     end
 
     def submit(id, target, body)
+      raise ArgumentError, "Reserved host request ID: #{id}" if id.start_with?("dispatch/", "result/")
       @inbox.submit(id, target, body)
     end
 
     def lookup(id) = @inbox.lookup(id)
 
-    def receive(worker, id)
-      worker.send_command("run")
-      claim = worker.receive
+    def receive(worker, id, command: "run")
+      raise "Worker already owns a delivery" if @inflight.key?(worker)
+      claim = read_reply(worker, command)
       unless claim.fetch("request") == id && claim.fetch("pid") == worker.process.pid
         raise "Unexpected claim for #{id}: #{claim.inspect}"
       end
-      Delivery.new(worker: worker, claim: claim, value: worker.receive)
+      # Keep the claim even if the next pipe read fails before a Delivery exists.
+      claim.each_value(&:freeze)
+      @inflight[worker] = claim.freeze
+      Delivery.new(worker: worker, claim: claim, value: read_reply(worker))
     end
 
     def perform(worker, id, target, body)
@@ -64,22 +69,38 @@ module WorkflowChild
     end
 
     def ack(delivery)
-      delivery.worker.send_command("ack")
-      raise "Missing ACK" unless delivery.worker.receive == {"ack" => true}
+      worker = delivery.worker
+      raise Inbox::StaleAcknowledgement unless @inflight[worker].equal?(delivery.claim)
+      raise "Missing ACK" unless read_reply(worker, "ack") == {"ack" => true}
+      @inflight.delete(worker)
       delivery.value
     end
 
     # Only parent-result import has a replay receipt in the Workflow snapshot.
-    def recover_import(delivery)
-      return false unless delivery.worker.process.join(0)
-      id = delivery.claim.fetch("request")
-      row = @inbox.lookup(id)
-      return false unless row && JSON.parse(row.fetch("body")).fetch("kind") == "deliver"
-      Database.open(@path) do |db|
-        db.execute("UPDATE inbox SET status='queued',owner=NULL WHERE request_id=? AND status='running' AND owner=?",
-          [id, delivery.claim.fetch("token")])
+    def recover_import(worker)
+      claim = @inflight[worker]
+      return false unless claim && worker.process.join(0)
+      requeued = Database.open(@path) do |db|
+        db.execute(<<~SQL, [claim.fetch("request"), claim.fetch("token")])
+          UPDATE inbox SET status='queued', owner=NULL
+          WHERE request_id=? AND owner=? AND status='running' AND json_extract(body, '$.kind')='deliver'
+        SQL
         db.changes == 1
       end
+      @inflight.delete(worker)
+      requeued
+    end
+
+    private
+
+    def read_reply(worker, command = nil)
+      worker.send_command(command) if command
+      worker.receive
+    rescue EOFError, Errno::EPIPE
+      # A closed pipe alone does not prove loss of ownership. If reaping times
+      # out, retain the claim so the supervisor can check the process again.
+      recover_import(worker) if @inflight.key?(worker) && worker.process.join(5)
+      raise
     end
   end
 end

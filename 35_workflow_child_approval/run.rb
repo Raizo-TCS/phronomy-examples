@@ -11,7 +11,15 @@ module WorkflowChild
     raise "Expected #{expected.inspect}, got #{value.inspect}" unless value == expected
   end
 
-  def run(dir, approved:)
+  def check_reserved_id(host, id, target, input)
+    host.submit(id, target, input)
+    raise "Accepted reserved request ID #{id}"
+  rescue ArgumentError => error
+    raise unless error.message == "Reserved host request ID: #{id}"
+    check(host.lookup(id), nil)
+  end
+
+  def run(dir, approved:, crash_before_reply:)
     path = File.join(dir, "demo.sqlite3")
     effects = File.join(dir, "tool.log")
     stores = WorkerApproval.stores(path, install: true)
@@ -25,6 +33,7 @@ module WorkflowChild
     # Each durable parent wait contains a stable, host-assigned child ID before dispatch.
     x = {"parent" => "X", "agent" => "S"}
     y = {"parent" => "Y", "agent" => "S"}
+    check_reserved_id(host, "dispatch/workflow-child-v1:X", "agent/S", x.merge("kind" => "dispatch"))
     x.merge!(host.perform(a, "open-X", "workflow/X", x.merge("kind" => "open", "text" => "apply")))
     request = host.ack(host.receive(a, "dispatch/#{x.fetch("child")}"))
     check(request.fetch("execution"), x.fetch("child"))
@@ -34,6 +43,8 @@ module WorkflowChild
     y_dispatch_id = "dispatch/#{y.fetch("child")}"
     check(host.ack(host.receive(a, y_dispatch_id)), {"status" => "deferred"})
     check(host.lookup(y_dispatch_id).fetch("status"), "parked")
+    x_result_id = "result/#{x.fetch("child")}"
+    check_reserved_id(host, x_result_id, "workflow/X", x.merge("kind" => "deliver"))
     check(host.perform(b, "early-X", "workflow/X", x.merge("kind" => "deliver")), {"status" => "not_completed"})
 
     check(host.perform(a, "wrong-child-Y", "workflow/Y", y.merge("kind" => "deliver", "child" => x.fetch("child"))),
@@ -46,17 +57,32 @@ module WorkflowChild
     check(host.submit("answer-S-X", "agent/S", answer).fetch("status"), "done")
     # Terminal ACK promoted the original parked row; no caller submits Y again.
     check(host.ack(host.receive(a, y_dispatch_id)).fetch("execution"), y.fetch("child"))
-    x_result_id = "result/#{x.fetch("child")}"
-    first = host.receive(b, x_result_id)
     expected_outcome = approved ? "completed" : "rejected"
     check(stores.agent.observe_execution(agent_id: "S", execution_id: x.fetch("child")).status.to_s, expected_outcome)
-    check(first.value, {"status" => "applied", "outcome" => expected_outcome, "output" => approved ? "approved" : nil})
-    check(host.recover_import(first), false)
-    b.stop!
-    raise "Fault injection failed" unless b.process.value.signaled?
-    check(host.recover_import(first), true)
-    check(host.ack(host.receive(a, x_result_id)), {"status" => "already_applied"})
-    check(stores.workflow.load("X").fetch(:snapshot).fetch("fields").values_at("imports", "child_outcome"), [1, expected_outcome])
+    begin
+      if crash_before_reply
+        host.ack(host.receive(b, x_result_id, command: "run-and-crash-before-reply"))
+      else
+        first = host.receive(b, x_result_id)
+        check(first.value, {"status" => "applied", "outcome" => expected_outcome, "output" => approved ? "approved" : nil})
+        check(host.recover_import(b), false)
+        b.stop!
+        host.ack(first)
+      end
+      raise "Expected worker death before ACK"
+    rescue EOFError, Errno::EPIPE
+      check(b.process.value.termsig, Signal.list.fetch("KILL"))
+    end
+    check(host.lookup(x_result_id).fetch("status"), "queued")
+    saved = stores.workflow.load("X").fetch(:snapshot)
+    check(saved.fetch("phase"), "__end__")
+    check(saved.fetch("fields").values_at("imports", "child_outcome", "consumed_revision", "output"),
+      [1, expected_outcome, x.fetch("revision"), approved ? "approved" : nil])
+    replay = host.receive(a, x_result_id)
+    check(host.recover_import(b), false)
+    check(host.ack(replay), {"status" => "already_applied"})
+    check(host.lookup(x_result_id).fetch("status"), "done")
+    check(stores.workflow.load("X").fetch(:snapshot), saved)
     check(stores.workflow.load("Y").fetch(:snapshot).fetch("phase"), "awaiting_child")
 
     # Y owns a distinct result from the same Agent and imports it on its own delivery.
@@ -65,7 +91,7 @@ module WorkflowChild
     check(stores.workflow.load("Y").fetch(:snapshot).fetch("fields").fetch("imports"), 1)
     recorded = File.exist?(effects) ? File.readlines(effects, chomp: true) : []
     check(recorded, approved ? [b.process.pid.to_s] : [])
-    puts "#{expected_outcome}: A=#{a.process.pid} B=#{b.process.pid} shared Agent S; X=#{x.fetch("child")} Y=#{y.fetch("child")}"
+    puts "#{expected_outcome}: A=#{a.process.pid} B=#{b.process.pid} shared Agent S; X=#{x.fetch("child")} Y=#{y.fetch("child")}; crash #{crash_before_reply ? "before" : "after"} result reply"
     puts "parent imports: X=1 Y=1; Tool calls=#{recorded.size}; pre-ACK redelivery: already_applied"
   ensure
     a&.close
@@ -77,5 +103,7 @@ end
 modes = ARGV.empty? ? %w[approve reject] : ARGV
 abort "Usage: ruby run.rb [approve|reject]" unless (modes - %w[approve reject]).empty?
 modes.each do |mode|
-  Dir.mktmpdir("workflow-child") { |dir| WorkflowChild.run(dir, approved: mode == "approve") }
+  [true, false].each do |crash_before_reply|
+    Dir.mktmpdir("workflow-child") { |dir| WorkflowChild.run(dir, approved: mode == "approve", crash_before_reply: crash_before_reply) }
+  end
 end

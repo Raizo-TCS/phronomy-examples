@@ -10,8 +10,9 @@ approval for X. While X waits, worker A serves Y. Y's request remains in the
 SQLite inbox until S can accept it. Worker B approves X, resumes its parent,
 and is forcibly stopped before the parent delivery is acknowledged. A replays
 the delivery and observes the existing receipt. Each parent imports one result.
-The second scenario rejects X's approval and delivers a durable rejection to
-its parent without running the Tool.
+When X is rejected, its parent receives a durable rejection and the Tool never runs.
+Both decisions are exercised with B killed immediately before its result reply
+and again in a fresh run after the reply but before the inbox ACK.
 
 ## Run
 
@@ -37,7 +38,8 @@ process harness, inbox and approval handler.
 - Finishing the parent start delivery also inserts its child-dispatch row in
   the same inbox transaction. A terminal child ACK likewise enqueues its
   parent-result notification. Request IDs are deterministic and duplicate
-  enqueue attempts must identify the same contents.
+  enqueue attempts must identify the same contents. The host reserves the
+  `dispatch/` and `result/` ID prefixes at its submission boundary.
 - The inbox serializes each `workflow/X` or `agent/S` target. A dispatch that
   encounters a busy S releases its claim and parks its durable row. An answer
   for S can then run. Its terminal ACK atomically promotes parked rows. Y
@@ -46,14 +48,21 @@ process harness, inbox and approval handler.
   ID before loading the child's durable result. It calls
   `send_saved_event` under the parent claim. The Workflow saves the imported
   result and the consumed wait revision together. A replay reads that receipt.
-- The supervisor can requeue an unacknowledged parent import after reaping the
-  exact local process and checking its original claim token.
+- As soon as a worker reports its claim, the supervisor retains the worker
+  process handle, request ID, and token. Losing the result reply leaves those
+  facts available. On a pipe EOF or broken pipe it briefly waits for that
+  exact worker to exit. After reaping, only a still-running parent import
+  with the matching token is requeued. The pipe error reaches the caller;
+  the next worker can claim the row and observe the saved receipt. A live
+  worker retains the claim; the supervisor can later call
+  `recover_import(worker)` after confirming exit.
 
 This is an application-defined Workflow wait with a separately hosted Agent.
 The scenarios cover completed/rejected child results and failure between import and
 ACK under a single live supervisor. Native Agent Tool descendants,
 arbitrary `task_state` callbacks, child failure/cancellation routing,
-supervisor restart, fleet-wide fencing, and an uncertain Tool effect need
+worker loss before the claim is reported, supervisor restart, fleet-wide
+fencing, and an uncertain Tool effect need
 their own contracts. In particular, a crash before an Agent answer's ACK is
 not a signal to repeat the Tool.
 

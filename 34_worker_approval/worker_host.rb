@@ -28,7 +28,8 @@ end
 module WorkerApproval
   def self.serve(inbox, handler)
     $stdout.sync = true
-    while $stdin.gets&.chomp == "run"
+    while (command = $stdin.gets&.chomp)
+      break unless %w[run run-and-crash-before-reply].include?(command)
       job = inbox.claim
       unless job
         puts JSON.generate(idle: true)
@@ -36,7 +37,8 @@ module WorkerApproval
       end
       puts JSON.generate(request: job.fetch("request_id"), token: job.fetch("owner"), pid: Process.pid)
       value = handler.call(job)
-      # The supervisor can kill this process at the precise pre-ACK boundary.
+      # Test fault at handler return, after persistence and before the supervisor sees the result.
+      Process.kill("KILL", Process.pid) if command == "run-and-crash-before-reply"
       puts JSON.generate(value)
       break unless $stdin.gets&.chomp == "ack"
       inbox.finish(job, value)

@@ -26,10 +26,14 @@ fixtures. All assertions must pass:
    before acting, while repeated delivery of the identical accepted answer
    returns its existing receipt.
 3. Completion before S finishes, or a notification addressed to the wrong
-   parent/child pair, does not apply a parent transition.
-4. On X's committed notification, B is killed before its inbox ACK. The
-   supervisor rejects reclaiming a live B, then requeues the dead worker's
-   exact claim. A sees `already_applied` and the durable X count is one.
+   parent/child pair, does not apply a parent transition. A submitter cannot
+   preempt the host's `dispatch/` or `result/` request IDs.
+4. On X's committed notification, B is killed before it replies with the
+   result, or after the reply but before ACK. The supervisor retains the
+   claim before reading the result. A broken pipe or EOF requeues only the
+   dead worker's matching parent import. Recovery refuses a live B or an
+   obsolete claim. A observes `already_applied`, acknowledges the row,
+   and leaves X's saved receipt and import count of one unchanged.
 5. Y is still waiting after X's replay and imports its own child result
    exactly once. With X approved, the Tool effect log contains B's PID once.
    With X denied, the durable child and parent both report rejection and the

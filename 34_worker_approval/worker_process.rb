@@ -23,7 +23,7 @@ module WorkerApproval
 
     def receive
       line = Timeout.timeout(25) { @output.gets }
-      raise "worker exited before replying" unless line
+      raise EOFError, "worker exited before replying" unless line
       JSON.parse(line)
     end
 

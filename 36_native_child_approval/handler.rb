@@ -87,7 +87,7 @@ module NativeChild
         NativeChild.check(rejected.fetch(:rejected), true)
         NativeChild.check(@other_task.wait_result(timeout: 12).fetch(:rejected), true)
       else
-        @other = WorkerApproval::Conversation.create(agent_id: "independent-in-b", persistence: @store)
+        @other = WorkerApproval::Conversation.create(persistence: @store)
       end
       result = @other.invoke("independent follow-up")
       @other.unload!
@@ -115,6 +115,35 @@ module NativeChild
       NativeChild.check(@provider.calls.length, approved ? 2 : 1)
       {"child" => @store.observe_execution(agent_id: @ticket.fetch("child"), execution_id: child_id).status.to_s,
        "parent" => @store.observe_execution(agent_id: @ticket.fetch("parent"), execution_id: id).status.to_s}
+    end
+
+    # Each worker reads the terminal history from its own SQLite connection.
+    def terminal_history(ids)
+      before = @provider.calls.length
+      @parent ||= Parent.load(ids.fetch("parent"), persistence: @store, coordination_store: @coordination)
+      @child ||= Child.load(ids.fetch("child"), persistence: @store)
+      history = [[@parent, ids.fetch("execution")], [@child, ids.fetch("child_execution")]].map do |agent, id|
+        result = agent.resume(id)
+        holds = @store.retained_references(agent_id: agent.agent_id)
+        raise "Expected retained native history" if holds.empty?
+        {"result" => result.slice(:execution_id, :status, :output),
+         "transcript" => agent.transcript_messages.map(&:to_h), "retentions" => holds.map(&:to_h)}
+      end
+      NativeChild.check(@provider.calls.length, before)
+      history
+    end
+
+    def release_completed(ids)
+      released = @parent.unload_with_completed_child!(ids.fetch("execution"), execution_id: ids.fetch("child_execution"))
+      NativeChild.check(Parent.get(@parent.agent_id), nil)
+      NativeChild.check(Child.get(@child.agent_id), nil)
+      {"released" => released}
+    end
+
+    def next_turn
+      reply = @parent.invoke("recall the prior turn")
+      NativeChild.check(@provider.calls.length, 1)
+      {"output" => reply.fetch(:output)}
     end
 
     private

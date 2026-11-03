@@ -15,6 +15,9 @@ $stdin.each_line do |line|
           when "approve_and_handoff" then handler.approve_and_handoff
           when "replay" then handler.replay_approval(job.fetch("approval"))
           when "answer" then handler.answer(job.fetch("approved"))
+          when "history" then handler.terminal_history(job.fetch("ids"))
+          when "release" then handler.release_completed(job.fetch("ids"))
+          when "next_turn" then handler.next_turn
           else raise ArgumentError, "unknown command"
           end
   puts JSON.generate(reply)

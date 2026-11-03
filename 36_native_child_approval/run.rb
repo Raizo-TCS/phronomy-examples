@@ -20,9 +20,9 @@ module NativeChild
     repeat = %w[approve-twice reject-second].include?(decision)
     c = WorkerApproval::WorkerProcess.new(path, effects, script: script) if repeat
     workers = [a, b, c].compact
-    check(workers.map { |w| w.process.pid }.uniq.size, workers.size)
 
-    ticket = call(a, "start", "input" => (repeat ? "apply then publish" : "use the child"))
+    input = repeat ? "apply then publish" : "use the child"
+    ticket = call(a, "start", "input" => input)
     check(call(b, "restore", "ticket" => ticket), {"restored" => ticket})
     check(call(a, "other"), {"other" => "other job finished"})
     check(File.exist?(effects), false)
@@ -38,9 +38,24 @@ module NativeChild
     end
 
     approved = %w[approve approve-twice].include?(decision)
-    result = call(c || b, "answer", "approved" => approved)
+    final_owner = c || b
+    result = call(final_owner, "answer", "approved" => approved)
     child_status = approved ? "completed" : "rejected"
     check(result, {"parent" => "completed", "child" => child_status})
+
+    # The reader receives only execution identities. The host compares observations.
+    ids = ticket.except("approval")
+    history = call(final_owner, "history", "ids" => ids)
+    check(call(final_owner, "release", "ids" => ids), {"released" => true})
+    reader = WorkerApproval::WorkerProcess.new(path, effects, script: script)
+    workers << reader
+    check(workers.map { |w| w.process.pid }.uniq.size, workers.size)
+    check(call(reader, "history", "ids" => ids), history)
+    check(call(final_owner, "other"), {"other" => "other job finished"})
+    previous_reply = approved ? "received: child finished" : "no child output"
+    check(call(reader, "next_turn"), {"output" => "Previous turn: #{input} / #{previous_reply}"})
+
+    check(call(reader, "release", "ids" => ids), {"released" => true})
     calls = File.exist?(effects) ? File.readlines(effects, chomp: true) : []
     expected = (repeat || approved) ? [b.process.pid.to_s] : []
     expected << "published by #{c.process.pid}" if repeat && approved
@@ -48,11 +63,12 @@ module NativeChild
     check(workers.all? { |w| w.process.alive? }, true)
     pids = "A=#{a.process.pid} B=#{b.process.pid}"
     pids += " C=#{c.process.pid}" if repeat
-    puts "#{decision}: child=#{child_status} parent=completed Tool calls=#{calls.length}; #{pids}"
+    puts "#{decision}: child=#{child_status} parent=completed Tool calls=#{calls.length}; #{pids} reader=#{reader.process.pid} history preserved"
   ensure
     a&.close
     b&.close
     c&.close
+    reader&.close
     WorkerApproval::Record.connection_pool.disconnect! if WorkerApproval::Record.connected?
   end
 end

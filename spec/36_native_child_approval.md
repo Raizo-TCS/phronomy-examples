@@ -5,7 +5,8 @@
 The host can hand off the same parent and direct child each time the child
 reaches a supported Tool approval wait. Workers share the SQLite Agent and
 coordination stores. Each worker owns a separate process, Agent registry and
-database connections.
+database connections. After the parent imports the child result and completes,
+the host can also unload both local instances without deleting their history.
 
 For example, A hands a parent/child pair to B before the child applies a change.
 B can finish the child locally or hand the pair to C when the child asks to
@@ -41,8 +42,19 @@ core checkout. The default command checks the following cases in fresh databases
   the second ID. C restores the second wait without invoking the provider,
   refuses a replay of the first approval and runs no duplicate Tool. B can
   handle unrelated work while C owns the pair.
-- Reading the completed parent again preserves the result and causes no extra
-  provider call. Every worker that participated is still alive.
+- After completion, B (one approval) or C (two approvals) calls
+  `unload_with_completed_child!`. Both local lookups return nil. After the
+  next worker loads the pair, the old references still refuse operations and
+  the released worker processes an unrelated request.
+- A fresh worker receives only the parent and child Agent and execution IDs.
+  It reads both terminal results, transcripts and nonempty retention records
+  from SQLite. These match the observations from before release, with no
+  provider calls during the reads.
+- The fresh worker invokes the same parent with a new user message. Its one
+  provider request includes the previous user input and final assistant
+  response. This turn makes no Tool call. The effect log still matches the
+  table. The reader can release the pair again after its own turn. All
+  participating workers remain alive.
 
 The host orders transfers after release. Supervisor loss, distributed worker
 fencing and crash recovery of external Tool effects require host policy.

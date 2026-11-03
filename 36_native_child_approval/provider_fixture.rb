@@ -20,6 +20,10 @@ module NativeChild
       parent = body.fetch("tools").any? { |tool| tool.fetch("function").fetch("name") == "dispatch_to_worker" }
       if parent && last.fetch("role") == "tool"
         last.fetch("content").empty? ? "no child output" : "received: #{last.fetch("content")}"
+      elsif parent && last.fetch("content") == "recall the prior turn"
+        previous_input = messages.take(user_index).reverse.find { |message| message["role"] == "user" }
+        previous_reply = messages.take(user_index).reverse.find { |message| message["role"] == "assistant" }
+        "Previous turn: #{previous_input.fetch("content")} / #{previous_reply.fetch("content")}"
       elsif parent
         ExampleChatStub.tool("dispatch_to_worker", {input: turn.first.fetch("content")})
       elsif last.fetch("role") == "tool"

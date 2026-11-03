@@ -1,7 +1,9 @@
 # Phronomy Examples
 
-These examples use the published Phronomy `~> 0.31.0` gem through
-`Gemfile.phronomy` and all seven lockfiles. It adds explicit schema delivery,
+These examples use the published Phronomy `~> 0.32.0` gem through
+`Gemfile.phronomy` and all seven lockfiles. Version 0.32.0 adds Worker approval
+handoff, saved Workflow events and completed parent/child owner release for
+Examples 34–36. It also includes explicit schema delivery,
 durable transcript Message reads and safe one-shot/child Agent release to structured Agent output,
 GeneratorVerifier lifetimes and explicit bounded LM Studio parse-error handling.
 The baseline includes the r8 contracts and RubyLLM 2.0 migration.
@@ -36,11 +38,12 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-The ordinary CI jobs install the published RubyGems dependency using the
-committed lockfiles. The hosted-worker job checks out the pinned Phronomy
-commit, verifies the loaded gem path and runs Examples 34, 35 and 36 against
-that checkout. To verify a local framework checkout, export `PHRONOMY_PATH`
-and run `scripts/update_phronomy.sh` first.
+All CI jobs install the published RubyGems dependency using the committed
+lockfiles. Hosted Worker CI verifies Phronomy 0.32.0, its RubyGems source and
+loaded path with `PHRONOMY_PATH` unset. It runs Examples 34, 35 and 36 and the
+original GC probe (`RECORDS=5 MORE_WORK=1`) on Ubuntu 24.04 with Ruby 3.2.3/3.3.6
+and Ubuntu 26.04 with Ruby 3.2.11/3.3.13. To verify a local framework checkout,
+export `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
 
 ## DX1 and DX2
 
@@ -216,8 +219,9 @@ Gemfile.phronomy
 ```
 
 DX1/DX2 require Phronomy 0.31 or later; 0.30.1 does not expose these APIs.
-The shared dependency allows `~> 0.31.0`, and all seven lockfiles select the
-published 0.31.0 gem. Keep `PHRONOMY_PATH` unset to verify that dependency:
+Worker Examples 34–36 require 0.32.0; 0.31.0 does not provide `start_hosted`.
+The shared dependency allows `~> 0.32.0`, and all seven lockfiles select the
+published 0.32.0 gem. Keep `PHRONOMY_PATH` unset to verify that dependency:
 
 ```bash
 unset PHRONOMY_PATH
@@ -322,9 +326,10 @@ A worker pool should not be assumed to imply parallel execution.
 
 ## Verification
 
-Install/update all bundles first:
+From the repository root, install/update all published-gem bundles first:
 
 ```bash
+unset PHRONOMY_PATH
 ./scripts/update_phronomy.sh
 ```
 
@@ -333,6 +338,26 @@ Then run the ordinary repository verification:
 ```bash
 ./scripts/verify_examples.sh
 ```
+
+The standard verifier includes Examples 34–36 with fixed HTTP responses. To run
+only their Worker acceptance and original GC preservation probe without a live
+LLM, use the SQLite bundle from the repository root:
+
+```bash
+unset PHRONOMY_PATH
+export BUNDLE_GEMFILE="$PWD/30_sqlite_persistence/Gemfile"
+bundle exec ruby -rphronomy -e 'spec = Gem.loaded_specs.fetch("phronomy"); puts "Phronomy #{spec.version}: #{spec.full_gem_path}"'
+bundle exec ruby 34_worker_approval/run.rb
+bundle exec ruby 35_workflow_child_approval/run.rb
+bundle exec ruby 36_native_child_approval/run.rb
+PHRONOMY_EXAMPLES="$PWD" RECORDS=5 MORE_WORK=1 bundle exec ruby scripts/verify_terminal_gc.rb preserve
+unset BUNDLE_GEMFILE
+```
+
+This validates process handoff and SQLite history preservation, not live-model
+quality. Known LM Studio PEG failures in Examples 01/22 must still be reported
+as failures in the standard verifier's actual totals; passing Worker checks does
+not change that overall result.
 
 The SQLite Persistence reference backend also has a focused database contract
 suite that does not require an LLM:

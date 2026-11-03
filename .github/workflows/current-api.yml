@@ -49,28 +49,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     env:
-      PHRONOMY_PATH: ${{ github.workspace }}/phronomy
       BUNDLE_GEMFILE: ${{ github.workspace }}/examples/30_sqlite_persistence/Gemfile
     steps:
       - uses: actions/checkout@v4
         with:
           path: examples
           persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          repository: Raizo-TCS/phronomy
-          # These examples exercise unreleased APIs. Pin the reviewed core commit.
-          ref: 4eed6032ffc3cafacf3c09c2b84294db3a46e624
-          path: phronomy
-          persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           working-directory: examples/30_sqlite_persistence
-      - name: Install SQLite bundle with the paired core
+      - name: Install SQLite bundle with the published gem
         run: |
           bundle install
-          bundle exec ruby -rphronomy -e 'abort "Wrong core checkout" unless File.realpath(Gem.loaded_specs.fetch("phronomy").full_gem_path) == File.realpath(ENV.fetch("PHRONOMY_PATH"))'
+          bundle exec ruby -rbundler -rphronomy -e '
+            abort "PHRONOMY_PATH must be unset" if ENV.key?("PHRONOMY_PATH")
+            spec = Gem.loaded_specs.fetch("phronomy")
+            source = Bundler.load.specs.find { |item| item.name == "phronomy" }.source
+            abort "Wrong published version" unless spec.version.to_s == "0.32.0"
+            abort "Phronomy must come from RubyGems" unless source.is_a?(Bundler::Source::Rubygems)
+            puts "Phronomy #{spec.version}"
+            puts "Loaded gem: #{spec.full_gem_path}"
+            puts "Dependency source: #{source}"
+          '
       - name: Exercise Agent and Workflow handoffs with fixed HTTP responses
         run: |
           bundle exec ruby 34_worker_approval/run.rb

@@ -275,6 +275,7 @@ usable without a PostgreSQL server.
 | `32_async_composition` | Basic and asynchronously evaluated majority voting with Execution and TaskResult |
 | [34_worker_approval](34_worker_approval/README.md) | Standalone approval across two Ruby workers, including pre-ACK process loss |
 | [35_workflow_child_approval](35_workflow_child_approval/README.md) | Two Workflows share one Agent and receive their own durable child results across workers |
+| [36_native_child_approval](36_native_child_approval/README.md) | One worker releases a parent Agent and its approval-waiting subagent, handles another request, and stays alive while a second worker resumes the pair |
 
 ### Multi-agent
 

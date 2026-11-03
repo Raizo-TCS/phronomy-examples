@@ -48,7 +48,7 @@ jobs:
         with:
           repository: Raizo-TCS/phronomy
           # These examples exercise unreleased APIs. Pin the reviewed core commit.
-          ref: f5f799ea25f2729e950258ad20120fb7e95be52d
+          ref: d067beced034c591ede6fa64fd1259bca838e3cb
           path: phronomy
           persist-credentials: false
       - uses: ruby/setup-ruby@v1
@@ -63,6 +63,7 @@ jobs:
         run: |
           bundle exec ruby 34_worker_approval/run.rb
           bundle exec ruby 35_workflow_child_approval/run.rb
+          bundle exec ruby 36_native_child_approval/run.rb
 
   rails:
     runs-on: ubuntu-latest

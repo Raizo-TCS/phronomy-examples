@@ -5,7 +5,7 @@ verify_cli_run() {
   local name="$1"
   local sqlite_worker=false
   case "$name" in
-    34_worker_approval|35_workflow_child_approval) sqlite_worker=true ;;
+    34_worker_approval|35_workflow_child_approval|36_native_child_approval) sqlite_worker=true ;;
   esac
   if [[ "$sqlite_worker" == true ]]; then
     header "$name [CLI + HTTP fixtures]"

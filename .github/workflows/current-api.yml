@@ -37,8 +37,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.2.3", "3.3.6"]
-    runs-on: ubuntu-latest
+        include:
+          - os: ubuntu-24.04
+            ruby: "3.2.3"
+          - os: ubuntu-24.04
+            ruby: "3.3.6"
+          - os: ubuntu-26.04
+            ruby: "3.2.11"
+          - os: ubuntu-26.04
+            ruby: "3.3.13"
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     env:
       PHRONOMY_PATH: ${{ github.workspace }}/phronomy

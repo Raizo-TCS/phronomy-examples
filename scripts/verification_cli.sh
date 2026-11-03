@@ -3,7 +3,15 @@
 # Sourced by verify_examples.sh. Evidence belongs to verification, not core.
 verify_cli_run() {
   local name="$1"
-  header "$name [CLI + LLM]"
+  local sqlite_worker=false
+  case "$name" in
+    34_worker_approval|35_workflow_child_approval|36_native_child_approval) sqlite_worker=true ;;
+  esac
+  if [[ "$sqlite_worker" == true ]]; then
+    header "$name [CLI + HTTP fixtures]"
+  else
+    header "$name [CLI + LLM]"
+  fi
   if [[ ! -f "$BASE_DIR/$name/run.rb" ]]; then
     skip "no run.rb found"
     return
@@ -23,6 +31,11 @@ verify_cli_run() {
   local grace=${CLI_KILL_GRACE_SECONDS:-10}
   local observation=""
   local -a command=(bundle exec ruby "$name/run.rb") arguments=()
+  if [[ "$sqlite_worker" == true ]]; then
+    # Worker examples use example 30's SQLite dependencies and selected core checkout.
+    command=(env BUNDLE_GEMFILE="$BASE_DIR/30_sqlite_persistence/Gemfile"
+      bundle exec ruby "$name/run.rb")
+  fi
   if [[ -n "${EXAMPLE_ARGS[$name]:-}" ]]; then
     read -r -a arguments <<< "${EXAMPLE_ARGS[$name]}"
     command+=("${arguments[@]}")

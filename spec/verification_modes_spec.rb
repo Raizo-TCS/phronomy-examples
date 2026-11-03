@@ -22,17 +22,19 @@ RSpec.describe "Repository verification modes" do
         FileUtils.cp(File.join(root, "scripts", name), scripts)
       end
       %w[09_rails_chat 15_rails_secure_chat 18_rails_agent_job 20_cve_scanner
-        30_sqlite_persistence 31_postgresql_persistence 01_basic_chain].each do |name|
+        30_sqlite_persistence 31_postgresql_persistence 01_basic_chain 36_native_child_approval].each do |name|
         FileUtils.mkdir_p(File.join(dir, name))
       end
       File.write(File.join(dir, "test_approval_lmstudio.rb"), 'raise "must not execute"')
       File.write(File.join(dir, "01_basic_chain/run.rb"), invalid_syntax ? "def (" : 'raise "must not execute"')
+      File.write(File.join(dir, "36_native_child_approval/run.rb"), 'raise "must not execute"')
       command = <<~'RUBY'
         require "json"
         require "rbconfig"
         name = File.basename($PROGRAM_NAME)
         File.open(ENV.fetch("VERIFY_COMMAND_LOG"), "a") do |file|
-          file.puts(JSON.generate(command: name, arguments: ARGV, directory: File.basename(Dir.pwd)))
+          file.puts(JSON.generate(command: name, arguments: ARGV, directory: File.basename(Dir.pwd),
+            gemfile: ENV["BUNDLE_GEMFILE"]))
         end
         if name == "python3"
           exit 0 # The independent source-API preflight is outside this test.
@@ -82,6 +84,7 @@ RSpec.describe "Repository verification modes" do
       %w[exec ruby -e], %w[exec ruby -c], %w[exec rspec spec], %w[exec rspec]
     )
     expect(bundle_calls).to include(include("directory" => "30_sqlite_persistence", "arguments" => %w[exec rspec]))
+    expect(bundle_calls).to include(include("arguments" => %w[exec ruby -c 36_native_child_approval/run.rb]))
   end
 
   it "still fails syntax-only verification when a CLI file has invalid Ruby syntax" do
@@ -103,6 +106,8 @@ RSpec.describe "Repository verification modes" do
     expect(status.success?).to be(false) # Controlled commands reject live work.
     arguments = calls.map { |call| call.fetch("arguments") }
     expect(arguments).to include(include("integration/trust_pipeline_spec.rb"), %w[exec ruby 01_basic_chain/run.rb])
+    expect(calls).to include(include("arguments" => %w[exec ruby 36_native_child_approval/run.rb],
+      "gemfile" => end_with("/30_sqlite_persistence/Gemfile")))
     ports = calls.select { |call| call["arguments"].include?("-rsocket") }.map { |call| call["arguments"].last }
     expect(ports).to eq(%w[3009 3015 3018 3020])
     expect(out).to include("Rails: db + Zeitwerk + server + health + Playwright GUI")

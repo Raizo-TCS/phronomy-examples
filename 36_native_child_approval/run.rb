@@ -17,27 +17,48 @@ module NativeChild
     script = File.join(__dir__, "worker.rb")
     a = WorkerApproval::WorkerProcess.new(path, effects, script: script)
     b = WorkerApproval::WorkerProcess.new(path, effects, script: script)
-    raise "Expected separate workers" if a.process.pid == b.process.pid
+    repeat = %w[approve-twice reject-second].include?(decision)
+    c = WorkerApproval::WorkerProcess.new(path, effects, script: script) if repeat
+    workers = [a, b, c].compact
+    check(workers.map { |w| w.process.pid }.uniq.size, workers.size)
 
-    ticket = call(a, "start")
+    ticket = call(a, "start", "input" => (repeat ? "apply then publish" : "use the child"))
     check(call(b, "restore", "ticket" => ticket), {"restored" => ticket})
     check(call(a, "other"), {"other" => "other job finished"})
     check(File.exist?(effects), false)
-    approved = decision == "approve"
-    result = call(b, "answer", "approved" => approved)
+    if repeat
+      next_ticket = call(b, "approve_and_handoff")
+      check(next_ticket.except("approval"), ticket.except("approval"))
+      raise "Expected two different approval IDs" if next_ticket.fetch("approval") == ticket.fetch("approval")
+      check(call(c, "restore", "ticket" => next_ticket), {"restored" => next_ticket})
+      first_id = ticket.fetch("approval")
+      check(call(c, "replay", "approval" => first_id), {"refused" => first_id})
+      check(call(b, "other"), {"other" => "other job finished"})
+      check(File.readlines(effects, chomp: true), [b.process.pid.to_s])
+    end
+
+    approved = %w[approve approve-twice].include?(decision)
+    result = call(c || b, "answer", "approved" => approved)
     child_status = approved ? "completed" : "rejected"
     check(result, {"parent" => "completed", "child" => child_status})
     calls = File.exist?(effects) ? File.readlines(effects, chomp: true) : []
-    check(calls, approved ? [b.process.pid.to_s] : [])
-    check(a.process.alive? && b.process.alive?, true)
-    puts "#{decision}: child=#{child_status} parent=completed Tool calls=#{calls.length}; A=#{a.process.pid} B=#{b.process.pid}"
+    expected = (repeat || approved) ? [b.process.pid.to_s] : []
+    expected << "published by #{c.process.pid}" if repeat && approved
+    check(calls, expected)
+    check(workers.all? { |w| w.process.alive? }, true)
+    pids = "A=#{a.process.pid} B=#{b.process.pid}"
+    pids += " C=#{c.process.pid}" if repeat
+    puts "#{decision}: child=#{child_status} parent=completed Tool calls=#{calls.length}; #{pids}"
   ensure
     a&.close
     b&.close
+    c&.close
     WorkerApproval::Record.connection_pool.disconnect! if WorkerApproval::Record.connected?
   end
 end
 
-decisions = ARGV.empty? ? %w[approve reject] : ARGV
-abort "Usage: ruby run.rb [approve|reject]" unless (decisions - %w[approve reject]).empty?
-decisions.each { |decision| Dir.mktmpdir("native-child") { |dir| NativeChild.run(dir, decision) } }
+decisions = %w[approve reject approve-twice reject-second]
+abort "Usage: ruby run.rb [#{decisions.join("|")}]" unless (ARGV - decisions).empty?
+(ARGV.empty? ? decisions : ARGV).each do |decision|
+  Dir.mktmpdir("native-child") { |dir| NativeChild.run(dir, decision) }
+end

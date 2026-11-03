@@ -9,9 +9,11 @@ $stdout.sync = true
 $stdin.each_line do |line|
   job = JSON.parse(line)
   reply = case job.fetch("op")
-          when "start" then handler.start
+          when "start" then handler.start(job.fetch("input", "use the child"))
           when "restore" then handler.restore(job.fetch("ticket"))
           when "other" then handler.other_work
+          when "approve_and_handoff" then handler.approve_and_handoff
+          when "replay" then handler.replay_approval(job.fetch("approval"))
           when "answer" then handler.answer(job.fetch("approved"))
           else raise ArgumentError, "unknown command"
           end

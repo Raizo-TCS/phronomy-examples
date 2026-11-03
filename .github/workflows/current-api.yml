@@ -48,7 +48,7 @@ jobs:
         with:
           repository: Raizo-TCS/phronomy
           # These examples exercise unreleased APIs. Pin the reviewed core commit.
-          ref: d067beced034c591ede6fa64fd1259bca838e3cb
+          ref: 1a0ec56ca3ba11f061a05240bdb8e12638ab63f0
           path: phronomy
           persist-credentials: false
       - uses: ruby/setup-ruby@v1

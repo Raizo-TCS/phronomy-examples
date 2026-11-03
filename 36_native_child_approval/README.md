@@ -1,21 +1,24 @@
 # A native child Agent waits for approval across live Ruby workers
 
-A parent Orchestrator dispatches to its declared child through the normal
-subagent Tool. When that child needs approval, the worker detaches the
-supported parent/child pair locally. The next worker uses the persisted
-parent Execution, child slot and approval to resume the same call.
+A parent Orchestrator dispatches to its registered subagent. At each supported
+child approval wait, the current worker can release both local Agent instances.
+The next worker uses the shared SQLite stores to restore the same parent execution,
+child execution and pending approval.
 
-For example, A starts a parent that calls a child through
-`dispatch_to_worker`. The child asks to run `apply_request`. A releases
-both Agents. B loads the parent and reopens that exact approval. With B
-waiting, A rejects an unrelated pending approval and runs a new request
-on that same unrelated Agent. Both Ruby processes stay alive.
+For example, A dispatches a child that needs permission to apply and then publish
+a change. A releases the pair before either Tool runs. B restores the pair,
+approves `apply_request` and releases both Agents when the child asks to publish.
+C restores that second request. B serves an unrelated request while C owns the pair.
 
 ## Run
 
-Use the Phronomy feature checkout that supports a native child execution ID
-on the hosted parent's `detach!`. The released 0.31.0 gem predates this API.
-From this directory on Linux:
+Run the example with a Phronomy checkout that provides
+`MultiAgent::Orchestrator#approve_hosted_child`. Each scenario starts fresh
+worker processes and a new SQLite database. WebMock supplies the provider's HTTP
+responses. The workers, persistence adapter, native dispatch and Tools run in Ruby.
+The example's version 2 parent definition declares a child with both Tools.
+
+For example, from this directory on Linux:
 
 ```sh
 export PHRONOMY_PATH=/absolute/path/to/phronomy
@@ -23,41 +26,49 @@ bundle install
 bundle exec ruby run.rb
 ```
 
-The default command runs both decisions in fresh SQLite databases. To run
-one decision, pass `approve` or `reject`. WebMock fixes the provider's HTTP
-replies. The processes, Agent dispatch, SQLite adapter and Tool are real.
-Success prints the durable outcomes, the Tool call count and the worker PIDs.
+The default command runs all four scenarios. To select one, pass its name,
+for example `bundle exec ruby run.rb reject-second`. The output includes
+the child and parent outcomes, the Tool call count and the worker PIDs.
+
+| Scenario | Decision in B | Decision in C | Effects recorded |
+|---|---|---|---|
+| `approve` | Approve the only request | | B applies |
+| `reject` | Reject the only request | | None |
+| `approve-twice` | Approve the first request | Approve the second request | B applies, C publishes |
+| `reject-second` | Approve the first request | Reject the second request | B applies |
 
 ## How the handoff works
 
-At the approval boundary, the application identifies the pair to detach.
-Phronomy validates and releases the corresponding local owners. After that
-returns, the host sends IDs to B. Each worker uses its own objects and its
-own database connections.
+The host keeps exclusive ownership of the pair until its current worker confirms
+release. Each recipient reopens the saved pair and checks the approval's identity
+before acting. The parent and child execution IDs travel through each handoff.
+The approval request ID identifies one decision within the child execution.
 
-1. A receives the child's approval event on the parent's listener. The
-   event contains the child execution ID and the approval request ID.
-   A calls the hosted parent's `detach!(execution_id: ..., approval_request_id: ...)`.
-   Both local registry lookups are now empty.
-2. B loads the same Orchestrator with both stores and resumes the exact
-   parent execution. The listener reports the original child request. The
-   parent resume currently reports `ExecutionRehydrationRequiredError`
-   while the child is waiting. B answers using the child execution and
-   approval IDs, then resumes the parent to import the child's outcome.
-3. A separate approval was already pending in A before the handoff.
-   A's old parent and child reject operations. Its unrelated Agent
-   continues on its original instance and can process another request.
-4. Approval executes the Tool once in B. Rejection records a rejected
-   child and executes the Tool zero times. In this native dispatch, the
-   rejected child's output is empty; the fixture has the parent respond
-   "no child output" and complete. Reading the final parent result again
-   causes no additional provider call.
+For example, in `approve-twice`:
 
-Pipes make the order of host commands explicit. The host transfers
-ownership only after A confirms its release. The scenario covers a single
-direct native child at a quiescent approval wait. Overlapping delivery
-from a second host, a worker crash during the Tool's external effect and
-more complex graphs require their own coordination or recovery policy.
-B retains the finished parent/child coordination history. Evicting terminal
-Agent instances while preserving that history is a separate lifecycle case.
+1. A receives the child's `apply_request` approval event on the parent's listener
+   and passes its execution and request IDs to the hosted parent's `detach!`.
+   Both Agents leave A's local registry.
+2. B loads the parent with both stores and resumes its execution. The listener
+   emits the saved approval. The parent resume reports
+   `ExecutionRehydrationRequiredError` while the child remains unfinished.
+   B calls `parent.approve_hosted_child` with the accepted request's IDs.
+3. B executes `apply_request`. When the child requests `publish_request`, B
+   passes the **new** approval request ID to the answer handle's `detach!`.
+   The host delivers this second wait to C after B confirms release.
+4. C restores the pair at `publish_request` without running `apply_request`
+   again. C refuses a replay of the first approval. It approves publication
+   and resumes the parent to import the child's
+   recorded result. The effect log records B for the first Tool and C for
+   the second. All three workers are still alive.
+
+If a worker rejects a request, the child records rejection. In this example
+the parent receives empty child output and completes with the fixture's reply,
+"no child output". Reading the terminal parent again makes no provider call.
+
+Pipes serialize host commands. The example covers a single directly dispatched
+child at a committed approval wait. The host owns overlapping delivery and
+crash recovery, including reconciliation of uncertain external effects.
+The stores retain the finished parent/child coordination history.
+
 See [the acceptance specification](../spec/36_native_child_approval.md).

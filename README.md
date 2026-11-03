@@ -36,10 +36,11 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-CI installs the published RubyGems dependency using the committed lockfiles. No local
-checkout or `PHRONOMY_PATH` override is used. To verify a local framework checkout,
-export `PHRONOMY_PATH` and run
-`scripts/update_phronomy.sh` first.
+The ordinary CI jobs install the published RubyGems dependency using the
+committed lockfiles. The hosted-worker job checks out the pinned Phronomy
+commit, verifies the loaded gem path and runs Examples 34, 35 and 36 against
+that checkout. To verify a local framework checkout, export `PHRONOMY_PATH`
+and run `scripts/update_phronomy.sh` first.
 
 ## DX1 and DX2
 
@@ -275,7 +276,7 @@ usable without a PostgreSQL server.
 | `32_async_composition` | Basic and asynchronously evaluated majority voting with Execution and TaskResult |
 | [34_worker_approval](34_worker_approval/README.md) | Standalone approval across two Ruby workers, including pre-ACK process loss |
 | [35_workflow_child_approval](35_workflow_child_approval/README.md) | Two Workflows share one Agent and receive their own durable child results across workers |
-| [36_native_child_approval](36_native_child_approval/README.md) | One worker releases a parent Agent and its approval-waiting subagent, handles another request, and stays alive while a second worker resumes the pair |
+| [36_native_child_approval](36_native_child_approval/README.md) | Two workers hand off one native child approval. Three workers handle two successive approvals in the same child execution, applying each accepted Tool on the worker that answers it |
 
 ### Multi-agent
 

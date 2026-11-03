@@ -21,9 +21,13 @@ module NativeChild
       if parent && last.fetch("role") == "tool"
         last.fetch("content").empty? ? "no child output" : "received: #{last.fetch("content")}"
       elsif parent
-        ExampleChatStub.tool("dispatch_to_worker", {input: "child job"})
+        ExampleChatStub.tool("dispatch_to_worker", {input: turn.first.fetch("content")})
       elsif last.fetch("role") == "tool"
-        "child finished"
+        if turn.first.fetch("content") == "apply then publish" && last.fetch("content") == "applied"
+          ExampleChatStub.tool("publish_request")
+        else
+          "child finished"
+        end
       elsif last.fetch("content") == "independent follow-up"
         "other job finished"
       else

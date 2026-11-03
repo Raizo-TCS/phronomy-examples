@@ -12,7 +12,7 @@ module NativeChild
     end
 
     # A starts two independent Executions. Only the parent and its native child move.
-    def start
+    def start(input)
       other_events = Queue.new
       @other = WorkerApproval::Conversation.create(agent_id: "other", persistence: @store, on_event: listener(other_events))
       @other_task = @other.start_hosted(reservation: reserve(@other, "other-execution"), input: "other gated job")
@@ -21,30 +21,28 @@ module NativeChild
       events = Queue.new
       @parent = Parent.create(agent_id: "parent", persistence: @store, coordination_store: @coordination, on_event: listener(events))
       reservation = reserve(@parent, "parent-execution")
-      hosted = @parent.start_hosted(reservation: reservation, input: "use the child")
+      hosted = @parent.start_hosted(reservation: reservation, input: input)
       request = Timeout.timeout(12) { events.pop }
+      NativeChild.check(request.items.map(&:tool_name), ["apply_request"])
       identity = @store.execution_identity(request.execution_id)
-      @child = WorkerApproval::Conversation.get(identity.agent_id)
+      @child = Child.get(identity.agent_id)
       NativeChild.check(identity.correlation.values_at("parent_agent_id", "parent_execution_id"), [reservation.agent_id, reservation.execution_id])
-      wait = hosted.detach!(execution_id: request.execution_id, approval_request_id: request.id)
-      NativeChild.check([wait.execution_id, wait.approval_request_id], [request.execution_id, request.id])
-      NativeChild.check(Parent.get("parent"), nil)
-      NativeChild.check(WorkerApproval::Conversation.get(identity.agent_id), nil)
+      detach(hosted, request)
       NativeChild.check(@provider.calls.length, 3)
       @ticket = {"parent" => reservation.agent_id, "execution" => reservation.execution_id, "child" => identity.agent_id,
                  "child_execution" => request.execution_id, "approval" => request.id}
     end
 
-    # B reconstructs the exact pair from durable state, then waits for the host's decision.
+    # Each receiving worker reopens the exact saved wait before accepting a decision.
     def restore(ticket)
-      events = Queue.new
-      @parent = Parent.load(ticket.fetch("parent"), persistence: @store, coordination_store: @coordination, on_event: listener(events))
+      @events = Queue.new
+      @parent = Parent.load(ticket.fetch("parent"), persistence: @store, coordination_store: @coordination, on_event: listener(@events))
       parent_id = ticket.fetch("execution")
       identity = @store.execution_identity(ticket.fetch("child_execution"))
       NativeChild.check([identity.agent_id, *identity.correlation.values_at("parent_agent_id", "parent_execution_id")],
         ticket.values_at("child", "parent", "execution"))
       waiting = @parent.resume_async(parent_id)
-      request = Timeout.timeout(12) { events.pop }
+      request = Timeout.timeout(12) { @events.pop }
       NativeChild.check([request.execution_id, request.id], ticket.values_at("child_execution", "approval"))
       begin
         waiting.wait_result(timeout: 12)
@@ -52,24 +50,57 @@ module NativeChild
       rescue Phronomy::ExecutionRehydrationRequiredError
         # The native parent can resume after the child has a durable result.
       end
-      @child = WorkerApproval::Conversation.get(identity.agent_id)
+      @child = Child.get(identity.agent_id)
       @ticket = ticket
       NativeChild.check(@provider.calls.length, 0)
       {"restored" => ticket}
     end
 
-    # A's old instances cannot act, although the unrelated live instance still can.
+    def approve_and_handoff
+      answer = @parent.approve_hosted_child(@ticket.fetch("execution"), execution_id: @ticket.fetch("child_execution"),
+        approval_request_id: @ticket.fetch("approval"))
+      next_request = Timeout.timeout(12) { @events.pop }
+      NativeChild.check(next_request.execution_id, @ticket.fetch("child_execution"))
+      NativeChild.check(next_request.items.map(&:tool_name), ["publish_request"])
+      raise "Expected a new approval request" if next_request.id == @ticket.fetch("approval")
+
+      begin
+        answer.detach!(execution_id: next_request.execution_id, approval_request_id: @ticket.fetch("approval"))
+        raise "The consumed approval released a newer wait"
+      rescue Phronomy::AgentBusyError
+        # Only the new request permits releasing this wait.
+      end
+      wait = detach(answer, next_request)
+      NativeChild.check(answer.wait_result(timeout: 12), wait)
+      NativeChild.check(@provider.calls.length, 1)
+      @ticket = @ticket.merge("approval" => next_request.id)
+    end
+
+    # Each released worker can do independent work while its successor owns the pair.
     def other_work
       assert_unloaded { @parent.resume(@ticket.fetch("execution")) }
       assert_unloaded { @child.approve(@ticket.fetch("child_execution"), approval_request_id: @ticket.fetch("approval")) }
-      NativeChild.check(WorkerApproval::Conversation.get("other").equal?(@other), true)
-      rejected = @other.approve(@other_request.execution_id, approval_request_id: @other_request.id, approved: false)
-      NativeChild.check(rejected.fetch(:rejected), true)
-      NativeChild.check(@other_task.wait_result(timeout: 12).fetch(:rejected), true)
+      before = @provider.calls.length
+      if @other
+        NativeChild.check(WorkerApproval::Conversation.get("other").equal?(@other), true)
+        rejected = @other.approve(@other_request.execution_id, approval_request_id: @other_request.id, approved: false)
+        NativeChild.check(rejected.fetch(:rejected), true)
+        NativeChild.check(@other_task.wait_result(timeout: 12).fetch(:rejected), true)
+      else
+        @other = WorkerApproval::Conversation.create(agent_id: "independent-in-b", persistence: @store)
+      end
       result = @other.invoke("independent follow-up")
       @other.unload!
-      NativeChild.check(@provider.calls.length, 4)
+      NativeChild.check(@provider.calls.length, before + 1)
       {"other" => result.fetch(:output)}
+    end
+
+    def replay_approval(id)
+      @parent.approve_hosted_child(@ticket.fetch("execution"), execution_id: @ticket.fetch("child_execution"),
+        approval_request_id: id)
+      raise "Accepted an already consumed approval request"
+    rescue Phronomy::AgentBusyError
+      {"refused" => id}
     end
 
     def answer(approved)
@@ -87,6 +118,14 @@ module NativeChild
     end
 
     private
+
+    def detach(hosted, request)
+      wait = hosted.detach!(execution_id: request.execution_id, approval_request_id: request.id)
+      NativeChild.check([wait.execution_id, wait.approval_request_id], [request.execution_id, request.id])
+      NativeChild.check(Parent.get(@parent.agent_id), nil)
+      NativeChild.check(Child.get(@child.agent_id), nil)
+      wait
+    end
 
     def reserve(agent, id)
       Phronomy::Agent::ReservedExecution.new(agent_id: agent.agent_id, execution_id: id)

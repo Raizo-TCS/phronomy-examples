@@ -33,7 +33,11 @@ jobs:
         run: bash scripts/verify_offline.sh
 
   hosted-workers:
-    name: Hosted Worker examples (Ruby 3.3, SQLite)
+    name: Hosted Worker examples (Ruby ${{ matrix.ruby }}, SQLite)
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2.3", "3.3.6"]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -48,12 +52,12 @@ jobs:
         with:
           repository: Raizo-TCS/phronomy
           # These examples exercise unreleased APIs. Pin the reviewed core commit.
-          ref: aa3086fdef0f25c35632d0fd97d64284019be8be
+          ref: 4eed6032ffc3cafacf3c09c2b84294db3a46e624
           path: phronomy
           persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.3"
+          ruby-version: ${{ matrix.ruby }}
           working-directory: examples/30_sqlite_persistence
       - name: Install SQLite bundle with the paired core
         run: |
@@ -64,6 +68,12 @@ jobs:
           bundle exec ruby 34_worker_approval/run.rb
           bundle exec ruby 35_workflow_child_approval/run.rb
           bundle exec ruby 36_native_child_approval/run.rb
+      - name: Verify collection of completed native child owners
+        env:
+          PHRONOMY_EXAMPLES: ${{ github.workspace }}/examples
+          RECORDS: "5"
+          MORE_WORK: "1"
+        run: bundle exec ruby scripts/verify_terminal_gc.rb preserve
 
   rails:
     runs-on: ubuntu-latest

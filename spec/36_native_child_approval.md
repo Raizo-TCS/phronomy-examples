@@ -58,3 +58,22 @@ core checkout. The default command checks the following cases in fresh databases
 
 The host orders transfers after release. Supervisor loss, distributed worker
 fencing and crash recovery of external Tool effects require host policy.
+
+## Lifetime in a long-running Worker
+
+The Hosted Worker CI job runs a separate Ruby process to verify that completed
+owners can be collected without changing durable records. It runs the same
+SQLite probe on Ruby 3.2.3 and 3.3.6.
+
+For example, from the examples root with the matching core in `PHRONOMY_PATH`:
+
+```sh
+PHRONOMY_EXAMPLES="$PWD" BUNDLE_GEMFILE="$PWD/30_sqlite_persistence/Gemfile" \
+  RECORDS=5 MORE_WORK=1 bundle exec ruby scripts/verify_terminal_gc.rb preserve
+```
+
+The probe completes and unloads five pairs, then processes three unrelated
+requests. It checks all ten registry entries, compares every SQLite application
+table before and after each release, and checks the terminal records and
+retentions. After full GC, all ten weak references must have expired. It also
+verifies the expected five Tool effects and 23 provider calls.

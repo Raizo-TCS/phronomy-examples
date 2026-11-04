@@ -77,6 +77,8 @@ jobs:
           bundle exec ruby 34_worker_approval/run.rb
           bundle exec ruby 35_workflow_child_approval/run.rb
           bundle exec ruby 36_native_child_approval/run.rb
+      - name: Run multi-process regression tests
+        run: bash scripts/verify_hosted_regressions.sh
       - name: Verify collection of completed native child owners
         env:
           PHRONOMY_EXAMPLES: ${{ github.workspace }}/examples

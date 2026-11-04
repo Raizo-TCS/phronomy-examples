@@ -24,9 +24,9 @@ class FailureHandler < NativeChild::Handler
   end
 
   def read_results(ticket)
+    calls = @provider.calls.size
     @parent ||= NativeChild::Parent.load(ticket.fetch("parent"), persistence: @store, coordination_store: @coordination)
     @child ||= NativeChild::Child.load(ticket.fetch("child"), persistence: @store)
-    calls = @provider.calls.size
     outcomes = [[@parent, ticket.fetch("execution")], [@child, ticket.fetch("child_execution")]].map do |agent, execution|
       state = @store.observe_execution(agent_id: agent.agent_id, execution_id: execution)
       [state.status.to_s, observe { agent.resume(execution) }]
@@ -41,12 +41,12 @@ class FailureHandler < NativeChild::Handler
   end
 
   def fresh_turn
-    stub = ExampleChatStub.new do |body, _|
+    @provider = ExampleChatStub.new do |body, _|
       raise "unexpected provider request" unless body.fetch("messages").last.fetch("content") == "new independent question"
       "new turn completed"
     end
     result = @parent.invoke("new independent question")
-    {"id" => result.fetch(:execution_id), "output" => result.fetch(:output), "calls" => stub.calls.size}
+    {"id" => result.fetch(:execution_id), "output" => result.fetch(:output), "calls" => @provider.calls.size}
   end
 
   private

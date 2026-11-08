@@ -9,6 +9,7 @@
 require_relative "../shared/llm_config"
 require "phronomy"
 require_relative "tools"
+require_relative "adaptive_shared_state"
 
 class StructureAnalyst < Phronomy::Agent::Base
   agent_definition id: "example-22-structure-analyst", version: 2
@@ -58,12 +59,23 @@ class QualityReviewer < Phronomy::Agent::Base
   INST
 end
 
-class CodeReviewTeam < Phronomy::MultiAgent::SharedState
+class CodeReviewTeam < AdaptiveSharedState
   coordination <<~COORD
     You are part of a collaborative code review team sharing a knowledge store.
     Two tools coordinate your work:
-      read_store     -- returns all current findings as JSON (no parameters)
+      read_store     -- requests a budgeted page of shared findings
       write_finding  -- records one finding to the store (param: content)
+    read_store returns a request receipt. The next LLM input includes its matching
+    shared_findings_page knowledge, identified by tool_call_id. Read the page there.
+    Page sizes adapt to the loaded context window and the complete Tool exchange.
+    Records contain stable IDs and complete text when it fits in the response budget.
+    Use next_before_id as before_id to continue to older records.
+    Use read_store with query (such as a filename) to find relevant findings.
+    If a record is truncated, use its id as finding_id and next_content_offset as content_offset
+    to retrieve the rest. Do not treat a truncated record as the complete finding.
+    Multiple read_store requests share the available retrieval budget. Prefer one
+    request at a time when you need a larger page. Each request reads the findings
+    that existed when that request executed, including writes completed before it.
     You also have access to list_files and read_file to inspect source files.
     Required workflow: call read_store first, then call write_finding once per insight.
     Each write_finding call must contain exactly one unique insight.

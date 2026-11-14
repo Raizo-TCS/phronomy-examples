@@ -484,6 +484,12 @@ if ! verify_phronomy_dependency; then
   exit 1
 fi
 
+header "Example 22 public extension preflight"
+if ! (cd "$BASE_DIR" && bundle exec ruby -e 'require_relative "22_shared_state/adaptive_shared_state"; puts "Public sharing and Context budgeting APIs available"'); then
+  fail "Example 22 requires Phronomy 0.33.0 or later with public sharing and Context budgeting APIs"
+  exit 1
+fi
+
 header "Current Phronomy main API/architecture preflight"
 if ! python3 "$BASE_DIR/scripts/verify_current_api.py"; then
   exit 1

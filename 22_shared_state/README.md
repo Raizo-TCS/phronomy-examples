@@ -2,7 +2,8 @@
 
 Three specialist Agents share findings while the application controls how much
 shared information enters each LLM input. Phronomy owns Agent execution, Tool
-exchanges, context selection, the shared store, and final aggregation.
+exchanges, context selection, coordination cycles, and when aggregation runs.
+The application owns the finding records, search Tools, and final report format.
 
 For example, the security reviewer searches findings about a file, reads a
 bounded page, and records a new issue without loading the whole shared store.
@@ -10,7 +11,8 @@ bounded page, and records a new issue without loading the whole shared store.
 ## Review lifecycle
 
 The team runs reviewers in order and preserves their findings between cycles.
-Each reviewer retrieves selected findings and writes through the original Tool.
+Each reviewer retrieves selected findings and writes through an application Tool.
+Every team invocation constructs its own store, policies, and derived reviewers.
 
 For example, a finding written by the structure analyst is available to the
 security auditor in the same cycle. Three reviewers over three cycles produce
@@ -42,7 +44,7 @@ sharing the available retrieval budget and identified by `tool_call_id`.
 |---|---|---|
 | `read_store` | Optional `before_id`, `query`, `finding_id`, `content_offset` | `shared_findings_request` receipt with a snapshot boundary |
 | ContextPolicy retrieval | Successful receipts matched to read Tool calls | `shared_findings_page` knowledge containing each page |
-| `write_finding` | `content` | Original store write and acknowledgement |
+| `write_finding` | `content` | Application store write and the existing acknowledgement |
 
 Pages list newest records first. Pass `next_before_id` as `before_id` for older
 records. `query` searches complete stored text case-insensitively; keep the same
@@ -68,12 +70,46 @@ count. Missing metadata and required inputs that cannot fit cause explicit
 errors. Large `read_file` results or very large Tool batches can still exhaust
 the budget; this adapter does not silently truncate them.
 
-The adapter is evaluated against published Phronomy **0.32.0** with the repository
-lockfile. `ContextPolicy` is public, but the adapter also uses private
-`SharedState` hooks and token-estimation/budget helpers, including
-`ContextPolicy#estimate_content`, `TokenBudget`, and `TokenEstimator`. Future versions
-require compatibility tests. This is invocation-local retrieval, not a new
-durable Worker protocol. It does not modify model-server PEG parsing.
+The implementation uses public Phronomy extension points. `SharedState.sharing`
+and `SharedState::Binding` connect application Tools and records; `Agent.with_tools`
+and `context_policy` create isolated reviewer definitions. The Context contract's
+`input_token_limit`, `with_input_token_limit`, and protected `estimate_tokens`
+retain the existing DefaultPolicy selection and token-estimation mechanisms.
+No private SharedState hook, TokenBudget, or TokenEstimator is referenced.
+
+This example requires the **public sharing and Context budgeting APIs in
+Phronomy 0.33.0 or later**. The shared dependency and all seven lockfiles select
+the published 0.33.0 gem. Loading Example 22 against an older core fails with an
+explicit configuration error.
+
+This is invocation-local retrieval, not a durable Worker protocol. The provider
+closes its store after aggregation or an execution failure. It must be created
+anew for each invocation. Ordinary Agent approval waits keep the invocation and
+store open; this example adds no cross-process restore operation.
+
+## Ownership and composition
+
+The application composes the review session while framework contracts execute
+its Agents and select their LLM inputs. Session resources are independent even
+when the same application team object is invoked again.
+
+For example, two calls to `CodeReviewTeam#invoke` create two `ReviewSharing`
+providers. Each provider binds its store to the derived reviewers' policies and
+read/write Tools; neither call changes `StructureAnalyst` or the other original
+Agent classes. The recorded author labels and three-cycle report stay the same.
+
+| Application component | Responsibility | Public framework connection |
+|---|---|---|
+| `CodeReviewTeam` in `team.rb` | Compose a fresh session and format its report | SharedState configuration and `invoke` |
+| `ReviewSharing` | Bind member policies and scope shared resources | `Agent.with_tools`, `context_policy`, `SharedState::Binding` |
+| `ReviewFindingStore` | Store immutable finding records during the invocation | Opaque application store passed to callbacks |
+| `AdaptiveFindingReader` | Search and page complete stored records | Called by application Tool and Policy |
+| `AdaptiveReviewContextPolicy` | Allocate retrieval room and materialize requested pages | Context budgeting helpers and `DefaultPolicy` |
+
+The store preserves the existing `agent`, `content`, and `cycle` fields. Searches
+remain case-insensitive substrings of content; this migration does not add
+semantic search or change review criteria. Store records are immutable snapshots,
+and aggregate output must be materialized before the provider closes the store.
 
 ## Directory access
 
@@ -87,17 +123,21 @@ suspension and resume.
 
 ## Run the example
 
-Resolve the published framework using the frozen lockfile, then invoke the
-example with the directory to review. Shared LLM configuration supplies the model.
+Install the published framework before running this example. Shared LLM
+configuration supplies the model and loaded context metadata.
 
-For example, these commands review the bundled sample:
+For example, from the examples repository root, these commands update all seven
+bundles and review the bundled sample:
 
 ```bash
-unset PHRONOMY_PATH
-export BUNDLE_GEMFILE="$PWD/Gemfile"
-BUNDLE_FROZEN=true bundle install
+unset PHRONOMY_PATH BUNDLE_GEMFILE
+./scripts/update_phronomy.sh
 bundle exec ruby 22_shared_state/run.rb
 ```
+
+For local framework development, select a checkout explicitly with
+`PHRONOMY_PATH` and repeat the dependency update. Do not commit local-path
+lockfiles; published-gem verification requires `PHRONOMY_PATH` to be unset.
 
 An optional argument selects another directory:
 
@@ -108,7 +148,8 @@ bundle exec ruby 22_shared_state/run.rb /path/to/your/ruby/project
 For local Qwen evaluation, use the actual loaded model and context metadata:
 
 ```bash
-unset PHRONOMY_PATH PHRONOMY_CONTEXT_WINDOW
+unset PHRONOMY_CONTEXT_WINDOW
+unset PHRONOMY_PATH
 export PHRONOMY_BASE_URL=http://192.168.122.1:1234/v1
 export PHRONOMY_PROVIDER=openai
 export PHRONOMY_MODEL=qwen/qwen3.6-27b
@@ -126,6 +167,8 @@ whether the model uses retrieval correctly and completes the review.
 
 For example, the integration tests execute multiple reads in one exchange,
 recover an escaped long finding, and run three reviewers over three cycles.
+They also check isolated repeated sessions, unchanged base Agent definitions,
+absence of automatic full-store injection, and cleanup after failures.
 
 ```bash
 bundle exec rspec spec/adaptive_shared_state_spec.rb \

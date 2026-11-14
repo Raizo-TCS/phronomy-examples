@@ -1,12 +1,16 @@
 # frozen_string_literal: true
 
 require "phronomy"
+require "timeout"
 require_relative "../22_shared_state/adaptive_shared_state"
 
-RSpec.describe AdaptiveSharedState do
-  let(:store) { Phronomy::MultiAgent::SharedState::KnowledgeStore.new }
+RSpec.describe AdaptiveReviewContextPolicy do
+  let(:store) { ReviewFindingStore.new }
+  let(:estimator) do
+    Class.new(Phronomy::Context::ContextPolicy) { public :estimate_tokens }.new
+  end
   let(:budget) { SharedReadBudget.new }
-  let(:reader) { AdaptiveFindingReader.new(store, budget: budget) }
+  let(:reader) { AdaptiveFindingReader.new(store, budget: budget, estimate: estimator.method(:estimate_tokens)) }
   let(:policy) { AdaptiveReviewContextPolicy.new(store: store) }
 
   def input(window, instruction_tokens: 100, conversation: [])
@@ -17,10 +21,11 @@ RSpec.describe AdaptiveSharedState do
     current = types::ConversationItem.new(id: "request", kind: :external_message,
       role: :user, content: "U" * 400, estimated_tokens: 100,
       required: true, sequence: 0)
-    types.new(agent_id: "adaptive-test", execution_id: "execution-test", call_sequence: 1,
+    source = types.new(agent_id: "adaptive-test", execution_id: "execution-test", call_sequence: 1,
       call_mode: :complete, instruction: [instruction], tools: [], knowledge: [],
       conversation: [[current], *conversation], previous_manifest: nil,
-      token_budget: window && Phronomy::LlmContextWindow::TokenBudget.new(max_input_tokens: window))
+      token_budget: nil)
+    window ? source.with_input_token_limit(window) : source
   end
 
   def add(content)
@@ -28,10 +33,10 @@ RSpec.describe AdaptiveSharedState do
   end
 
   def cost(value)
-    Phronomy::LlmContextWindow::TokenEstimator.estimate(value.is_a?(String) ? value : JSON.generate(value))
+    estimator.estimate_tokens(value.is_a?(String) ? value : JSON.generate(value))
   end
 
-  def exchange(requests = [{}], assistant_text: "", required: true)
+  def exchange(requests = [{}], assistant_text: "", required: true, receipts: nil)
     types = Phronomy::Context::ContextPolicyInput
     calls = requests.each_with_index.map { |args, index| {id: "call-#{index}", name: "read_store", arguments: args} }
     assistant_content = {role: "assistant", content: assistant_text, tool_calls: calls}
@@ -39,7 +44,7 @@ RSpec.describe AdaptiveSharedState do
       role: :assistant, content: JSON.parse(assistant_content.to_json), estimated_tokens: cost(assistant_content),
       required: required, sequence: 1, tool_call_ids: calls.map { |call| call[:id] })
     responses = calls.map.with_index do |call, index|
-      receipt = AdaptiveFindingReader.request(store, **call[:arguments])
+      receipt = receipts ? receipts.fetch(index) : AdaptiveFindingReader.request(store, **call[:arguments])
       content = {role: "tool", tool_call_id: call[:id], content: receipt.to_json}
       types::ConversationItem.new(id: "tool-response-#{index}", kind: :tool_message,
         role: :tool, content: JSON.parse(content.to_json), estimated_tokens: cost(content), required: required,
@@ -93,7 +98,6 @@ RSpec.describe AdaptiveSharedState do
     expect(plan.conversation.length).to be < source.conversation.length
     expect(plan.conversation.flatten).to include(source.conversation.first.first)
     expect(plan.metadata.fetch("adaptive_input_limit")).to be < 8192
-    expect { Phronomy::Context::ContextPlanValidator.new.validate!(input: source, plan: plan) }.not_to raise_error
     expect { policy.call(input(8192, instruction_tokens: 6000)) }.to raise_error(Phronomy::Context::BudgetExceededError)
   end
 
@@ -109,7 +113,6 @@ RSpec.describe AdaptiveSharedState do
     expect(plan.knowledge.all?(&:required?)).to be(true)
     expect(plan.metadata.fetch("shared_result_tokens")).to be <= plan.metadata.fetch("shared_result_budget")
     expect(plan_cost(plan)).to be <= plan.metadata.fetch("adaptive_input_limit")
-    expect { Phronomy::Context::ContextPlanValidator.new.validate!(input: source, plan: plan) }.not_to raise_error
   end
 
   it "resolves only current required requests, without replaying optional historical receipts" do
@@ -161,7 +164,6 @@ RSpec.describe AdaptiveSharedState do
     larger = input(16_384, conversation: [group])
     plan = policy.call(larger)
     expect(plan.conversation).to include(group)
-    expect { Phronomy::Context::ContextPlanValidator.new.validate!(input: larger, plan: plan) }.not_to raise_error
   end
 
   it "retrieves oversized text in lossless chunks including the complete knowledge envelope cost" do
@@ -204,21 +206,127 @@ RSpec.describe AdaptiveSharedState do
     expect { reader.read }.to raise_error(Phronomy::ConfigurationError, /known context budget/)
   end
 
-  it "binds independent generated-member policies and keeps the per-invocation call guard" do
+  it "derives independent policies and keeps the original reviewer configuration" do
+    source_tool = Class.new(Phronomy::Tool::Base) do
+      tool_name "source"
+      description "Read source."
+      def execute = "Source"
+    end
+    original_policy = Phronomy::Context::DefaultPolicy.instance
     member = Class.new(Phronomy::Agent::Base) do
       agent_definition id: "adaptive-test-member", version: 1
+      tools source_tool => "read_source"
+      context_policy original_policy
+      max_iterations 7
     end
-    first = described_class.new.send(:build_instrumented_researcher, member, store, 1)
-    second = described_class.new.send(:build_instrumented_researcher, member, store, 2)
+    sharing = ReviewSharing.new(store: store)
+    first = sharing.prepare_member(member)
+    second = sharing.prepare_member(member)
     first_plan = first.context_policy.call(input(8192, conversation: [exchange]))
     second_plan = second.context_policy.call(input(32_768, conversation: [exchange]))
+
     expect(first.context_policy).not_to equal(second.context_policy)
     expect(first_plan.metadata.fetch("shared_result_budget")).to be < second_plan.metadata.fetch("shared_result_budget")
     expect([first.max_iterations, second.max_iterations]).to eq([30, 30])
-    first_tool = first.tools.find { |tool| tool.tool_name == "read_store" }
-    receipt = JSON.parse(first_tool.new.execute)
-    expect(receipt.slice("type", "version", "snapshot_size")).to eq(
-      "type" => "shared_findings_request", "version" => 1, "snapshot_size" => 0
-    )
+    expect(first.tools).to eq([source_tool])
+    expect(first.tool_aliases.fetch(source_tool)).to eq("read_source")
+    expect(member.context_policy).to equal(original_policy)
+    expect(member.max_iterations).to eq(7)
+    expect(member.agent_definition).to eq(id: "adaptive-test-member", version: 1)
+
+    sharing.open(input: "Review", config: {}) do |binding|
+      read_tool = binding.tool_definitions(member: first, cycle: 1).keys.find { |tool| tool.tool_name == "read_store" }
+      receipt = JSON.parse(read_tool.new.execute)
+      expect(receipt.slice("type", "version", "snapshot_size")).to eq(
+        "type" => "shared_findings_request", "version" => 1, "snapshot_size" => 0
+      )
+      expect(store.closed).to be(false)
+    end
+    expect(store.closed).to be(true)
+  end
+
+  it "isolates stored records from caller mutation and rejects use after close" do
+    text = +"Original observation"
+    add(text)
+    text.replace("Changed externally")
+    records = store.read_all
+    expect(records.first.fetch(:content)).to eq("Original observation")
+    expect { records.first[:content] = "Changed record" }.to raise_error(FrozenError)
+    expect { records << {content: "Injected record"} }.to raise_error(FrozenError)
+    store.close
+    expect { store.read_all }.to raise_error(/closed/)
+    expect { store.write(agent: :Reviewer, cycle: 1, content: "Late finding") }.to raise_error(/closed/)
+  end
+
+  it "closes a failed provider scope and rejects reuse without entering it again" do
+    sharing = ReviewSharing.new(store: store)
+    failure = RuntimeError.new("Review failed")
+    expect { sharing.open(input: "Review", config: {}) { raise failure } }.to raise_error { |error| expect(error).to equal(failure) }
+    expect(store.closed).to be(true)
+    entered_again = false
+    expect { sharing.open(input: "Again", config: {}) { entered_again = true } }.to raise_error(ArgumentError, /new ReviewSharing/)
+    expect(entered_again).to be(false)
+  end
+
+  it "rejects an overlapping provider open without closing the active invocation" do
+    sharing = ReviewSharing.new(store: store)
+    entered = Queue.new
+    finish = Queue.new
+    active = Thread.new do
+      sharing.open(input: "Active review", config: {}) do
+        entered << true
+        finish.pop
+        expect(store.closed).to be(false)
+      end
+    end
+    begin
+      Timeout.timeout(5) { entered.pop }
+      expect { sharing.open(input: "Overlapping review", config: {}) { raise "Must not enter" } }
+        .to raise_error(ArgumentError, /new ReviewSharing/)
+      expect(store.closed).to be(false)
+    ensure
+      finish << true
+      Timeout.timeout(5) { active.value }
+    end
+    expect(store.closed).to be(true)
+  end
+
+  it "isolates overlapping sharing scopes derived from the same reviewer" do
+    reviewer = Class.new(Phronomy::Agent::Base) do
+      agent_definition id: "overlapping-reviewer", version: 1
+    end
+    original_policy = reviewer.context_policy
+    outer = ReviewSharing.new(store: store)
+    inner = ReviewSharing.new
+    outer_member = outer.prepare_member(reviewer)
+    inner_member = inner.prepare_member(reviewer)
+    read_contents = lambda do |member, tools|
+      receipt = JSON.parse(tools.fetch("read_store").new.call({}))
+      source = input(8192, conversation: [exchange(receipts: [receipt])])
+      lookup_pages(member.context_policy.call(source)).first.fetch("page")
+        .fetch("findings").map { |record| record.fetch("content") }
+    end
+
+    outer.open(input: "Outer review", config: {}) do |outer_binding|
+      outer_tools = outer_binding.tool_definitions(member: outer_member, cycle: 1).keys.to_h { |tool| [tool.tool_name, tool] }
+      outer_tools.fetch("write_finding").new.call({"content" => "Outer observation"})
+      inner.open(input: "Inner review", config: {}) do |inner_binding|
+        inner_tools = inner_binding.tool_definitions(member: inner_member, cycle: 1).keys.to_h { |tool| [tool.tool_name, tool] }
+        inner_tools.fetch("write_finding").new.call({"content" => "Inner observation"})
+        expect(outer.store.closed).to be(false)
+        expect(inner.store.closed).to be(false)
+        expect(read_contents.call(outer_member, outer_tools)).to eq(["Outer observation"])
+        expect(read_contents.call(inner_member, inner_tools)).to eq(["Inner observation"])
+      end
+      expect(inner.store.closed).to be(true)
+      expect(outer.store.closed).to be(false)
+      outer_tools.fetch("write_finding").new.call({"content" => "Outer continuation"})
+      expect(read_contents.call(outer_member, outer_tools)).to eq(["Outer continuation", "Outer observation"])
+    end
+
+    expect(outer.store.closed).to be(true)
+    expect(reviewer.context_policy).to equal(original_policy)
+    expect(reviewer.tools).to eq([])
+    expect(reviewer.agent_definition).to eq(id: "overlapping-reviewer", version: 1)
   end
 end

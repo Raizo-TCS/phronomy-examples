@@ -1,0 +1,41 @@
+name: Dependency audit
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit application lockfiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: false
+      - name: Install the audit tool independently of application bundles
+        run: gem install bundler-audit --version '~> 0.9.3' --no-document
+      - name: Update the advisory database
+        run: bundler-audit update
+      - name: Audit every checked-in application lockfile
+        run: |
+          set -euo pipefail
+          mapfile -d '' -t lockfiles < <(git ls-files -z -- 'Gemfile.lock' '*/Gemfile.lock')
+          if [[ ${#lockfiles[@]} -eq 0 ]]; then
+            echo "::error::No application lockfiles were found"
+            exit 1
+          fi
+          failed=0
+          for lockfile in "${lockfiles[@]}"; do
+            directory="$(dirname -- "$lockfile")"
+            echo "::group::Dependency audit: $directory"
+            if ! bundler-audit check "$directory"; then
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$failed"

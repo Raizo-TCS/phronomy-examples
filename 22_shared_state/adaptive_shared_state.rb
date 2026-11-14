@@ -3,6 +3,14 @@
 require "json"
 require "phronomy"
 
+unless Phronomy::MultiAgent::SharedState.respond_to?(:sharing) &&
+    Phronomy::Context::ContextPolicyInput.method_defined?(:with_input_token_limit) &&
+    Phronomy::Context::ContextPolicy.protected_method_defined?(:estimate_tokens)
+  raise Phronomy::ConfigurationError,
+    "Example 22 requires the public sharing and Context budget APIs. " \
+    "Install Phronomy 0.33.0 or later and update the application bundle."
+end
+
 # Each materialized lookup receives an explicit positive allowance from the
 # current call's aggregate retrieval budget.
 class SharedReadBudget
@@ -26,24 +34,24 @@ class AdaptiveReviewContextPolicy < Phronomy::Context::ContextPolicy
   end
 
   def call(input)
-    window = input.token_budget&.effective_input_limit
-    unless window && window.positive?
+    window = input.input_token_limit
+    unless window&.positive?
       raise Phronomy::ConfigurationError, "Adaptive review requires loaded context-window metadata"
     end
 
     output_reserve = window / 4
     safety_margin = window / 16
     input_limit = window - output_reserve - safety_margin
-    # TokenBudget is private in 0.32.0; this is a version-coupled prototype.
-    tool_overhead = [estimate_content(input.tools.map(&:definition)) - input.tools.sum(&:estimated_tokens), 0].max
+    tool_overhead = [estimate_tokens(input.tools.map(&:definition)) - input.tools.sum(&:estimated_tokens), 0].max
     selection_limit = input_limit - tool_overhead
     unless selection_limit.positive?
       raise Phronomy::Context::BudgetExceededError, "No input budget remains after Tool framing"
     end
-    budget = Phronomy::LlmContextWindow::TokenBudget.new(max_input_tokens: selection_limit)
-    required_input = input.with(token_budget: budget,
+    selection_input = input.with_input_token_limit(selection_limit)
+    required_input = selection_input.with(
       knowledge: input.knowledge.select(&:required?),
-      conversation: input.conversation.select { |group| group.any?(&:required?) })
+      conversation: input.conversation.select { |group| group.any?(&:required?) }
+    )
     required_plan = Phronomy::Context::DefaultPolicy.instance.call(required_input)
     remaining = input_limit - canonical_cost(required_plan)
     raise Phronomy::Context::BudgetExceededError, "Required input leaves no retrieval room" if remaining.negative?
@@ -52,7 +60,7 @@ class AdaptiveReviewContextPolicy < Phronomy::Context::ContextPolicy
     retrieval_limit = remaining / 2
     retrieved = materialize_requests(requests, retrieval_limit)
     selection = Phronomy::Context::DefaultPolicy.instance.call(
-      input.with(token_budget: budget, knowledge: input.knowledge + retrieved)
+      selection_input.with(knowledge: input.knowledge + retrieved)
     )
     if canonical_cost(selection) > input_limit
       raise Phronomy::Context::BudgetExceededError, "Selected input exceeds the adaptive input budget"
@@ -75,7 +83,7 @@ class AdaptiveReviewContextPolicy < Phronomy::Context::ContextPolicy
 
   def canonical_cost(selection)
     items = selection.instruction + selection.knowledge + selection.conversation.flatten
-    items.sum { |item| estimate_content(item.content) } + estimate_content(selection.tools.map(&:definition))
+    items.sum { |item| estimate_tokens(item.content) } + estimate_tokens(selection.tools.map(&:definition))
   end
 
   def retrieval_requests(groups)
@@ -107,9 +115,9 @@ class AdaptiveReviewContextPolicy < Phronomy::Context::ContextPolicy
       allowance = remaining / (requests.length - index)
       read_budget = SharedReadBudget.new
       read_budget.update(allowance)
-      reader = AdaptiveFindingReader.new(@store, budget: read_budget)
+      reader = AdaptiveFindingReader.new(@store, budget: read_budget, estimate: method(:estimate_tokens))
       envelope = {type: "shared_findings_page", version: 1,
-        tool_call_id: request.fetch(:tool_call_id), snapshot_size: request.fetch(:snapshot_size)}
+                  tool_call_id: request.fetch(:tool_call_id), snapshot_size: request.fetch(:snapshot_size)}
       content = reader.read(**request.fetch(:request), snapshot_size: request.fetch(:snapshot_size),
         wrap: ->(page) { envelope.merge(page: page) }).to_json
       item = knowledge_item(content: content, required: true,
@@ -123,9 +131,10 @@ end
 # Pages carry complete records when they fit. An oversized record has an
 # explicit character cursor, so its remaining text can be retrieved losslessly.
 class AdaptiveFindingReader
-  def initialize(store, budget:)
+  def initialize(store, budget:, estimate:)
     @store = store
     @budget = budget
+    @estimate = estimate
   end
 
   # Capture an append-only snapshot before any later Tool writes in the batch.
@@ -172,7 +181,7 @@ class AdaptiveFindingReader
       entries.select! { |_id, finding| finding.fetch(:content).downcase.include?(query.downcase) }
     end
     page = {total_findings: findings.length, remaining_matches: entries.length,
-      next_before_id: nil, response_budget_tokens: @limit, findings: []}
+            next_before_id: nil, response_budget_tokens: @limit, findings: []}
     ensure_fits!(page)
 
     entries.each_with_index do |(id, finding), index|
@@ -236,7 +245,7 @@ class AdaptiveFindingReader
   end
 
   def fits?(value)
-    Phronomy::LlmContextWindow::TokenEstimator.estimate(JSON.generate(@wrap.call(value))) <= @limit
+    @estimate.call(JSON.generate(@wrap.call(value))) <= @limit
   end
 
   def ensure_fits!(value)
@@ -246,24 +255,101 @@ class AdaptiveFindingReader
   end
 end
 
-# Evaluation-only integration with Phronomy 0.32.0 private SharedState hooks.
-# The model configuration, shared store, member execution and aggregation stay
-# with their existing owners. The call limit is a separate application guard.
-class AdaptiveSharedState < Phronomy::MultiAgent::SharedState
-  private
+# The application owns the append-only record format and its invocation lifetime.
+class ReviewFindingStore
+  attr_reader :closed
 
-  def build_instrumented_researcher(researcher_class, store, cycle)
-    instrumented = super
-    instrumented.context_policy(AdaptiveReviewContextPolicy.new(store: store))
-    instrumented.max_iterations(30)
-    instrumented
+  def initialize
+    @findings = []
+    @closed = false
   end
 
-  def build_prompt(original_input, _store, _cycle, extra_tools: [], per_agent_instruction: nil)
-    parts = [self.class._coordination || default_coordination_guide(extra_tools)]
-    parts << "Your specific focus for this session: #{per_agent_instruction}" if per_agent_instruction
-    parts << "Task: #{original_input}"
-    parts.join("\n\n")
+  def write(agent:, content:, cycle:)
+    ensure_open!
+    @findings << {agent: agent, content: content.dup.freeze, cycle: cycle}.freeze
+    nil
+  end
+
+  def read_all
+    ensure_open!
+    @findings.dup.freeze
+  end
+
+  def size
+    ensure_open!
+    @findings.size
+  end
+
+  def close
+    @findings.clear
+    @closed = true
+  end
+
+  private
+
+  def ensure_open!
+    raise "Review findings are closed" if closed
+  end
+end
+
+# One application invocation composes a store, its policies, and shared Tools.
+# The framework continues to own member execution, cycles and aggregation.
+class ReviewSharing
+  attr_reader :store
+
+  def initialize(store: ReviewFindingStore.new)
+    @store = store
+    @authors = {}
+    @open_lock = Mutex.new
+    @opened = false
+  end
+
+  # Derive a call-local class without changing the registered reviewer.
+  def prepare_member(member)
+    definition = member.agent_definition
+    definitions = member.tools.to_h { |tool| [tool, member.tool_aliases[tool]] }
+    prepared = member.with_tools(definitions,
+      id: "#{definition.fetch(:id)}@#{definition.fetch(:version)}/adaptive-review", version: 3)
+    prepared.context_policy(AdaptiveReviewContextPolicy.new(store: store))
+    prepared.max_iterations(30)
+    @authors[prepared] = member.name&.to_sym || definition.fetch(:id).to_sym
+    prepared
+  end
+
+  def open(input:, config:)
+    @open_lock.synchronize do
+      raise ArgumentError, "Create a new ReviewSharing for each team invocation" if @opened
+      @opened = true
+    end
+    begin
+      yield Phronomy::MultiAgent::SharedState::Binding.new(
+        store: store, tools: method(:tool_definitions)
+      )
+    ensure
+      store.close
+    end
+  end
+
+  private
+
+  def tool_definitions(member:, cycle:)
+    {build_read_tool(store) => nil,
+     build_write_tool(store, cycle, @authors.fetch(member)) => nil}
+  end
+
+  def build_write_tool(store, cycle, author)
+    Class.new(Phronomy::Tool::Base) do
+      tool_name "write_finding"
+      description "Record a new finding into the shared knowledge store so " \
+                  "that other researchers can build on your discovery."
+      execution_mode :cooperative
+      param :content, type: :string, desc: "The finding to record"
+
+      define_method(:execute) do |content:|
+        store.write(agent: author, content: content, cycle: cycle)
+        "Finding recorded."
+      end
+    end
   end
 
   def build_read_tool(store)
@@ -288,10 +374,5 @@ class AdaptiveSharedState < Phronomy::MultiAgent::SharedState
           finding_id: finding_id, content_offset: content_offset).to_json
       end
     end
-  end
-
-  def instrumented_definition_for(researcher_class)
-    definition = super
-    definition.merge(id: "#{definition.fetch(:id)}/adaptive-store-evaluation", version: 2)
   end
 end

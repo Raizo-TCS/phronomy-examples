@@ -1,7 +1,9 @@
 # Phronomy Examples
 
-These examples use the published Phronomy `~> 0.32.0` gem through
-`Gemfile.phronomy` and all seven lockfiles. Version 0.32.0 adds Worker approval
+These examples use the published Phronomy `~> 0.33.0` gem through
+`Gemfile.phronomy` and all seven lockfiles. Version 0.33.0 adds public SharedState
+sharing, Agent Tool composition and Context budgeting APIs used by Example 22.
+Version 0.32.0 introduced Worker approval
 handoff, saved Workflow events and completed parent/child owner release for
 Examples 34–36. It also includes explicit schema delivery,
 durable transcript Message reads and safe one-shot/child Agent release to structured Agent output,
@@ -39,7 +41,7 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
 All CI jobs install the published RubyGems dependency using the committed
-lockfiles. Hosted Worker CI verifies Phronomy 0.32.0, its RubyGems source and
+lockfiles. Hosted Worker CI verifies Phronomy 0.33.0, its RubyGems source and
 loaded path with `PHRONOMY_PATH` unset. It runs Examples 34, 35 and 36 and the
 original GC probe (`RECORDS=5 MORE_WORK=1`) on Ubuntu 24.04 with Ruby 3.2.3/3.3.6
 and Ubuntu 26.04 with Ruby 3.2.11/3.3.13. To verify a local framework checkout,
@@ -220,14 +222,20 @@ Gemfile.phronomy
 
 DX1/DX2 require Phronomy 0.31 or later; 0.30.1 does not expose these APIs.
 Worker Examples 34–36 require 0.32.0; 0.31.0 does not provide `start_hosted`.
-The shared dependency allows `~> 0.32.0`, and all seven lockfiles select the
-published 0.32.0 gem. Keep `PHRONOMY_PATH` unset to verify that dependency:
+The shared dependency allows `~> 0.33.0`, and all seven lockfiles select the
+published 0.33.0 gem. Keep `PHRONOMY_PATH` unset to verify that dependency:
 
 ```bash
 unset PHRONOMY_PATH
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
+
+Example 22 requires the public SharedState sharing and Context budgeting APIs
+published in Phronomy 0.33.0. Its deterministic tests use the released gem, as do
+the shared dependency, all seven lockfiles and the Hosted Worker CI version
+assertion. See [Example 22](22_shared_state/README.md) for setup and the separate
+real-model acceptance requirements.
 
 For local framework development, set `PHRONOMY_PATH` to an explicit checkout and
 repeat the dependency update before verification. Do not commit local core paths

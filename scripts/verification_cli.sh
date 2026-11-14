@@ -61,7 +61,7 @@ verify_cli_run() {
 
   ruby -rjson -rtime -e '
     path, code = ARGV
-    record = JSON.parse(File.read(path))
+    record = JSON.parse(File.read(path), symbolize_names: true)
     code = Integer(code)
     record.merge!(exit_code: code, completed_at: Time.now.utc.iso8601(6),
       status: {0 => "completed", 124 => "outer_cutoff", 137 => "killed"}.fetch(code, "failed"))

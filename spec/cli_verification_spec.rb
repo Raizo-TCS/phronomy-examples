@@ -31,7 +31,10 @@ RSpec.describe "CLI verification evidence" do
         "bash", "-c", script, "cli-test", base, File.join(root, "scripts"), reports, name, limit.to_s)
     end
     evidence = Dir.glob(File.join(reports, "cli-*", "execution.json")).fetch(0)
-    [*output, JSON.parse(File.read(evidence)), File.dirname(evidence)]
+    raw_record = File.read(evidence)
+    expect(raw_record.scan(/^\s*"status"\s*:/).length).to eq(1),
+      "execution.json must contain exactly one final status key"
+    [*output, JSON.parse(raw_record), File.dirname(evidence)]
   end
 
   def with_cli(source)

@@ -2,8 +2,7 @@
 
 A Rails web application demonstrating a stateful `Phronomy::Agent::Base` whose
 durable Agent state is stored in the Rails primary SQLite database through the
-ActiveRecord-backed Persistence reference implementation from
-`30_sqlite_persistence`.
+optional `phronomy-active_record` package.
 
 ## Purpose
 
@@ -21,7 +20,7 @@ ChatAgent#invoke
   ↓
 Phronomy Agent lifecycle
   ↓
-PhronomyExamples::Persistence::ActiveRecordSQLite
+PhronomyStore.persistence (PhronomyActiveRecord.build(...).agent)
   ↓
 ActiveRecord::Base.connection_pool
   ↓
@@ -38,7 +37,7 @@ so they are not tied to the lifetime of one Rails process.
 |---------|-------------|-------|
 | Stateful Agent | `Agent::Base` + `agent_definition` | `ChatAgent` retains Journal-backed conversation state across turns |
 | Agent lifecycle | `scope.create` / `scope.load` | `ConversationsController` creates; subsequent requests load by durable `agent_id` |
-| External durable Persistence | `PhronomyExamples::Persistence::ActiveRecordSQLite` | `PhronomyStore.persistence` injects the Rails primary connection pool |
+| External durable Persistence | `PhronomyActiveRecord.build(...).agent` | `PhronomyStore.persistence` uses the Rails primary connection pool |
 | LLM invocation | `agent.invoke(content)` | `MessagesController` runs the normal Agent → LLM execution path |
 | Transcript read-back | `agent.transcript_messages` | `ConversationsController#index` reloads the logical transcript from durable Journal state |
 
@@ -46,11 +45,20 @@ There is intentionally no application-level ActiveRecord model for Phronomy
 Agent state. The Persistence backend owns its `phronomy_*` storage tables and
 the Agent Journal remains the canonical conversation state.
 
-The backend implementation is **not copied into this Rails application**.
-Example 09 loads the concrete implementation from sibling example
-`30_sqlite_persistence` and injects `ActiveRecord::Base.connection_pool`.
-This keeps one authoritative backend implementation while demonstrating how a
-Rails consumer supplies its own database connection pool.
+The initializer assembles Agent persistence from the optional package using the
+Rails-owned connection pool:
+
+```ruby
+require "phronomy/active_record"
+persistence = PhronomyActiveRecord.build(
+  connection_pool: ActiveRecord::Base.connection_pool, dialect: :sqlite
+).agent
+```
+
+`PhronomyStore.persistence` retains this facade for Agent creation and loading.
+The package owns the SQL implementation; Rails owns the connection pool and
+schema migrations. Examples 30/31 exercise the same package through their
+standalone backend wrappers.
 
 ## Database schema
 

@@ -1,7 +1,8 @@
 # Error API migration (DX05-A)
 
-Phronomy 0.29.0 includes these DX05-A error APIs. The default bundles and CI use
-the published gem. For local framework development, select an explicit checkout
+Phronomy 0.29.0 includes these DX05-A error APIs. The current bundles and CI
+use the published dependency selected by `Gemfile.phronomy` (`~> 0.33.0`).
+For local framework development, select an explicit checkout
 with `PHRONOMY_PATH` as described in the root README.
 
 * Examples 09/15 catch AgentNotFoundError only around the target Agent load and
@@ -13,8 +14,8 @@ with `PHRONOMY_PATH` as described in the root README.
   the existing class/message/code. Recovery uses generic Phronomy::Error, not
   constantization of a saved class name. Old and unknown codes remain readable.
 * No SQL schema, table, migration version or Storage backend behavior changes.
-* The released 0.28.0 gem does not include these error APIs. All seven bundle
-  lockfiles now select Phronomy 0.29.0 from RubyGems.
+* The released 0.28.0 gem does not include these error APIs. The original migration
+  selected Phronomy 0.29.0; all seven current lockfiles select 0.33.0 from RubyGems.
 
 Run root tests, both SQL suites/reload demos, Rails 09/15 history verification and
 `verify_examples.sh` against the same released core version. Root controller tests use

@@ -5,8 +5,9 @@ its result, and the next-state decision. It should not reconstruct state-entry
 identity or delivery failure handling for every Agent call. Phronomy's new
 `task_state` owns that bookkeeping through the Workflow contract.
 
-Phronomy 0.29.0 includes this DX05-D API. The default bundles and CI use the
-published gem; Phronomy 0.28.0 does not contain it. The migration originally
+Phronomy 0.29.0 includes this DX05-D API; Phronomy 0.28.0 does not contain it.
+The current bundles and CI use the published dependency selected by
+`Gemfile.phronomy` (`~> 0.33.0`). The migration originally
 built on examples `751d143`. Use `PHRONOMY_PATH` only for an explicit local
 framework checkout, following the root README.
 

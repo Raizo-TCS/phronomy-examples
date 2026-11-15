@@ -201,7 +201,8 @@ included by both SQL suites: fresh-pool reload preserves saved revisions and
 closed lifecycle, opaque retention blocks unloading, Store failure preserves
 the original owner, and async scope cleanup leaves the pool usable.
 
-Run against the released Phronomy 0.29.0 gem with `PHRONOMY_PATH` unset:
+Run against the current published dependency selected by `Gemfile.phronomy`
+(`~> 0.33.0`), with `PHRONOMY_PATH` unset:
 
 ```bash
 bundle install
@@ -219,8 +220,9 @@ PHRONOMY_POSTGRES_URL=postgresql://... bundle exec ruby run.rb
 The package's `verification.json` preserves historical candidate-time results.
 Application acceptance passed root 93, CVE 79, SQLite 145 and PostgreSQL 136
 cases, both fresh-pool reloads, all 13 CI jobs and the full 99-check verification
-script. Core dependencies and all seven lockfiles now select released Phronomy
-0.29.0; CI repeats the normal suites against the published gem.
+script. Those historical results used released Phronomy 0.29.0. The current
+bundles select `~> 0.33.0`; CI repeats the normal suites against the published
+dependency selected by `Gemfile.phronomy`.
 
 ## v0.29.0 follow-up: batch review ownership
 

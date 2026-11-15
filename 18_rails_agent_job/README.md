@@ -64,8 +64,9 @@ delivery. Agent semantic durability remains independent from notifications.
 
 ## Run and compare
 
-Released Phronomy 0.29.0 provides TaskResult.completed/failed, Blocking.call_async
-and the Agent scope API used by both Jobs.
+The current bundle provides TaskResult.completed/failed, Blocking.call_async
+and the Agent scope API used by both Jobs. These APIs were already available in
+the original Phronomy 0.29.0 baseline.
 Run the Rails app normally, open the chat page and compare its two display modes.
 Both jobs use the same allowlist and keyword `stream:` as the controller.
 
@@ -76,8 +77,8 @@ requirements to copy the streaming adapter into every application.
 The Job uses `OrderedEventDelivery.open` to drain on success or failure. Token
 coalescing stays in [TokenEventBatch](app/services/token_event_batch.rb); the
 helper does not interpret event types. AgentResultJob remains the simple
-final-answer-only path. The integration is available in the default released
-Phronomy 0.29.0 dependency.
+final-answer-only path. The integration uses the default published Phronomy
+`~> 0.33.0` dependency selected by `Gemfile.phronomy`.
 
 ## Agent lifetime
 

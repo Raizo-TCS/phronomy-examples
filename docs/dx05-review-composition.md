@@ -142,7 +142,8 @@ end
 
 ## Acceptance
 
-Run against released Phronomy 0.29.0:
+Run against the current published dependency selected by `Gemfile.phronomy`
+(`~> 0.33.0`):
 
 ```bash
 unset PHRONOMY_PATH

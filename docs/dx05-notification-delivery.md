@@ -345,7 +345,9 @@ Agent release remains DX05-E, and shared Workflow completion handling remains DX
 
 ## Verification
 
-Run the following in the real Rails environment against released Phronomy 0.29.0. Leave `PHRONOMY_PATH` unset unless testing an explicit local framework checkout.
+Run the following in the real Rails environment against the current published
+dependency selected by `Gemfile.phronomy` (`~> 0.33.0`). Leave `PHRONOMY_PATH`
+unset unless testing an explicit local framework checkout.
 
 ```bash
 unset PHRONOMY_PATH

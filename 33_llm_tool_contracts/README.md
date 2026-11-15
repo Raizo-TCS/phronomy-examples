@@ -1,7 +1,8 @@
 # LLM and Tool contracts without a provider service
 
-From the repository root, run `bundle install` with the released Phronomy 0.29.0
-dependency, then `bundle exec ruby 33_llm_tool_contracts/run.rb`.
+From the repository root, run `bundle install` with the published Phronomy
+`~> 0.33.0` dependency selected by `Gemfile.phronomy`, then
+`bundle exec ruby 33_llm_tool_contracts/run.rb`.
 The result is `Result: 6`; no API key or LLM service is needed.
 
 The local backend implements only protected operations. It returns a Tool request

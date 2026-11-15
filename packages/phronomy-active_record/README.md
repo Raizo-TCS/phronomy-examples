@@ -1,6 +1,6 @@
 # phronomy-active_record (unpublished 0.1.0)
 
-Optional SQL persistence for Phronomy 0.32.x. The existing examples' neutral
+Optional SQL persistence for Phronomy 0.33.x. The existing examples' neutral
 ActiveRecord driver and resource mappings are now maintained here. Core does
 not require this package, ActiveRecord, SQLite or PostgreSQL.
 
@@ -73,7 +73,20 @@ migration tests remain separate from normal PostgreSQL contract tests.
 | `30_sqlite_persistence/db/schema.rb` | `lib/phronomy/active_record/schema_v1/sqlite.rb` |
 | `31_postgresql_persistence/db/schema.rb` | `lib/phronomy/active_record/schema_v1/postgresql.rb` |
 
-Old examples imports are compatibility adapters, not second implementations.
+The former `shared/storage/*.rb` imports and `PhronomyExamples::Storage` alias
+have been removed. Load the package and use its namespace directly:
+
+```ruby
+require "phronomy/active_record"
+codec = PhronomyActiveRecord::Storage::Codec
+```
+
+The same namespace provides `Backend`, `Records`, `Streams`, `Blobs` and
+`Mapping`. These are the existing implementations; no SQL behavior or stored
+format changes. Keep the local `path:` dependency shown above until the package
+is published. The resource-mapping and schema aliases listed in the table remain
+in use by examples 30/31 and the offline migration CLI.
+
 The examples' historical Rails migrations and offline snapshot tooling remain
 application/deployment history. Future schema changes require new versioned
 assets and explicit upgrade migrations rather than editing SchemaV1.

@@ -243,22 +243,17 @@ Portable contract failures are translated only when their meaning is known:
 Connection loss, server unavailability, deadlocks, and indeterminate commit
 outcomes are deliberately **not** converted into optimistic conflicts.
 
-## Relationship to future commonization
+## Shared implementation and database-specific behavior
 
-This phase intentionally keeps:
+The optional package owns the shared driver and codec. The SQLite and PostgreSQL
+example wrappers select their dialect and supply the same resource mappings;
+they do not duplicate SQL operations.
 
-```text
-ActiveRecordSQLite
-ActiveRecordPostgreSQL
-```
-
-independent.
-
-After both reference implementations have been exercised in CI, common code can
-be reviewed for extraction. Codec duplication may be a reasonable candidate.
-Transaction setup, lock strategy, CAS SQL, admission, and backend-specific error
-handling should remain concrete unless extraction makes their semantics clearer,
-not less visible.
+For example, `ActiveRecordPostgreSQL` selects `dialect: :postgresql` when
+constructing `PhronomyActiveRecord::Storage::Backend`. The package retains
+PostgreSQL-specific locking and error handling within that implementation.
+Database-specific integration tests remain necessary even though the wrappers
+share their implementation.
 
 ## Coordination repositories and upgrades
 
@@ -284,17 +279,23 @@ Different Team rows can progress independently. Initial Handoff/Team conflicts
 use `ON CONFLICT DO NOTHING`. Catch such conflicts outside an explicit inner
 savepoint; the failed SPI scope cannot continue.
 
-## Refactor 35: neutral Storage SPI 2
+## Neutral Storage SPI 2
 
-The default released Phronomy 0.29.0 dependency provides this SPI. Use PHRONOMY_PATH only for an explicit local framework checkout.
+The current bundle selects published Phronomy `~> 0.33.0` through
+`Gemfile.phronomy`. Use `PHRONOMY_PATH` only for an explicit local framework
+checkout. The Refactor 35 migration originally targeted Phronomy 0.29.0;
+the current implementation and verification instructions follow below.
 The core requires spi_version 2 and neutral atomic_resources, record_cas,
 stream_cas, conditional_unique, guarded_checks and nested_savepoints capabilities.
 Public Persistence retains its existing eight domain repositories and three
 capability names. Raw Backend exposes a View with Records, Streams and Blobs.
 
-The driver is shared in ../shared/storage. Domain resources and existing table
-names are wired separately in ../shared/persistence_storage_mapping.rb. The
-physical driver has no domain resource-ID switch, domain codec, active-state
+The optional `phronomy-active_record` package owns the neutral SQL driver in
+`lib/phronomy/active_record/storage` and domain resource mappings in
+`lib/phronomy/active_record/persistence_storage_mapping.rb`.
+`../shared/persistence_storage_mapping.rb` exposes the mapping alias used by
+this example and the offline migration CLI. The physical driver has no domain
+resource-ID switch, domain codec, active-state
 interpretation, content digest or Agent watermark API. Table/index definitions,
 record type/version/payload and content bytes are unchanged.
 
@@ -312,12 +313,19 @@ break and throw cause TransactionError and rollback. Bound views/handles expire
 at scope exit and reject cross-thread use; cached root handles join the current
 transaction. Complete stream batches are validated before writes.
 
-Run the shipped neutral/domain contracts and the database-specific tests against
-released Phronomy 0.29.0. S2a results do not verify the new SPI; live PostgreSQL
-locking, deadlock, connection-failure and fresh-pool tests remain a release gate.
+Run the shipped neutral/domain contracts and database-specific tests against
+the current bundle's Phronomy version, following the verification commands above.
+Historical S2a results do not verify this SPI; live PostgreSQL locking, deadlock,
+connection-failure and fresh-pool tests remain a release gate.
 
 For the coordinated source API migration, see [r8 unit 3](../R8-UNIT3.md).
 
 ## Backend distribution
 
-This example consumes the local optional [phronomy-active_record package](../packages/phronomy-active_record/README.md). The driver, mappings and versioned schema have one authoritative implementation there. Compatibility imports preserve existing example entry points.
+This example consumes the local optional
+[phronomy-active_record package](../packages/phronomy-active_record/README.md).
+The driver, mappings and versioned schema have one authoritative implementation
+there. Import Storage components with `require "phronomy/active_record"` and
+use `PhronomyActiveRecord::Storage`; the old `shared/storage/*.rb` imports and
+`PhronomyExamples::Storage` alias have been removed. This example's backend
+wrapper, resource-mapping alias and schema entry point remain in use.

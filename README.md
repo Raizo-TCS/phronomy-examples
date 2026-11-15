@@ -47,6 +47,19 @@ original GC probe (`RECORDS=5 MORE_WORK=1`) on Ubuntu 24.04 with Ruby 3.2.3/3.3.
 and Ubuntu 26.04 with Ruby 3.2.11/3.3.13. To verify a local framework checkout,
 export `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
 
+## Storage import migration
+
+SQL implementation imports now use the optional `phronomy-active_record` package
+directly. The old `shared/storage/*.rb` paths and `PhronomyExamples::Storage`
+alias have been removed; the SQL implementation and saved data formats are
+unchanged.
+
+For example, replace a legacy codec import with `require "phronomy/active_record"`
+and use `PhronomyActiveRecord::Storage::Codec`. Keep the local package dependency
+in `Gemfile.phronomy_active_record`. See the package's
+[source ownership and migration guidance](packages/phronomy-active_record/README.md#source-ownership-and-verification)
+for the remaining Storage components and the example wiring that stays in use.
+
 ## DX1 and DX2
 
 Examples 20 and 27 declare their output shape and consume Agent-validated JSON

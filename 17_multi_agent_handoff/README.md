@@ -1,7 +1,8 @@
 # 17 Multi-Agent Handoff
 
-This version uses `Phronomy::MultiAgent::HandoffRunner` from the default released
-Phronomy 0.29.0 dependency. The old 0.26.0 core used the previous Runner namespace.
+This example uses `Phronomy::MultiAgent::HandoffRunner` from the default published
+Phronomy `~> 0.33.0` dependency selected by `Gemfile.phronomy`. The old 0.26.0
+core used the previous Runner namespace.
 
 This example uses `Phronomy::MultiAgent::HandoffRunner` and explicit
 `Phronomy::MultiAgent::Handoff` edges. All Agents in a conversation share one

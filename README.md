@@ -1,7 +1,29 @@
 # Phronomy Examples
 
-These examples use the published Phronomy `~> 0.34.0` gem through
-`Gemfile.phronomy` and all seven lockfiles. Version 0.33.0 adds public SharedState
+<!-- PHRONOMY_RELEASE_OVERVIEW_BEGIN -->
+
+This candidate updates the optional SQL package to consume the public composition
+catalog added after Phronomy 0.34.0. SQL-backed examples therefore require the
+matching core checkout through `PHRONOMY_PATH` until a release containing that
+API is published and the dependency/CI baselines are updated. For example, the
+package now obtains its canonical resources from `PersistenceComposition.resources`
+rather than the private StorageSchema. This changes source dependencies, not
+stored records or database schemas. See the package's
+[candidate requirements](packages/phronomy-active_record/README.md#install-and-configure).
+
+This source pair is for coordinated validation. Before publishing the examples
+change, release a core version containing the catalog API, update the shared gem
+requirement and optional package requirement, regenerate all seven lockfiles
+from that published gem, and update Hosted Worker CI's exact version pin. Run
+published-gem CI with `PHRONOMY_PATH` unset. Do not publish this candidate with
+the old 0.34.0 dependency baseline still in place.
+
+The released baseline uses the published Phronomy `~> 0.34.0` gem through
+`Gemfile.phronomy` and all seven lockfiles.
+
+<!-- PHRONOMY_RELEASE_OVERVIEW_END -->
+
+Version 0.33.0 adds public SharedState
 sharing, Agent Tool composition and Context budgeting APIs used by Example 22.
 Version 0.32.0 introduced Worker approval
 handoff, saved Workflow events and completed parent/child owner release for
@@ -40,12 +62,18 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 `Phronomy::Documents`. See [r8 unit 5 migration](R8-UNIT5.md) and
 [r8 unit 6 migration](R8-UNIT6.md) for the historical migration steps.
 
-All CI jobs install the published RubyGems dependency using the committed
-lockfiles. Hosted Worker CI verifies Phronomy 0.34.0, its RubyGems source and
+<!-- PHRONOMY_RELEASE_CI_BEGIN -->
+
+The release-baseline CI jobs install the published RubyGems dependency using the
+committed lockfiles. That baseline does not provide this candidate's new catalog
+API; candidate SQL verification must use the matching core checkout. Hosted
+Worker CI verifies Phronomy 0.34.0, its RubyGems source and
 loaded path with `PHRONOMY_PATH` unset. It runs Examples 34, 35 and 36 and the
 original GC probe (`RECORDS=5 MORE_WORK=1`) on Ubuntu 24.04 with Ruby 3.2.3/3.3.6
 and Ubuntu 26.04 with Ruby 3.2.11/3.3.13. To verify a local framework checkout,
 export `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
+
+<!-- PHRONOMY_RELEASE_CI_END -->
 
 ## Storage import migration
 
@@ -235,14 +263,25 @@ Gemfile.phronomy
 
 DX1/DX2 require Phronomy 0.31 or later; 0.30.1 does not expose these APIs.
 Worker Examples 34–36 require 0.32.0; 0.31.0 does not provide `start_hosted`.
-The shared dependency allows `~> 0.34.0`, and all seven lockfiles select the
-published 0.34.0 gem. Keep `PHRONOMY_PATH` unset to verify that dependency:
+
+<!-- PHRONOMY_RELEASE_DEPENDENCY_BEGIN -->
+
+The release-baseline dependency allows `~> 0.34.0`, and all seven lockfiles select
+published 0.34.0. This candidate's SQL package instead requires the matching
+checkout containing the new catalog API. After publishing that core API, update
+the dependency and exact CI pin, then regenerate the seven lockfiles and verify
+the real published dependency with `PHRONOMY_PATH` unset:
 
 ```bash
 unset PHRONOMY_PATH
 ./scripts/update_phronomy.sh
 ./scripts/verify_examples.sh
 ```
+
+These published-gem verification commands are a release gate, not a working
+configuration for the candidate SQL source against the old 0.34.0 gem.
+
+<!-- PHRONOMY_RELEASE_DEPENDENCY_END -->
 
 Example 22 requires the public SharedState sharing and Context budgeting APIs
 published in Phronomy 0.33.0. Its deterministic tests use the released gem, as do

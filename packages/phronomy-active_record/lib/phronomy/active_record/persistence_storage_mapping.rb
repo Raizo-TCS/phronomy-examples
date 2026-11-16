@@ -6,7 +6,7 @@ module PhronomyActiveRecord
     module StorageMapping
       module_function
 
-      def resources = Phronomy::PersistenceComposition::StorageSchema.resources
+      def resources = Phronomy::PersistenceComposition.resources
 
       def mappings
         {

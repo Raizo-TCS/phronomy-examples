@@ -1,20 +1,32 @@
 # phronomy-active_record (unpublished 0.1.0)
 
-Optional SQL persistence for Phronomy 0.33.x. The existing examples' neutral
-ActiveRecord driver and resource mappings are now maintained here. Core does
-not require this package, ActiveRecord, SQLite or PostgreSQL.
+<!-- PHRONOMY_RELEASE_OVERVIEW_BEGIN -->
+Optional SQL persistence for published Phronomy `~> 0.35.0`. The existing
+examples' neutral ActiveRecord driver and resource mappings are maintained
+here. Core does not require this package, ActiveRecord, SQLite or PostgreSQL.
+The package uses the public `PersistenceComposition.resources` catalog.
+<!-- PHRONOMY_RELEASE_OVERVIEW_END -->
 
 ## Install and configure
 
-Until publication, use this package directory with `path:` (or a pinned checkout
-containing it). This does not assume that an unpublished gem exists on RubyGems.
+<!-- PHRONOMY_RELEASE_INSTALL_BEGIN -->
+The application selects the published core and the optional database package
+together. The SQL package itself is still distributed as repository source.
+
+For example, a local SQLite application declares the published core, the
+package checkout and its database driver:
 
 ```ruby
-gem "phronomy", "~> 0.34.0"
+gem "phronomy", "~> 0.35.0"
 gem "phronomy-active_record", path: "/path/to/phronomy-active_record",
   require: "phronomy/active_record"
-gem "sqlite3", ">= 2.1" # or pg for PostgreSQL
+gem "sqlite3", ">= 2.10.2"
 ```
+
+The examples repository reads the same core requirement from
+`Gemfile.phronomy`. For coordinated local core development, select the
+matching checkout through `PHRONOMY_PATH` and run `scripts/update_phronomy.sh`.
+<!-- PHRONOMY_RELEASE_INSTALL_END -->
 
 Ruby >= 3.2, ActiveRecord >= 7.1 and < 9 are accepted dependencies. Actual Ruby
 requirements also depend on the chosen ActiveRecord version. Compatibility
@@ -36,6 +48,11 @@ puts agent.invoke("Hello").fetch(:output)
 It does not create tables, change connection settings, close the application pool,
 start Runtime, or decide domain retry/recovery/finalization policies. Borrowed
 connections are returned through ActiveRecord's pool API.
+
+The mapping obtains `PersistenceComposition.resources`, a frozen list of the
+canonical domain and content Resource objects. Composition owns the catalog;
+this package owns SQL table/column mapping and connection adaptation. The package
+does not read private core schema modules or duplicate their declarations.
 
 ## Explicit new-database migration
 

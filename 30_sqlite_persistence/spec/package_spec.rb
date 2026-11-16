@@ -11,7 +11,12 @@ RSpec.describe "Optional ActiveRecord distribution" do
       expect(connection).not_to receive(:create_table)
       expect(connection).not_to receive(:add_index)
       expect(connection).not_to receive(:drop_table)
+      catalog = Phronomy::PersistenceComposition.resources
+      expect(Phronomy::PersistenceComposition).to receive(:resources).once.and_return(catalog)
       stores = PhronomyActiveRecord.build(connection_pool: pool, dialect: :sqlite)
+      catalog.each do |resource|
+        expect(stores.coordinator.backend.resources.fetch(resource.id)).to equal(resource)
+      end
       root = build_agent_root
       stores.agent.agents.create(root)
       expect(stores.agent.agents.load(root.agent_id).to_h).to eq(root.to_h)

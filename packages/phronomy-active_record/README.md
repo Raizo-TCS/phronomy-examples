@@ -1,40 +1,31 @@
 # phronomy-active_record (unpublished 0.1.0)
 
 <!-- PHRONOMY_RELEASE_OVERVIEW_BEGIN -->
-
-Optional SQL persistence for the matching unreleased Phronomy checkout after
-0.34.0. The existing examples' neutral ActiveRecord driver and resource mappings
-are maintained here. Core does not require this package, ActiveRecord, SQLite or
-PostgreSQL. This candidate uses the new public composition catalog; the released
-0.34.0 gem alone does not provide that operation.
-
+Optional SQL persistence for published Phronomy `~> 0.35.0`. The existing
+examples' neutral ActiveRecord driver and resource mappings are maintained
+here. Core does not require this package, ActiveRecord, SQLite or PostgreSQL.
+The package uses the public `PersistenceComposition.resources` catalog.
 <!-- PHRONOMY_RELEASE_OVERVIEW_END -->
 
 ## Install and configure
 
 <!-- PHRONOMY_RELEASE_INSTALL_BEGIN -->
+The application selects the published core and the optional database package
+together. The SQL package itself is still distributed as repository source.
 
-The application selects the core implementation and optional database package
-together. Until both the new core API and updated dependency baseline are
-published, use matching checkouts rather than assuming the published 0.34.0 gem
-contains the catalog operation.
-
-For example, a local SQLite application declares both checkout paths and adds
-its database driver. The examples repository can select the same core through
-`PHRONOMY_PATH` and its existing bundle-update procedure.
-
-Before publishing this package change, release the core API and update the
-package's minimum core dependency to the actual released version. The current
-0.34 dependency declaration is the release baseline, not proof that the new
-catalog is available in 0.34.0.
+For example, a local SQLite application declares the published core, the
+package checkout and its database driver:
 
 ```ruby
-gem "phronomy", path: "/path/to/matching/phronomy"
+gem "phronomy", "~> 0.35.0"
 gem "phronomy-active_record", path: "/path/to/phronomy-active_record",
   require: "phronomy/active_record"
-gem "sqlite3", ">= 2.1" # or pg for PostgreSQL
+gem "sqlite3", ">= 2.10.2"
 ```
 
+The examples repository reads the same core requirement from
+`Gemfile.phronomy`. For coordinated local core development, select the
+matching checkout through `PHRONOMY_PATH` and run `scripts/update_phronomy.sh`.
 <!-- PHRONOMY_RELEASE_INSTALL_END -->
 
 Ruby >= 3.2, ActiveRecord >= 7.1 and < 9 are accepted dependencies. Actual Ruby

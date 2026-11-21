@@ -3,6 +3,7 @@
 require "spec_helper"
 require "tmpdir"
 require_relative "../scripts/support/trust_acceptance_observer"
+require_relative "../scripts/support/trust_approval_acceptance"
 
 RSpec.describe "Trust pipeline acceptance diagnostics" do
   def run_case(name)
@@ -91,6 +92,53 @@ RSpec.describe "Trust pipeline acceptance diagnostics" do
       expect(chat.calls.first.dig("response_format", "type")).to eq("json_schema")
       expect(chat.calls.first["tools"]).not_to be_empty
     end
+  end
+
+  %w[native tool_then_schema].each do |mode|
+    %w[accepted iteration_limit].each do |reason|
+      it "approves both distinct drafts after a rejected review in #{mode}, ending with #{reason}" do
+        previous_mode = ENV[TrustLlmCompatibility::ENV_KEY]
+        ENV[TrustLlmCompatibility::ENV_KEY] = mode
+        chat = ExampleChatStub.new do |_body, index|
+          case index % 3
+          when 0 then ExampleChatStub.tool("approved_policy_lookup", query: "refund")
+          when 1 then JSON.generate(answer: "Refund policy", confidence: 0.95, citations: [])
+          else
+            accepted = index == 5 && reason == "accepted"
+            JSON.generate(approved: accepted, score: accepted ? 0.95 : 0.6, feedback: "Check the policy evidence")
+          end
+        end
+        status, report = run_case("approval-yes")
+        expect([status, report["status"]]).to eq([0, "passed"]), report.inspect
+        expect(chat.calls.length).to eq(6)
+        expect(report["approvals"].length).to eq(2)
+        expect(report["decisions"].map { |item| item["approved"] }).to eq([true, true])
+        expect(report["tool_executions"]).to eq(2)
+        expect(report["tool_effects"].map { |item| item["tool_invocation_id"] }.uniq.length).to eq(2)
+        expect(report["releases"].last["value"]).to be true
+        result = report["results"].last.fetch("value")
+        expect(result.values_at("termination_reason", "iterations")).to eq([reason, 2])
+
+        # An unchanged total cannot hide executing the first approved invocation twice.
+        duplicate_effect = Marshal.load(Marshal.dump(report))
+        duplicate_effect["tool_effects"][1] = duplicate_effect["tool_effects"][0]
+        expect(TrustApprovalAcceptance.yes?(duplicate_effect, result)).to be false
+        missing_approval = Marshal.load(Marshal.dump(report))
+        missing_approval["approvals"].pop
+        expect(TrustApprovalAcceptance.yes?(missing_approval, result)).to be false
+        wrong_decision = Marshal.load(Marshal.dump(report))
+        wrong_decision["decisions"][1]["request_id"] = "unrelated-request"
+        expect(TrustApprovalAcceptance.yes?(wrong_decision, result)).to be false
+      ensure
+        ENV[TrustLlmCompatibility::ENV_KEY] = previous_mode
+      end
+    end
+  end
+
+  it "bounds predetermined yes answers and retains one answer for denial or cancellation" do
+    expect(TrustApprovalAcceptance.input("yes").each_line.to_a).to eq(["yes\n", "yes\n"])
+    expect(TrustApprovalAcceptance.input("no").each_line.to_a).to eq(["no\n"])
+    expect(TrustApprovalAcceptance.input("cancel").each_line.to_a).to eq(["cancel\n"])
   end
 
   it "reports schema-plus-Tool rejection as blocked, never as a successful approval" do

@@ -18,7 +18,8 @@ class TrustAcceptanceObserver
     @wake = ConditionVariable.new
     @origin = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     @records = {started_at: Time.now.utc.iso8601(6), requests: [], responses: [], http_attempts: [],
-                approvals: [], decisions: [], tool_executions: 0, releases: [], results: [], pipelines: [], exceptions: [], snapshots: [], observer_errors: []}
+                approvals: [], decisions: [], tool_executions: 0, tool_effects: [], releases: [], results: [], pipelines: [], exceptions: [], snapshots: [], observer_errors: []}
+    @tool_invocations = {}
     # Reserve a new report rather than overwrite evidence from a previous trial.
     File.open(path, File::WRONLY | File::CREAT | File::EXCL, 0o600) {}
   end
@@ -120,11 +121,28 @@ class TrustAcceptanceObserver
       if event.method_id == :initialize && event.event == :return
         record(:approvals, value: event.binding.receiver.to_h)
       elsif event.method_id == :respond_async && event.event == :call
-        record(:decisions, approved: event.binding.local_variable_get(:approved))
+        value = JSON.parse(JSON.generate(event.binding.receiver.to_h))
+        record(:decisions, request_id: value.fetch("request").fetch("id"),
+          approved: event.binding.local_variable_get(:approved))
+      end
+    elsif owner == "Phronomy::Agent::ToolInvocation" && event.method_id == :start_async_tool_operation && event.event == :call
+      # Diagnostic binding to the pinned core: correlate the actual Tool receiver
+      # with its invocation before execution, without modifying dispatch or input.
+      invocation = event.binding.receiver
+      if invocation.tool_name == "approved_policy_lookup"
+        @lock.synchronize {
+          @tool_invocations[invocation.tool.object_id] = {
+            execution_id: invocation.execution_id, tool_invocation_id: invocation.id,
+            tool_call_id: invocation.tool_call_id
+          }
+        }
       end
     elsif owner == "ApprovedPolicyLookup" && event.method_id == :execute && event.event == :call
       @lock.synchronize {
         @records[:tool_executions] += 1
+        @records[:tool_effects] << @tool_invocations.fetch(event.binding.receiver.object_id).merge(
+          at: Time.now.utc.iso8601(6), elapsed: elapsed, thread: Thread.current.object_id
+        )
         write_locked
       }
     elsif owner == "Phronomy::GeneratorVerifier" && event.method_id == :initialize && event.event == :call

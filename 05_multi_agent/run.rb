@@ -17,7 +17,6 @@
 # Here the orchestrator LLM drives coordination via tool calls.
 
 require_relative "../shared/llm_config"
-require_relative "../shared/output_validator"
 require "phronomy"
 require_relative "agents"
 
@@ -27,40 +26,32 @@ puts "=== Multi-Agent Example ==="
 puts "TaskResult: #{task}"
 puts
 puts "[config] Model:              #{LLMConfig::MODEL}"
-puts "[config] max_output_tokens is the Phronomy context-budget output reserve."
-puts "[config]   Provider-side output limiting is not guaranteed in Phronomy 0.19.x;"
-puts "[config]   it is forwarded only when RubyLLM provides a normalised API for it."
-puts "[config]   Actual output length is controlled by prompt instructions."
+allocation = Example05Budget.current
+puts "[config] Registered context: #{allocation.context_window}; output cap: #{allocation.output_tokens}"
+puts "[config] Input allowance: #{allocation.input_tokens}; safety margin: #{allocation.safety_margin}"
+puts "[config] Reasoning models may consume this budget before producing final-answer text."
 puts "[config] LLM calls expected: 3+ (Orchestrator drives tool calls autonomously)"
 puts
 
 llm_call_count = 0
 
-# Map agent definition IDs to their configured context output reserve for logging.
-agent_context_reserve = {
-  "example-05-orchestrator-agent" => OrchestratorAgent.max_output_tokens,
-  "example-05-researcher-agent"   => ResearcherAgent.max_output_tokens,
-  "example-05-writer-agent"       => WriterAgent.max_output_tokens
-}
-
 Phronomy.configuration.before_llm_input = ->(ctx) {
   llm_call_count += 1
-  reserve = agent_context_reserve[ctx.agent_definition_id] || "(not set)"
+  budget = Example05Budget.current
   puts "  [LLM call ##{llm_call_count}] agent=#{ctx.agent_definition_id} " \
-       "call_seq=#{ctx.call_sequence} context_output_reserve=#{reserve}"
+       "call_seq=#{ctx.call_sequence} output_cap=#{budget.output_tokens} input_allowance=#{budget.input_tokens}"
   puts "  [LLM call ##{llm_call_count}] accumulated tool result chars: #{$accumulated_tool_chars || 0}"
   nil
 }
 
 t_total = Time.now
 
-result = OutputValidator.validate(
-  "multi-agent produces article of 300+ chars",
-  check: ->(r) { r[:output].length >= 300 }
-) { Phronomy::Agent.open_scope { |agents| agents.create(OrchestratorAgent).invoke_async(task) } }
+result = Phronomy::Agent.open_scope { |agents| agents.create(OrchestratorAgent).invoke_async(task) }
+article = Example05Validation.article!(result)
+puts "[validate] OK: nonblank research passed to the writer; publishing its verified result"
 
 puts
 puts "--- Final Article ---"
-puts result[:output]
+puts article
 puts
 puts "[summary] Total LLM calls: #{llm_call_count}, total elapsed: #{(Time.now - t_total).round(1)}s"

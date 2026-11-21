@@ -5,6 +5,7 @@ require "optparse"
 require "stringio"
 require_relative "../shared/llm_config"
 require_relative "support/trust_acceptance_observer"
+require_relative "support/trust_approval_acceptance"
 require_relative "../19_trust_pipeline/llm_compatibility"
 
 options = {interval: 30}
@@ -33,7 +34,7 @@ previous_stdin = $stdin
 begin
   observer.start
   if options[:case].start_with?("approval-")
-    $stdin = StringIO.new(options[:case].delete_prefix("approval-") + "\n")
+    $stdin = TrustApprovalAcceptance.input(options[:case].delete_prefix("approval-"))
     file = "approval_demo.rb"
   else
     file = {"invoice" => "structured_agent_demo.rb", "accepted" => "lifetime_demo.rb", "iteration_limit" => "iteration_limit_demo.rb"}.fetch(options[:case])
@@ -66,9 +67,7 @@ when "invoice"
 when "accepted", "iteration_limit"
   failure.nil? && released && valid_result && result["termination_reason"] == options[:case]
 when "approval-yes"
-  failure.nil? && released && approved == 1 && tools == 1 &&
-    records[:decisions].map { |item| item[:approved] } == [true] &&
-    valid_result && %w[accepted iteration_limit].include?(result["termination_reason"])
+  failure.nil? && released && TrustApprovalAcceptance.yes?(records, result)
 when "approval-no"
   failure.nil? && released && approved == 1 && tools.zero? &&
     records[:decisions].map { |item| item[:approved] } == [false] &&

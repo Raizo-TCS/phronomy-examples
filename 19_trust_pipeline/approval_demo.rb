@@ -23,9 +23,13 @@ class ApprovalPolicyDraftAgent < PolicyDraftAgent
   model LLMConfig::MODEL
   provider LLMConfig::PROVIDER
   tools ApprovedPolicyLookup => nil
-  instructions "Call approved_policy_lookup exactly once before answering each question. " \
-    "After its result arrives, answer from that result without calling another Tool. " \
-    "Include confidence and supporting source excerpts."
+  instructions <<~PROMPT
+    Each draft request, including a revision, requires its own approved_policy_lookup call.
+    Call it exactly once before producing that draft, even when an earlier draft answered the same business question.
+    A lookup from an earlier draft does not satisfy the current draft's requirement.
+    After the Tool result for the current draft arrives, answer from that result without another Tool call for that draft.
+    Include confidence and supporting source excerpts.
+  PROMPT
 end
 
 events = Queue.new
@@ -33,7 +37,14 @@ result = Phronomy::GeneratorVerifier.open(
   draft_agent: ApprovalPolicyDraftAgent,
   review_agent: PolicyReviewAgent,
   draft_prompt_builder: ->(input, feedback) {
-    "Question: #{input}\nPrevious review: #{feedback}\nReport confidence from 0 to 1 and cite supporting policy excerpts."
+    <<~PROMPT
+      Draft request for: #{input}
+      Draft stage: #{feedback.nil? ? "initial" : "revision"}
+      Previous review: #{feedback || "None; this is the initial draft."}
+      Start a new approved_policy_lookup call for this draft, even when an earlier draft answered the same question.
+      After this draft's Tool result arrives, answer from it without another lookup.
+      Report confidence from 0 to 1 and cite supporting policy excerpts.
+    PROMPT
   },
   review_prompt_builder: ->(input, draft, citations) {
     "Review the answer for: #{input}\nAnswer: #{draft}\nSources: #{citations.inspect}\n" \

@@ -4,6 +4,7 @@ require "spec_helper"
 require "tmpdir"
 require_relative "../scripts/support/trust_acceptance_observer"
 require_relative "../scripts/support/trust_approval_acceptance"
+require_relative "../19_trust_pipeline/llm_compatibility"
 
 RSpec.describe "Trust pipeline acceptance diagnostics" do
   def run_case(name)
@@ -96,7 +97,7 @@ RSpec.describe "Trust pipeline acceptance diagnostics" do
 
   %w[native tool_then_schema].each do |mode|
     %w[accepted iteration_limit].each do |reason|
-      it "approves both distinct drafts after a rejected review in #{mode}, ending with #{reason}" do
+      it "approves both distinct drafts after a rejected review in #{mode}, ending with #{reason}", :draft_contract do
         previous_mode = ENV[TrustLlmCompatibility::ENV_KEY]
         ENV[TrustLlmCompatibility::ENV_KEY] = mode
         chat = ExampleChatStub.new do |_body, index|
@@ -119,6 +120,21 @@ RSpec.describe "Trust pipeline acceptance diagnostics" do
         result = report["results"].last.fetch("value")
         expect(result.values_at("termination_reason", "iterations")).to eq([reason, 2])
 
+        # Both requests concern the same business question. Revision history must
+        # not silently change the declared unit from one lookup per draft.
+        [chat.calls[0], chat.calls[3]].each do |request|
+          system = request.fetch("messages").find { |message| message["role"] == "system" }.fetch("content")
+          expect(system).to include("Each draft request, including a revision, requires its own approved_policy_lookup call.")
+          expect(system).to include("After the Tool result for the current draft arrives, answer from that result without another Tool call for that draft.")
+          prompt = request.fetch("messages").last
+          expect(prompt.fetch("role")).to eq("user")
+          expect(prompt.fetch("content")).to include("Draft request for: What is the refund policy?",
+            "Start a new approved_policy_lookup call for this draft, even when an earlier draft answered the same question.")
+        end
+        expect(chat.calls[0]["messages"].last["content"]).to include("Draft stage: initial")
+        expect(chat.calls[3]["messages"].last["content"]).to include("Draft stage: revision", "Check the policy evidence")
+        expect(chat.calls[3]["messages"].count { |message| message["role"] == "tool" }).to eq(1)
+
         # An unchanged total cannot hide executing the first approved invocation twice.
         duplicate_effect = Marshal.load(Marshal.dump(report))
         duplicate_effect["tool_effects"][1] = duplicate_effect["tool_effects"][0]
@@ -132,6 +148,39 @@ RSpec.describe "Trust pipeline acceptance diagnostics" do
       ensure
         ENV[TrustLlmCompatibility::ENV_KEY] = previous_mode
       end
+    end
+
+    it "does not count the previous draft's lookup as the revision's lookup in #{mode}", :draft_contract do
+      previous_mode = ENV[TrustLlmCompatibility::ENV_KEY]
+      ENV[TrustLlmCompatibility::ENV_KEY] = mode
+      chat = ExampleChatStub.new do |_body, index|
+        case index
+        when 0 then ExampleChatStub.tool("approved_policy_lookup", query: "refund")
+        when 1, 3 then JSON.generate(answer: "Refund policy", confidence: 0.95, citations: [])
+        when 2 then JSON.generate(approved: false, score: 0.6, feedback: "Check the policy evidence")
+        when 4 then JSON.generate(approved: true, score: 0.95, feedback: "Revised answer verified")
+        else raise "Unexpected additional request"
+        end
+      end
+      status, report = run_case("approval-yes")
+      expect([status, report["status"]]).to eq([1, "failed"])
+      expect(report["approvals"].length).to eq(1)
+      expect(report["decisions"].map { |item| item["approved"] }).to eq([true])
+      expect(report["tool_executions"]).to eq(1)
+      expect(report["releases"].last["value"]).to be true
+      expect(chat.calls[3]["messages"].count { |message| message["role"] == "tool" }).to eq(1)
+      if mode == "tool_then_schema"
+        expect(chat.calls.length).to eq(4)
+        expect(report["primary_error"].first).to include(
+          "class" => "Phronomy::LLMAdapter::InvalidResultError",
+          "message" => "Required approved_policy_lookup was not requested"
+        )
+      else
+        expect(chat.calls.length).to eq(5)
+        expect(report["results"].last.dig("value", "iterations")).to eq(2)
+      end
+    ensure
+      ENV[TrustLlmCompatibility::ENV_KEY] = previous_mode
     end
   end
 

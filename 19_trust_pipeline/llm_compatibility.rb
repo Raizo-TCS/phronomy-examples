@@ -85,8 +85,9 @@ module TrustLlmCompatibility
       unless request.tools.map { |tool| tool.fetch("name") } == [TOOL_NAME]
         raise Phronomy::LLMAdapter::InvalidResultError, "Example 19 policy supports only approved_policy_lookup"
       end
-      # A new question starts a new lookup, even when reused Agent history
-      # contains a previous lookup. No mutable phase counter is kept here.
+      # Every draft request, including a revision of the same question, starts
+      # a new lookup. Earlier history does not satisfy this draft's requirement.
+      # No mutable phase counter is kept here.
       return "tool" if request.message || request.messages.last&.role != :tool
 
       result = request.messages.last

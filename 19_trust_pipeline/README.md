@@ -60,6 +60,32 @@ the explicit decision through the Approval handle. "no" returns tool_rejected;
 "cancel" cancels the invocation. The protected Tool reads only the bundled
 fictional policy document.
 
+### Approval unit: one lookup per draft request
+
+This demo deliberately requires a new approved lookup for **each draft request**,
+including a revision of the same business question after review. The unit is a
+draft attempt, not the question text, conversation, or every HTTP request.
+
+| Stage | Required lookup behavior |
+| --- | --- |
+| Initial draft request | Request exactly one `approved_policy_lookup` call and obtain approval before answering |
+| Revision draft request | Request a new lookup and obtain a distinct approval, even when the previous result remains in history |
+| Continuation after the current draft's Tool result | Produce the draft without another lookup |
+| Review | Evaluate the draft without this Tool |
+
+Both the Agent instructions and each draft prompt declare this unit explicitly.
+The prompt labels the initial/revision stage and retains the original business
+question and review feedback. History is preserved, but an earlier lookup does
+not satisfy the current draft's lookup requirement. Two completed drafts therefore
+require two distinct approved Tool invocations, each executed exactly once.
+
+These prompts express the application policy; they do not guarantee model
+compliance or add a transport-level forced Tool choice. Missing or extra Tool
+requests remain acceptance failures. HTTP fixtures check both successful
+two-draft progression and rejection of a revision that reuses the earlier lookup
+without requesting its own. Live acceptance must exercise the intended path;
+a first-draft success does not validate the revision path.
+
 ## Declared output and output failure
 
 The paired structured-output update makes Agent responsible for strict JSON and
@@ -123,8 +149,8 @@ The policy is intentionally specific to this demo: OpenAI-compatible Chat
 Completions, the configured model, one `approved_policy_lookup` per draft,
 non-streaming execution. It rejects extra/unknown Tool calls and uncorrelated
 results. Phase selection uses the current request/history, not an in-memory
-counter; a new draft still needs its own lookup. The original instruction is
-clarified to request exactly one lookup before answering.
+counter; a new draft still needs its own lookup. Instructions and draft prompts
+explicitly require one lookup per draft request, including review-driven revisions.
 
 Select the mode before starting the CLI. Configuration is process-wide and
 must not be changed while Agents are running. It is installed only by

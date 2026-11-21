@@ -185,12 +185,13 @@ GEM
     nio4r (2.7.5)
     nokogiri (1.19.7-x86_64-linux-gnu)
       racc (~> 1.4)
-    phronomy (0.35.0)
+    phronomy (0.37.0)
       faraday (~> 2.14, >= 2.14.4)
       faraday-net_http (~> 3.4, >= 3.4.4)
       json (>= 2.21.2, < 3)
       json_schemer (~> 2.5)
       mcp (~> 1.0)
+      regexp_parser (!= 2.13.2)
       ruby_llm (~> 2.0.0)
       schematist (~> 1.1)
       state_machines (~> 0.6)
@@ -356,7 +357,7 @@ DEPENDENCIES
   debug
   importmap-rails
   nokogiri
-  phronomy (~> 0.35.0)
+  phronomy (~> 0.37.0)
   propshaft
   puma (>= 5.0)
   rails (~> 8.1.4, >= 8.1.4.1)

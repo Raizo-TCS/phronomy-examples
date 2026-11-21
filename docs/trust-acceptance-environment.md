@@ -33,7 +33,8 @@ bundle exec ruby scripts/verify_trust_pipeline.rb \
   --case approval-yes --report "$trial_reports/approval-yes.json"
 ```
 
-Require `status=passed`, one approval/positive decision, one actual Tool execution,
+Require `status=passed`, one or two distinct approvals with positive decisions,
+exactly one actual Tool execution for each approved invocation,
 a validated GeneratorVerifier result (`accepted` or `iteration_limit`), successful
 release, and `observation_complete=true`. The report must identify
 `llm_compatibility_mode=tool_then_schema`, the application adapter, and
@@ -191,7 +192,8 @@ establish that a deployed model/server supports the combination. Do not mark
 live approval cases complete based only on those tests.
 
 For each approval case, inspect its JSON and log: yes must reach approval, record
-one positive decision and one Tool execution; no must record one negative decision,
+one positive decision and one Tool execution for each of one or two distinct
+draft approvals; no must record one negative decision,
 zero Tool executions and `tool_rejected`; cancel must reach approval, record no
 decision, execute no Tool and retain cancellation. All require successful release.
 The existing runner checks these conditions. Rejection before approval remains

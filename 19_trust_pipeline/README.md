@@ -214,9 +214,14 @@ bundle exec ruby scripts/verify_trust_pipeline.rb --case approval-cancel --repor
 
 The runner supplies the explicit approval input to the existing CLI. The only
 Tool is the bundled fictional policy lookup. A case cannot pass by skipping the
-Tool call and returning a plausible answer. Yes requires one approval, one Tool
-execution and valid completion (accepted or iteration_limit); the separate
-accepted case checks adoption. No/cancel require zero Tool effects and release.
+Tool call and returning a plausible answer. The yes case supplies an explicit
+answer for each of at most two draft approvals, matching the demo's iteration
+limit. It requires distinct approval requests, exactly one execution for each
+approved Tool invocation, and valid completion (accepted or iteration_limit).
+A rejected review may start another draft with its own approval; this is not
+a duplicate Tool effect. The separate accepted case checks adoption. No/cancel
+require zero Tool effects and release. Normal interactive use still asks the
+user for every decision; only the test harness supplies predetermined answers.
 
 Exit codes: 0 passed, 1 failed, 2 blocked by native-schema capability rejection.
 A blocked approval is not an OK. Retain failed trials when comparing settings;

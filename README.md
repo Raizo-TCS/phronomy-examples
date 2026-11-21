@@ -56,6 +56,22 @@ path with `PHRONOMY_PATH` unset. It runs Examples 34, 35 and 36 and the GC probe
 `PHRONOMY_PATH` and run `scripts/update_phronomy.sh` first.
 <!-- PHRONOMY_RELEASE_CI_END -->
 
+CI reuses installed gems through `ruby/setup-ruby`'s `bundler-cache` option.
+Its cache keys distinguish the OS/version/architecture, Ruby version, bundle
+directory, and lockfile contents. The root and SQLite bundles are configured
+separately; Rails and PostgreSQL use their own bundle directories. A lockfile
+change triggers dependency installation for the new lockfile; it does not reuse
+the old dependency selection.
+
+All tests and the Worker published-version/source checks run on cache hits too.
+The existing Ubuntu 24.04 / Ruby 3.2.3 Worker job deliberately does not restore
+a gem cache, preserving a fresh RubyGems installation check in the main example
+workflow.
+Dependency auditing continues to update its advisory database on every run.
+If a native-extension cache becomes incompatible after a runner update, change
+`cache-version` on the affected `ruby/setup-ruby` step to force a rebuild.
+Cache availability is an optimization: a miss installs the locked dependencies.
+
 ## Storage import migration
 
 SQL implementation imports now use the optional `phronomy-active_record` package

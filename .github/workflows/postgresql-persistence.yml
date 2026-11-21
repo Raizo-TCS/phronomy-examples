@@ -88,9 +88,7 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           working-directory: examples/31_postgresql_persistence
-
-      - name: Install bundle
-        run: bundle install
+          bundler-cache: true
 
       - name: Run authoritative contract and PostgreSQL integration specs
         run: bundle exec rspec

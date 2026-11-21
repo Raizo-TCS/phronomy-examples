@@ -25,10 +25,13 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           working-directory: examples
-      - name: Install bundle
-        run: bundle install
-      - name: Install SQLite bundle
-        run: cd 30_sqlite_persistence && bundle install
+          bundler-cache: true
+      - name: Set up the separate SQLite bundle cache
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          working-directory: examples/30_sqlite_persistence
+          bundler-cache: true
       - name: Check APIs, run CLI stubs, and validate SQLite persistence
         run: bash scripts/verify_offline.sh
 
@@ -59,9 +62,13 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           working-directory: examples/30_sqlite_persistence
-      - name: Install SQLite bundle with the published gem
+          # Keep one existing Worker condition as a fresh-install check.
+          bundler-cache: ${{ matrix.ruby != '3.2.3' }}
+      - name: Install the published gem without a cache
+        if: matrix.ruby == '3.2.3'
+        run: bundle install
+      - name: Verify the published gem version and source
         run: |
-          bundle install
           bundle exec ruby -rbundler -rphronomy -e '
             abort "PHRONOMY_PATH must be unset" if ENV.key?("PHRONOMY_PATH")
             spec = Gem.loaded_specs.fetch("phronomy")
@@ -107,8 +114,7 @@ jobs:
         with:
           ruby-version: "3.2"
           working-directory: examples/${{ matrix.example }}
-      - name: Install bundle
-        run: bundle install
+          bundler-cache: true
       - name: Migrate and eager load the application
         run: |
           cd "${{ matrix.example }}"

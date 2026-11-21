@@ -1,7 +1,7 @@
 # phronomy-active_record (unpublished 0.1.0)
 
 <!-- PHRONOMY_RELEASE_OVERVIEW_BEGIN -->
-Optional SQL persistence for published Phronomy `~> 0.35.0`. The existing
+Optional SQL persistence for published Phronomy `~> 0.37.0`. The existing
 examples' neutral ActiveRecord driver and resource mappings are maintained
 here. Core does not require this package, ActiveRecord, SQLite or PostgreSQL.
 The package uses the public `PersistenceComposition.resources` catalog.
@@ -17,7 +17,7 @@ For example, a local SQLite application declares the published core, the
 package checkout and its database driver:
 
 ```ruby
-gem "phronomy", "~> 0.35.0"
+gem "phronomy", "~> 0.37.0"
 gem "phronomy-active_record", path: "/path/to/phronomy-active_record",
   require: "phronomy/active_record"
 gem "sqlite3", ">= 2.10.2"

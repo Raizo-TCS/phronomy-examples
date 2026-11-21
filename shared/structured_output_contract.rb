@@ -39,19 +39,21 @@ RSpec.shared_examples "persisted structured output" do
         before = store.executions.load(id)
         restored = reopen_structured_storage
         loaded = structured_agent.load(agent.agent_id, persistence: restored.agent)
+        value = loaded.resume(id)
         if valid
-          value = loaded.resume(id)
           expect(value[:output]).to eq("answer" => "saved")
           expect(value[:output]).to be_frozen
           expect(value[:raw_output]).to eq('{"answer":"saved"}')
           expect(loaded.transcript_messages.map(&:to_h)).to eq(result[:messages].map(&:to_h))
           expect(loaded.transcript_messages_async.wait_result.map(&:to_h)).to eq(result[:messages].map(&:to_h))
         else
-          expect { loaded.resume(id) }.to raise_error(Phronomy::Agent::OutputError) { |error|
-            expect(error.reason).to eq("invalid_json")
-            expect(error.raw_output).to eq("malformed output")
-            expect(error.cause.code).to eq("output_parser.invalid_json")
-          }
+          expect(value).to include(execution_id: id, status: :failed, output: nil)
+          expect(value.fetch(:error)).to include(
+            "class" => "Phronomy::Agent::OutputError",
+            "reason" => "invalid_json",
+            "raw_output" => "malformed output",
+            "cause" => hash_including("code" => "output_parser.invalid_json")
+          )
         end
         expect(restored.agent.executions.load(id).to_h).to eq(before.to_h)
         expect(chat.calls.length).to eq(1)

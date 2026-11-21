@@ -1,7 +1,7 @@
 # Phronomy Examples
 
 <!-- PHRONOMY_RELEASE_OVERVIEW_BEGIN -->
-These examples use published Phronomy `~> 0.35.0` through
+These examples use published Phronomy `~> 0.37.0` through
 `Gemfile.phronomy` and all seven lockfiles. The optional SQL package obtains
 canonical resources from the public `PersistenceComposition.resources` API.
 This changes source dependencies, not stored records or database schemas.
@@ -49,7 +49,7 @@ Embeddings live in `Phronomy::Embeddings`; loaders and splitters live in
 
 <!-- PHRONOMY_RELEASE_CI_BEGIN -->
 CI installs the published RubyGems dependency using committed lockfiles.
-Hosted Worker CI verifies Phronomy 0.35.0, its RubyGems source and loaded
+Hosted Worker CI verifies Phronomy 0.37.0, its RubyGems source and loaded
 path with `PHRONOMY_PATH` unset. It runs Examples 34, 35 and 36 and the GC probe
 (`RECORDS=5 MORE_WORK=1`) on Ubuntu 24.04 with Ruby 3.2.3/3.3.6 and Ubuntu
 26.04 with Ruby 3.2.11/3.3.13. To verify a local framework checkout, export
@@ -246,8 +246,8 @@ DX1/DX2 require Phronomy 0.31 or later; 0.30.1 does not expose these APIs.
 Worker Examples 34–36 require 0.32.0; 0.31.0 does not provide `start_hosted`.
 
 <!-- PHRONOMY_RELEASE_DEPENDENCY_BEGIN -->
-The shared dependency allows `~> 0.35.0`, and all seven lockfiles select
-published Phronomy 0.35.0. The SQL package requires its public composition
+The shared dependency allows `~> 0.37.0`, and all seven lockfiles select
+published Phronomy 0.37.0. The SQL package requires its public composition
 catalog API. Keep `PHRONOMY_PATH` unset to verify the published dependency:
 
 ```bash
